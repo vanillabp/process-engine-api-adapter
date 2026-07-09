@@ -1,0 +1,3 @@
+io.vanillabp.pea.springboot.PeaAdapterConfiguration
+io.vanillabp.pea.springboot.deployment.PeaAdapterDeploymentConfiguration
+io.vanillabp.pea.springboot.processservice.PeaAdapterProcessServiceConfiguration

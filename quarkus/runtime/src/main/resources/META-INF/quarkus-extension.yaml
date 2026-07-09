@@ -1,0 +1,7 @@
+name: vanillabp-process-engine-api
+artifact: "${project.groupId}:${project.artifactId}:${project.version}"
+dependencies:
+  - vanillabp
+capabilities:
+  provides:
+    - io.vanillabp.adapter.process-engine-api

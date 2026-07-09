@@ -1,0 +1,64 @@
+package io.vanillabp.pea.quarkus.deployment;
+
+import io.quarkus.arc.deployment.AdditionalBeanBuildItem;
+import io.quarkus.deployment.annotations.BuildProducer;
+import io.quarkus.deployment.annotations.BuildStep;
+import io.quarkus.deployment.builditem.FeatureBuildItem;
+import io.vanillabp.integration.deployment.processservice.VanillaBpMigratableProcessServiceBuildItem;
+import io.vanillabp.pea.PeaAdapter;
+import io.vanillabp.pea.processservice.PeaProcessService;
+import io.vanillabp.pea.quarkus.deployment.config.PeaProperties;
+import io.vanillabp.pea.quarkus.runtime.PeaProcessEngineProducer;
+import io.vanillabp.pea.quarkus.runtime.PeaProcessServiceProducer;
+
+/**
+ * Quarkus extension deployment of the Process-Engine-API adapter. Announces the adapter and
+ * its process-service bean to the VanillaBP Quarkus integration and registers the runtime
+ * producers (including the default in-memory mock engine).
+ */
+class PeaIntegrationProcessor {
+
+  private static final String FEATURE = "vanillabp-process-engine-api";
+
+  /**
+   * Announces the Process-Engine-API adapter type and its {@link PeaProcessService} bean to
+   * the VanillaBP Quarkus integration.
+   *
+   * @param properties Build-time properties (forces config root registration)
+   * @param featureProducer Feature build item producer
+   * @return The build item describing this adapter's process service
+   */
+  @BuildStep
+  VanillaBpMigratableProcessServiceBuildItem buildProcessServices(
+      final PeaProperties properties,
+      final BuildProducer<FeatureBuildItem> featureProducer) {
+
+    featureProducer.produce(new FeatureBuildItem(FEATURE));
+
+    return VanillaBpMigratableProcessServiceBuildItem
+        .builder()
+        .adapterType(PeaAdapter.ADAPTER_TYPE)
+        .migratableProcessServiceBeanClass(PeaProcessService.class.getName())
+        .build();
+
+  }
+
+  /**
+   * Registers the runtime producers: the Process-Engine-API adapter's process service and
+   * the default in-memory mock engine backing it.
+   *
+   * @return The bean registration build item
+   */
+  @BuildStep
+  AdditionalBeanBuildItem registerProducers() {
+
+    return AdditionalBeanBuildItem
+        .builder()
+        .addBeanClass(PeaProcessServiceProducer.class)
+        .addBeanClass(PeaProcessEngineProducer.class)
+        .setUnremovable()
+        .build();
+
+  }
+
+}

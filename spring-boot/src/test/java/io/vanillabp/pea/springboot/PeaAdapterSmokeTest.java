@@ -1,0 +1,62 @@
+package io.vanillabp.pea.springboot;
+
+import java.util.List;
+
+import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.context.ApplicationContext;
+
+import io.vanillabp.integration.adapter.spi.AdapterDeploymentService;
+import io.vanillabp.integration.processservice.SpringBootMigrationAdapterAutoConfiguration;
+import io.vanillabp.integration.test.utils.SuppressOutputExtension;
+import io.vanillabp.integration.workflowmodule.WorkflowModuleAutoConfiguration;
+import io.vanillabp.pea.PeaAdapter;
+import io.vanillabp.pea.mock.InMemoryProcessEngine;
+import io.vanillabp.pea.springboot.deployment.PeaAdapterDeploymentConfiguration;
+import io.vanillabp.pea.springboot.processservice.PeaAdapterProcessServiceConfiguration;
+
+/**
+ * Smoke test proving the Process-Engine-API adapter is discovered by the VanillaBP Spring
+ * Boot integration: the context boots without any BPMN files, a deployment service is
+ * created for the configured adapter id {@code pea}, and the default in-memory mock engine
+ * is present with no recorded invocations. No Docker and no network involved.
+ */
+@SpringBootTest(
+    classes = {
+        PeaAdapterConfiguration.class, PeaAdapterDeploymentConfiguration.class, PeaAdapterProcessServiceConfiguration.class, WorkflowModuleAutoConfiguration.class, SpringBootMigrationAdapterAutoConfiguration.class, TestPersistenceConfiguration.class
+    })
+@ExtendWith(SuppressOutputExtension.class)
+public class PeaAdapterSmokeTest {
+
+  @Autowired
+  private ApplicationContext context;
+
+  @Autowired
+  private InMemoryProcessEngine inMemoryProcessEngine;
+
+  @Test
+  @SuppressWarnings("unchecked")
+  public void testAdapterDiscoveredWithMockEngine() {
+
+    // deployment service discovered for the configured adapter id "pea"
+    final var deploymentServices = (List<AdapterDeploymentService<?, ?>>) context.getBean("peaDeploymentServices",
+        List.class);
+    Assertions.assertNotNull(deploymentServices);
+    Assertions.assertEquals(1, deploymentServices.size(),
+        "exactly one deployment service is expected for the single configured adapter");
+
+    final var deploymentService = deploymentServices.get(0);
+    Assertions.assertEquals("pea", deploymentService.getAdapterId());
+    Assertions.assertEquals(PeaAdapter.ADAPTER_TYPE, deploymentService.getAdapterType());
+
+    // the mock engine is present and untouched
+    Assertions.assertNotNull(inMemoryProcessEngine);
+    Assertions.assertTrue(inMemoryProcessEngine.getInvocations().isEmpty(),
+        "no Process-Engine-API invocations are expected during a plain boot");
+
+  }
+
+}
