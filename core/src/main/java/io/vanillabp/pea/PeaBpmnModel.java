@@ -9,9 +9,10 @@ package io.vanillabp.pea;
  * Because VanillaBP wires business code per BPMN process id, the adapter needs at least
  * the process id in addition to the raw resource - so this record carries it explicitly.
  * <p>
- * Extracting the {@code bpmnProcessId} from the BPMN XML is a later story; for now the
- * process id is supplied from outside. See {@code GAPS.md} (first entry): a BPMS-agnostic
- * API without a model type forces every consumer to parse BPMN itself.
+ * The {@code bpmnProcessId} is extracted from the BPMN XML by
+ * {@code PeaDeploymentService.readBpmn} using a JDK StAX parser. See {@code GAPS.md} (first
+ * entry): a BPMS-agnostic API without a model type forces every consumer to parse BPMN
+ * itself.
  *
  * @param filename The name of the BPMN resource (used for logging and deployment)
  * @param resource The raw BPMN XML bytes

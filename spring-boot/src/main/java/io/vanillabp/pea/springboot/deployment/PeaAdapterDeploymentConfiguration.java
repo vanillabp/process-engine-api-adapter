@@ -8,6 +8,7 @@ import java.util.Set;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.context.annotation.Bean;
 
+import dev.bpmcrafters.processengineapi.deploy.DeploymentApi;
 import io.vanillabp.integration.adapter.migration.config.MigrationAdapterProperties;
 import io.vanillabp.integration.adapter.spi.AdapterDeploymentService;
 import io.vanillabp.integration.processservice.SpringBootMigrationAdapterAutoConfiguration;
@@ -30,7 +31,8 @@ public class PeaAdapterDeploymentConfiguration {
   @Bean
   public List<AdapterDeploymentService<PeaBpmnModel, PeaProcessingContext>> peaDeploymentServices(
       final WorkflowModules allWorkflowModules,
-      final MigrationAdapterProperties properties) {
+      final MigrationAdapterProperties properties,
+      final DeploymentApi deploymentApi) {
 
     final List<AdapterDeploymentService<PeaBpmnModel, PeaProcessingContext>> deploymentServices = new ArrayList<>();
     final Set<String> adaptersBuilt = new HashSet<>();
@@ -52,7 +54,7 @@ public class PeaAdapterDeploymentConfiguration {
                 return;
               }
 
-              deploymentServices.add(new PeaDeploymentService(adapterId));
+              deploymentServices.add(new PeaDeploymentService(adapterId, deploymentApi));
               adaptersBuilt.add(adapterId);
 
             }));

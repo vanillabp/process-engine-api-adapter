@@ -1,11 +1,14 @@
 package io.vanillabp.pea.mock;
 
 import java.time.Instant;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.atomic.AtomicLong;
 
 import dev.bpmcrafters.processengineapi.Empty;
 import dev.bpmcrafters.processengineapi.ExecutionMode;
@@ -17,6 +20,7 @@ import dev.bpmcrafters.processengineapi.correlation.CorrelationApi;
 import dev.bpmcrafters.processengineapi.deploy.DeployBundleCommand;
 import dev.bpmcrafters.processengineapi.deploy.DeploymentApi;
 import dev.bpmcrafters.processengineapi.deploy.DeploymentInformation;
+import dev.bpmcrafters.processengineapi.deploy.NamedResource;
 import dev.bpmcrafters.processengineapi.process.ProcessInformation;
 import dev.bpmcrafters.processengineapi.process.StartProcessApi;
 import dev.bpmcrafters.processengineapi.process.StartProcessCommand;
@@ -54,6 +58,16 @@ import dev.bpmcrafters.processengineapi.task.UserTaskCompletionApi;
 public class InMemoryProcessEngine implements DeploymentApi, StartProcessApi, CorrelationApi, TaskSubscriptionApi, ServiceTaskCompletionApi, UserTaskCompletionApi {
 
   /**
+   * Name of the process variable the fake reads the workflow-aggregate id from when a
+   * process instance is started in {@link ExecutionMode#SYNC}. The Process-Engine-API
+   * start command has no dedicated business-key/correlation slot, so the VanillaBP
+   * adapter passes the aggregate id as an ordinary payload variable under this name (see
+   * {@code GAPS.md}). Kept in sync (by convention, not by a shared dependency) with the
+   * adapter core's {@code PeaProcessService.AGGREGATE_ID_VARIABLE}.
+   */
+  public static final String AGGREGATE_ID_VARIABLE = "aggregateId";
+
+  /**
    * A single recorded API invocation.
    *
    * @param api The Process-Engine-API interface the method belongs to
@@ -67,10 +81,42 @@ public class InMemoryProcessEngine implements DeploymentApi, StartProcessApi, Co
   }
 
   /**
+   * A resource bundle deployed via {@link #deploy(DeployBundleCommand)}.
+   *
+   * @param deploymentKey The generated key of this deployment
+   * @param resources The resources deployed (filename + bytes, opaque to the engine)
+   * @param tenantId The tenant the bundle was deployed for, or {@code null} for the
+   *          default tenant
+   */
+  public record Deployment(String deploymentKey, List<NamedResource> resources, String tenantId) {
+
+  }
+
+  /**
+   * An in-memory process instance created by a {@link ExecutionMode#SYNC} start (phase
+   * two of VanillaBP's two-phase start).
+   *
+   * @param instanceId The generated instance id
+   * @param aggregateId The workflow-aggregate id the instance was keyed by
+   * @param variables The process variables the instance was started with
+   */
+  public record StartedInstance(String instanceId, Object aggregateId, Map<String, Object> variables) {
+
+  }
+
+  /**
    * All invocations recorded so far, in call order. Public and inspectable on purpose:
    * tests assert against it directly.
    */
   public final List<Invocation> invocations = new CopyOnWriteArrayList<>();
+
+  private final List<Deployment> deployments = new CopyOnWriteArrayList<>();
+
+  private final Map<Object, StartedInstance> startedInstances = new ConcurrentHashMap<>();
+
+  private final AtomicLong deploymentCounter = new AtomicLong();
+
+  private final AtomicLong instanceCounter = new AtomicLong();
 
   /**
    * @return All invocations recorded so far, in call order.
@@ -82,11 +128,32 @@ public class InMemoryProcessEngine implements DeploymentApi, StartProcessApi, Co
   }
 
   /**
-   * Clears all recorded invocations (and, later, all fake state).
+   * @return All resource bundles deployed so far, in deployment order.
+   */
+  public List<Deployment> getDeployments() {
+
+    return deployments;
+
+  }
+
+  /**
+   * @return All process instances created by a {@link ExecutionMode#SYNC} start, keyed
+   *         by the workflow-aggregate id.
+   */
+  public Map<Object, StartedInstance> getStartedInstances() {
+
+    return startedInstances;
+
+  }
+
+  /**
+   * Clears all recorded invocations and all fake state (deployments, started instances).
    */
   public void reset() {
 
     invocations.clear();
+    deployments.clear();
+    startedInstances.clear();
 
   }
 
@@ -109,8 +176,12 @@ public class InMemoryProcessEngine implements DeploymentApi, StartProcessApi, Co
       final DeployBundleCommand cmd) {
 
     record("DeploymentApi", "deploy", cmd);
-    return CompletableFuture.completedFuture(
-        new DeploymentInformation("mock-deployment", Instant.now(), cmd.getTenantId()));
+    final var deploymentInformation = new DeploymentInformation(
+        "mock-deployment-"
+            + deploymentCounter.incrementAndGet(), Instant.now(), cmd.getTenantId());
+    deployments.add(
+        new Deployment(deploymentInformation.getDeploymentKey(), List.copyOf(cmd.getResources()), cmd.getTenantId()));
+    return CompletableFuture.completedFuture(deploymentInformation);
 
   }
 
@@ -121,7 +192,23 @@ public class InMemoryProcessEngine implements DeploymentApi, StartProcessApi, Co
       final StartProcessCommand cmd) {
 
     record("StartProcessApi", "startProcess", cmd);
-    return CompletableFuture.completedFuture(new ProcessInformation("mock-instance", Map.of()));
+    // Only ExecutionMode.SYNC creates an instance: this is phase two of VanillaBP's
+    // two-phase start. ExecutionMode.PREFLIGHT_CHECK (phase one) validates only and
+    // must not create one; any other mode is recorded but creates nothing either.
+    if (cmd.executionMode() != ExecutionMode.SYNC) {
+      return CompletableFuture.completedFuture(new ProcessInformation("mock-no-instance", Map.of()));
+    }
+    final Map<String, ?> payload = cmd.get();
+    final var variables = payload == null
+        ? Map.<String, Object>of()
+        : new LinkedHashMap<String, Object>(payload);
+    final var aggregateId = variables.get(AGGREGATE_ID_VARIABLE);
+    final var instanceId = "mock-instance-"
+        + instanceCounter.incrementAndGet();
+    if (aggregateId != null) {
+      startedInstances.put(aggregateId, new StartedInstance(instanceId, aggregateId, variables));
+    }
+    return CompletableFuture.completedFuture(new ProcessInformation(instanceId, Map.of()));
 
   }
 

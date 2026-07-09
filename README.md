@@ -4,12 +4,13 @@ A [VanillaBP](https://www.vanillabp.io) Version 2 BPMS adapter built on the
 BPMS-agnostic [bpm-crafters Process-Engine-API](https://github.com/bpm-crafters/process-engine-api)
 (`dev.bpm-crafters.process-engine-api:process-engine-api`).
 
-> **Experimental, mock-first, skeleton stage.** This repository currently contains only
-> the structural skeleton of the adapter plus an in-memory fake of the Process-Engine-API.
-> It does **not** yet deploy processes, start workflows, correlate messages or subscribe
-> to tasks. Its purpose right now is to discover — feature by feature — where either
+> **Experimental, mock-first.** This adapter is developed against an in-memory fake of the
+> Process-Engine-API (module `mock/`) to discover — feature by feature — where either
 > VanillaBP or the Process-Engine-API needs an extension. Those findings are collected in
-> [`GAPS.md`](GAPS.md).
+> [`GAPS.md`](GAPS.md). Implemented so far: **BPMN parsing and deployment** and the
+> **two-phase `startWorkflow`** (phase one `PREFLIGHT_CHECK`, phase two `SYNC`), proven
+> end-to-end through `ProcessService#startWorkflow` with the JPA outbox against the mock.
+> Message correlation and task subscription are later stories.
 
 ## Why an adapter against the Process-Engine-API?
 
@@ -88,6 +89,24 @@ By default the adapter runs against the in-memory mock engine
 (`io.vanillabp.pea.mock.InMemoryProcessEngine`). Providing your own beans of the
 Process-Engine-API interfaces (Spring Boot: any bean; Quarkus: any non-default bean)
 replaces the mock with a real Process-Engine-API implementation.
+
+## Behavior and limitations
+
+- **Deployment:** on startup each workflow module's BPMN resources are parsed (JDK StAX, one
+  entry per `<bpmn:process isExecutable="true">`) and deployed via the Process-Engine-API's
+  `DeploymentApi`. Because the API has no workflow-module / tenant namespace that matches
+  VanillaBP's, resources are deployed to the default tenant — **module isolation relies on
+  unique BPMN process ids across modules** ([`GAPS.md`](GAPS.md), entry 4).
+- **Starting workflows** is two-phase (the Process-Engine-API is treated as a remote BPMS):
+  phase one maps to `ExecutionMode.PREFLIGHT_CHECK` (validate only, inside the transaction),
+  phase two (after commit, via the outbox) to `ExecutionMode.SYNC` (create the instance). The
+  aggregate id travels as the `aggregateId` process variable (there is no business-key slot —
+  [`GAPS.md`](GAPS.md), entry 3). Phase two is at-least-once, so duplicates are possible until
+  the core-side `WorkflowInstanceRegistry` story lands.
+- **Platform coverage:** deployment is wired and integration-tested on **Spring Boot**. On
+  **Quarkus** the adapter and the mock engine are wired and smoke-tested, but the
+  deployment-service producer is not wired yet (mirroring the Quarkus dummy-adapter template,
+  which does not wire deployment services either) — a later story.
 
 ## Build
 

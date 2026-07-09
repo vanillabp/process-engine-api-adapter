@@ -14,18 +14,24 @@ is to make it obvious where VanillaBP or the Process-Engine-API needs an extensi
 The module depends only on `dev.bpm-crafters.process-engine-api:process-engine-api`. The
 adapter's `core` module does **not** depend on it.
 
-## Current (skeleton) behavior
+## Current behavior
 
-Every API method:
+Every API method records its invocation into the public, inspectable list
+`InMemoryProcessEngine.invocations` (also via `getInvocations()`). A record entry is
+`Invocation(String api, String method, Object command, ExecutionMode executionMode)`, where
+`executionMode` is taken from the command when it is `ExecutionModeAware` and `null`
+otherwise (e.g. task subscription commands). Beyond recording, two APIs carry real state:
 
-1. records its invocation into the public, inspectable list
-   `InMemoryProcessEngine.invocations` (also via `getInvocations()`). A record entry is
-   `Invocation(String api, String method, Object command, ExecutionMode executionMode)`,
-   where `executionMode` is taken from the command when it is `ExecutionModeAware` and
-   `null` otherwise (e.g. task subscription commands);
-2. returns a completed future / empty result of the declared type.
+- **`deploy(DeployBundleCommand)`** stores a `Deployment(deploymentKey, resources, tenantId)`
+  per invocation (inspectable via `getDeployments()`) and returns a `DeploymentInformation`.
+- **`startProcess(StartProcessCommand)`** records the command and its `ExecutionMode`.
+  Only for `ExecutionMode.SYNC` (phase two of VanillaBP's two-phase start) it creates a
+  `StartedInstance(instanceId, aggregateId, variables)` keyed by the value of the payload
+  variable `AGGREGATE_ID_VARIABLE` (`"aggregateId"`), inspectable via `getStartedInstances()`.
+  `ExecutionMode.PREFLIGHT_CHECK` (phase one) and any other mode create no instance.
 
-`reset()` clears all recordings (and, later, all fake state). No stateful behavior yet.
+All other methods still return a completed future / empty result of the declared type.
+`reset()` clears the recordings and all fake state (deployments, started instances).
 
 ## Interfaces implemented
 

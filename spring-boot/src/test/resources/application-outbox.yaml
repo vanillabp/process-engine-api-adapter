@@ -1,0 +1,10 @@
+spring:
+  datasource:
+    url: jdbc:h2:mem:pea-outbox-it;DB_CLOSE_DELAY=-1
+  jpa:
+    hibernate:
+      ddl-auto: create
+vanillabp:
+  outbox:
+    poll-interval: PT0.5S
+    attempt-frequency: PT0.5S

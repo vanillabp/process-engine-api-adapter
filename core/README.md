@@ -17,14 +17,66 @@ business SPI transitively) and `dev.bpm-crafters.process-engine-api:process-engi
   byte[] resource, String bpmnProcessId)`). The Process-Engine-API has no model type of
   its own — see [`../GAPS.md`](../GAPS.md), entry 1.
 - `PeaProcessingContext` — the processing context (`PC`) accumulated across all BPMN files
-  of one workflow module during the deployment pipeline.
+  of one workflow module during the deployment pipeline (it collects the `PeaBpmnModel`s).
 - `deployment/PeaDeploymentService` — implements
-  `AdapterDeploymentService<PeaBpmnModel, PeaProcessingContext>`. Type/id getters are
-  implemented; every pipeline method throws `UnsupportedOperationException` (skeleton).
+  `AdapterDeploymentService<PeaBpmnModel, PeaProcessingContext>`. Parses BPMN, accumulates
+  models and deploys them (see below). A `DeploymentApi` is a constructor parameter, so the
+  platform modules inject the implementation (the mock by default).
 - `processservice/PeaProcessService<A>` — implements `MigratableProcessService<A>`.
-  `needsTwoPhaseCommitForStartingWorkflows()` returns `true`; every behavior method throws
-  `UnsupportedOperationException` (skeleton). The Process-Engine-API interfaces are
-  constructor parameters, so the platform modules inject an implementation.
+  `needsTwoPhaseCommitForStartingWorkflows()` returns `true`; `startWorkflowPhaseOne` starts
+  with `PREFLIGHT_CHECK`, `startWorkflowPhaseTwo` with `SYNC` (see below). The
+  Process-Engine-API interfaces are constructor parameters, so the platform modules inject an
+  implementation.
+- `processservice/PeaStartProcessCommand` — the adapter's own `StartProcessCommand` carrying
+  the BPMN process id, the payload and the `ExecutionMode` (the built-in commands cannot
+  carry a non-default `ExecutionMode` — see [`../GAPS.md`](../GAPS.md), entry 2).
+
+## Reading BPMN (`readBpmn`)
+
+The Process-Engine-API has no BPMN model type, so `readBpmn` parses the BPMN XML itself,
+only far enough to learn the executable process ids. It uses the JDK's **StAX** streaming
+parser (`javax.xml.stream`, XXE-hardened: external entities and DTDs disabled), collecting
+the `id` of every `<bpmn:process isExecutable="true">` element (a file may contain several).
+It returns one `PeaBpmnModel(filename, rawBytes, bpmnProcessId)` per executable process;
+parse/read failures are wrapped in `BpmnParseException`.
+
+## Deploying (`prepareBpmn` → `deployResources`)
+
+`prepareBpmn` accumulates the models of a workflow module into the `PeaProcessingContext`
+(creating it on the first call — the core passes `null` initially). `wireBpmn` only logs for
+now (task wiring is a later story). `deployResources` builds one `DeployBundleCommand` per
+workflow module containing a `NamedResource` per **file** (models of the same file are
+deployed once) and calls the injected `DeploymentApi.deploy(...)` synchronously. Because
+module-as-tenant isolation is not expressible, the bundle is deployed to the default tenant
+(see [`../GAPS.md`](../GAPS.md), entry 4).
+
+## Two-phase start ↔ `ExecutionMode` mapping
+
+VanillaBP starts a workflow in two phases; the Process-Engine-API's `ExecutionMode`
+(bpm-crafters/process-engine-api issue 281) expresses exactly the needed semantics, so the
+mapping is direct:
+
+|           VanillaBP phase           |                   When                   | Process-Engine-API `ExecutionMode` |                                          Effect                                          |
+|-------------------------------------|------------------------------------------|------------------------------------|------------------------------------------------------------------------------------------|
+| phase one (`startWorkflowPhaseOne`) | inside the caller's DB transaction       | `PREFLIGHT_CHECK`                  | validate only — no instance is created (no ghost workflow if the transaction rolls back) |
+| phase two (`startWorkflowPhaseTwo`) | after commit, via the transaction outbox | `SYNC`                             | actually create the process instance                                                     |
+
+The command in both phases is a `PeaStartProcessCommand` with the same BPMN process id and
+the aggregate id passed as the `aggregateId` payload variable, differing only in the
+`ExecutionMode`. The platform passes the workflow module id and BPMN process id into both
+`startWorkflowPhaseOne(module, process, aggregatePersistence, aggregate)` and
+`startWorkflowPhaseTwo(module, process, aggregateId)`.
+
+This is proven end-to-end by `PeaTwoPhaseStartOutboxTest` in the `spring-boot` module, which
+drives `ProcessService#startWorkflow` inside a JPA transaction with the phase-two outbox:
+exactly one `PREFLIGHT_CHECK` is recorded while the transaction is open (no instance), one
+`SYNC` after commit creates the instance (matching process id + aggregate id), and a rollback
+records the `PREFLIGHT_CHECK` but never dispatches a `SYNC`.
+
+**Idempotency limitation:** phase two is at-least-once (outbox), so a crash between a
+successful create and the outbox entry removal can duplicate the instance. Strict dedup by
+`workflowModuleId + bpmnProcessId + workflowAggregateId` needs the core-side
+`WorkflowInstanceRegistry` (a separate story).
 
 ## Process-Engine-API interfaces used
 
