@@ -6,7 +6,6 @@ import io.quarkus.deployment.annotations.BuildStep;
 import io.quarkus.deployment.builditem.FeatureBuildItem;
 import io.vanillabp.integration.deployment.processservice.VanillaBpMigratableProcessServiceBuildItem;
 import io.vanillabp.pea.PeaAdapter;
-import io.vanillabp.pea.processservice.PeaProcessService;
 import io.vanillabp.pea.quarkus.deployment.config.PeaProperties;
 import io.vanillabp.pea.quarkus.runtime.PeaProcessEngineProducer;
 import io.vanillabp.pea.quarkus.runtime.PeaProcessServiceProducer;
@@ -38,7 +37,9 @@ class PeaIntegrationProcessor {
     return VanillaBpMigratableProcessServiceBuildItem
         .builder()
         .adapterType(PeaAdapter.ADAPTER_TYPE)
-        .migratableProcessServiceBeanClass(PeaProcessService.class.getName())
+        // the announced bean class is registered by the VanillaBP extension - it
+        // has to be the producer, not the core process-service class
+        .migratableProcessServiceBeanClass(PeaProcessServiceProducer.class.getName())
         .build();
 
   }
@@ -52,9 +53,10 @@ class PeaIntegrationProcessor {
   @BuildStep
   AdditionalBeanBuildItem registerProducers() {
 
+    // the process-service producer is registered by the VanillaBP extension via
+    // the build item above - only the mock-engine producer is registered here
     return AdditionalBeanBuildItem
         .builder()
-        .addBeanClass(PeaProcessServiceProducer.class)
         .addBeanClass(PeaProcessEngineProducer.class)
         .setUnremovable()
         .build();
