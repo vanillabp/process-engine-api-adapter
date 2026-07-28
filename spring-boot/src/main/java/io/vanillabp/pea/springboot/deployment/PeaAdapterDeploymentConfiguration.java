@@ -1,65 +1,46 @@
 package io.vanillabp.pea.springboot.deployment;
 
-import java.util.ArrayList;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Set;
+import java.util.Map;
 
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.context.annotation.Bean;
 
 import dev.bpmcrafters.processengineapi.deploy.DeploymentApi;
 import io.vanillabp.integration.adapter.migration.config.MigrationAdapterProperties;
-import io.vanillabp.integration.adapter.spi.AdapterDeploymentService;
 import io.vanillabp.integration.processservice.SpringBootMigrationAdapterAutoConfiguration;
-import io.vanillabp.integration.workflowmodule.WorkflowModule;
-import io.vanillabp.integration.workflowmodule.WorkflowModules;
 import io.vanillabp.pea.PeaAdapter;
-import io.vanillabp.pea.PeaBpmnModel;
-import io.vanillabp.pea.PeaProcessingContext;
 import io.vanillabp.pea.deployment.PeaDeploymentService;
 
 /**
- * Registers one {@link PeaDeploymentService} per configured Process-Engine-API adapter id.
- * Mirrors the dummy adapter template: walk all workflow modules, collect every prioritized
- * adapter id whose configured type is {@code process-engine-api} and build exactly one
- * deployment service per id.
+ * Registers the {@link PeaDeploymentService} as an <i>element</i> bean - never as a
+ * bean of type <code>List&lt;AdapterDeploymentService&gt;</code>: the platform
+ * collects all adapters' deployment services via <code>ObjectProvider</code> streams,
+ * and only element beans allow several adapter types to coexist in one application
+ * (the central migration scenario; a List bean per adapter breaks collection
+ * injection as soon as a second adapter is present).
+ * <p>
+ * Currently ONE instance is built for the first configured adapter id of type
+ * {@value PeaAdapter#ADAPTER_TYPE} - per-adapter-id multiplicity (one element bean
+ * per configured id) is introduced by the adapter-config-model story (26d).
  */
 @AutoConfiguration(after = SpringBootMigrationAdapterAutoConfiguration.class)
 public class PeaAdapterDeploymentConfiguration {
 
   @Bean
-  public List<AdapterDeploymentService<PeaBpmnModel, PeaProcessingContext>> peaDeploymentServices(
-      final WorkflowModules allWorkflowModules,
+  public PeaDeploymentService peaDeploymentService(
       final MigrationAdapterProperties properties,
       final DeploymentApi deploymentApi) {
 
-    final List<AdapterDeploymentService<PeaBpmnModel, PeaProcessingContext>> deploymentServices = new ArrayList<>();
-    final Set<String> adaptersBuilt = new HashSet<>();
-
-    allWorkflowModules
-        .getWorkflowModules()
+    final var adapterId = properties
+        .getAdapters()
+        .entrySet()
         .stream()
-        .map(WorkflowModule::getId)
-        .forEach(workflowModuleId -> properties
-            .getPrioritizedAdaptersFor(workflowModuleId)
-            .stream()
-            .filter(adapterId -> properties
-                .getAdapters()
-                .get(adapterId)
-                .equals(PeaAdapter.ADAPTER_TYPE))
-            .forEach(adapterId -> {
+        .filter(adapter -> adapter.getValue().equals(PeaAdapter.ADAPTER_TYPE))
+        .map(Map.Entry::getKey)
+        .findFirst()
+        .orElse("");
 
-              if (adaptersBuilt.contains(adapterId)) {
-                return;
-              }
-
-              deploymentServices.add(new PeaDeploymentService(adapterId, deploymentApi));
-              adaptersBuilt.add(adapterId);
-
-            }));
-
-    return deploymentServices;
+    return new PeaDeploymentService(adapterId, deploymentApi);
 
   }
 

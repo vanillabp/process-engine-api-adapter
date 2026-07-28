@@ -1,6 +1,5 @@
 package io.vanillabp.pea.springboot;
 
-import java.util.List;
 
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
@@ -38,17 +37,11 @@ public class PeaAdapterSmokeTest {
   private InMemoryProcessEngine inMemoryProcessEngine;
 
   @Test
-  @SuppressWarnings("unchecked")
   public void testAdapterDiscoveredWithMockEngine() {
 
-    // deployment service discovered for the configured adapter id "pea"
-    final var deploymentServices = (List<AdapterDeploymentService<?, ?>>) context.getBean("peaDeploymentServices",
-        List.class);
-    Assertions.assertNotNull(deploymentServices);
-    Assertions.assertEquals(1, deploymentServices.size(),
-        "exactly one deployment service is expected for the single configured adapter");
-
-    final var deploymentService = deploymentServices.get(0);
+    // element-bean convention: one AdapterDeploymentService bean per adapter
+    // (never a List bean) so several adapter types can coexist
+    final var deploymentService = context.getBean(AdapterDeploymentService.class);
     Assertions.assertEquals("pea", deploymentService.getAdapterId());
     Assertions.assertEquals(PeaAdapter.ADAPTER_TYPE, deploymentService.getAdapterType());
 
