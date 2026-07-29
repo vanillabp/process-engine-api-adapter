@@ -1,0 +1,375 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>InMemoryProcessEngine.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">VanillaBP adapter for the Process-Engine-API - Test coverage report</a> &gt; <a href="../index.html" class="el_bundle">process-engine-api-mock</a> &gt; <a href="index.source.html" class="el_package">io.vanillabp.pea.mock</a> &gt; <span class="el_source">InMemoryProcessEngine.java</span></div><h1>InMemoryProcessEngine.java</h1><pre class="source lang-java linenums">package io.vanillabp.pea.mock;
+
+import java.time.Instant;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.atomic.AtomicLong;
+
+import dev.bpmcrafters.processengineapi.Empty;
+import dev.bpmcrafters.processengineapi.ExecutionMode;
+import dev.bpmcrafters.processengineapi.ExecutionModeAware;
+import dev.bpmcrafters.processengineapi.MetaInfo;
+import dev.bpmcrafters.processengineapi.MetaInfoAware;
+import dev.bpmcrafters.processengineapi.correlation.CorrelateMessageCmd;
+import dev.bpmcrafters.processengineapi.correlation.CorrelationApi;
+import dev.bpmcrafters.processengineapi.deploy.DeployBundleCommand;
+import dev.bpmcrafters.processengineapi.deploy.DeploymentApi;
+import dev.bpmcrafters.processengineapi.deploy.DeploymentInformation;
+import dev.bpmcrafters.processengineapi.deploy.NamedResource;
+import dev.bpmcrafters.processengineapi.process.ProcessInformation;
+import dev.bpmcrafters.processengineapi.process.StartProcessApi;
+import dev.bpmcrafters.processengineapi.process.StartProcessCommand;
+import dev.bpmcrafters.processengineapi.task.CompleteTaskByErrorCmd;
+import dev.bpmcrafters.processengineapi.task.CompleteTaskCmd;
+import dev.bpmcrafters.processengineapi.task.FailTaskCmd;
+import dev.bpmcrafters.processengineapi.task.ServiceTaskCompletionApi;
+import dev.bpmcrafters.processengineapi.task.SubscribeForTaskCmd;
+import dev.bpmcrafters.processengineapi.task.TaskSubscription;
+import dev.bpmcrafters.processengineapi.task.TaskSubscriptionApi;
+import dev.bpmcrafters.processengineapi.task.UnsubscribeFromTaskCmd;
+import dev.bpmcrafters.processengineapi.task.UserTaskCompletionApi;
+import io.vanillabp.integration.adapter.spi.MigratableProcessService;
+
+/**
+ * Hand-written, in-memory fake of the bpm-crafters Process-Engine-API. It implements the
+ * real Process-Engine-API interfaces so the VanillaBP Process-Engine-API adapter can run
+ * (in tests and early applications) without a real BPMS and without Mockito.
+ * &lt;p&gt;
+ * &lt;b&gt;Purpose - mock-first development:&lt;/b&gt; this fake grows with every feature story of the
+ * adapter. Its job is to make it obvious, feature by feature, where either VanillaBP or
+ * the Process-Engine-API needs an extension. Findings are collected in the adapter repo's
+ * {@code GAPS.md}. It is intentionally &lt;i&gt;not&lt;/i&gt; a Mockito mock: later stories need it to
+ * carry real state (deployed definitions, started instances, subscribed tasks), which a
+ * generated mock cannot do.
+ * &lt;p&gt;
+ * &lt;b&gt;Current (skeleton) behavior:&lt;/b&gt; every API method records its invocation - the command
+ * object and, where the command carries one, its {@link ExecutionMode} - into the public,
+ * inspectable {@link #invocations} list and returns a completed future / empty result of
+ * the declared type. No stateful behavior yet. Use {@link #reset()} to clear recordings
+ * between tests.
+ * &lt;p&gt;
+ * A single instance implements all Process-Engine-API interfaces the adapter needs, so the
+ * platform modules can inject the same bean wherever any of these interfaces is required.
+ */
+<span class="fc" id="L59">public class InMemoryProcessEngine implements DeploymentApi, StartProcessApi, CorrelationApi, TaskSubscriptionApi, ServiceTaskCompletionApi, UserTaskCompletionApi {</span>
+
+  /**
+   * Name of the process variable the fake reads the workflow-aggregate id from when a
+   * process instance is started in {@link ExecutionMode#SYNC} - the shared
+   * cross-adapter constant of the adapter SPI.
+   */
+  public static final String AGGREGATE_ID_VARIABLE = MigratableProcessService.AGGREGATE_ID_VARIABLE;
+
+  /**
+   * A single recorded API invocation.
+   *
+   * @param api The Process-Engine-API interface the method belongs to
+   * @param method The invoked method name
+   * @param command The command object passed to the method
+   * @param executionMode The command's {@link ExecutionMode}, or {@code null} if the
+   *          command does not carry one (e.g. task subscription commands)
+   */
+<span class="fc" id="L77">  public record Invocation(String api, String method, Object command, ExecutionMode executionMode) {</span>
+
+  }
+
+  /**
+   * A resource bundle deployed via {@link #deploy(DeployBundleCommand)}.
+   *
+   * @param deploymentKey The generated key of this deployment
+   * @param resources The resources deployed (filename + bytes, opaque to the engine)
+   * @param tenantId The tenant the bundle was deployed for, or {@code null} for the
+   *          default tenant
+   */
+<span class="fc" id="L89">  public record Deployment(String deploymentKey, List&lt;NamedResource&gt; resources, String tenantId) {</span>
+
+  }
+
+  /**
+   * An in-memory process instance created by a {@link ExecutionMode#SYNC} start (phase
+   * two of VanillaBP's two-phase start).
+   *
+   * @param instanceId The generated instance id
+   * @param aggregateId The workflow-aggregate id the instance was keyed by
+   * @param variables The process variables the instance was started with
+   */
+<span class="fc" id="L101">  public record StartedInstance(String instanceId, Object aggregateId, Map&lt;String, Object&gt; variables) {</span>
+
+  }
+
+  /**
+   * All invocations recorded so far, in call order. Public and inspectable on purpose:
+   * tests assert against it directly.
+   */
+<span class="fc" id="L109">  public final List&lt;Invocation&gt; invocations = new CopyOnWriteArrayList&lt;&gt;();</span>
+
+<span class="fc" id="L111">  private final List&lt;Deployment&gt; deployments = new CopyOnWriteArrayList&lt;&gt;();</span>
+
+  /**
+   * All instances created by {@link ExecutionMode#SYNC} starts, in creation order.
+   * Deliberately a LIST (not a map keyed by aggregate id): duplicate starts for the
+   * same aggregate have to be observable by tests - a map would silently overwrite
+   * and hide exactly the bug the mock is meant to surface.
+   */
+<span class="fc" id="L119">  private final List&lt;StartedInstance&gt; startedInstances = new CopyOnWriteArrayList&lt;&gt;();</span>
+
+  /**
+   * BPMN process ids whose {@link ExecutionMode#PREFLIGHT_CHECK} is injected to
+   * fail - used by tests to assert that a failed phase one rolls the caller's
+   * transaction back.
+   */
+<span class="fc" id="L126">  private final Set&lt;String&gt; failPreflightForProcessIds = ConcurrentHashMap.newKeySet();</span>
+
+  /**
+   * BPMN process ids whose {@link ExecutionMode#SYNC} start is injected to fail
+   * ONCE per entry - used by tests to assert that a failed phase two makes the
+   * outbox retry the dispatch.
+   */
+<span class="fc" id="L133">  private final Set&lt;String&gt; failNextSyncForProcessIds = ConcurrentHashMap.newKeySet();</span>
+
+<span class="fc" id="L135">  private final AtomicLong deploymentCounter = new AtomicLong();</span>
+
+<span class="fc" id="L137">  private final AtomicLong instanceCounter = new AtomicLong();</span>
+
+  /**
+   * @return All invocations recorded so far, in call order.
+   */
+  public List&lt;Invocation&gt; getInvocations() {
+
+<span class="fc" id="L144">    return invocations;</span>
+
+  }
+
+  /**
+   * @return All resource bundles deployed so far, in deployment order.
+   */
+  public List&lt;Deployment&gt; getDeployments() {
+
+<span class="fc" id="L153">    return deployments;</span>
+
+  }
+
+  /**
+   * @return All process instances created by a {@link ExecutionMode#SYNC} start, in
+   *         creation order (duplicates for the same aggregate id are visible)
+   */
+  public List&lt;StartedInstance&gt; getStartedInstances() {
+
+<span class="fc" id="L163">    return startedInstances;</span>
+
+  }
+
+  /**
+   * Injects a failing {@link ExecutionMode#PREFLIGHT_CHECK} for the given BPMN
+   * process id (until {@link #reset()}).
+   *
+   * @param bpmnProcessId The BPMN process id whose preflight check should fail
+   */
+  public void failPreflightFor(
+      final String bpmnProcessId) {
+
+<span class="fc" id="L176">    failPreflightForProcessIds.add(bpmnProcessId);</span>
+
+<span class="fc" id="L178">  }</span>
+
+  /**
+   * Injects ONE failing {@link ExecutionMode#SYNC} start for the given BPMN process
+   * id - the next start fails, subsequent starts succeed (retry testing).
+   *
+   * @param bpmnProcessId The BPMN process id whose next SYNC start should fail
+   */
+  public void failNextSyncFor(
+      final String bpmnProcessId) {
+
+<span class="fc" id="L189">    failNextSyncForProcessIds.add(bpmnProcessId);</span>
+
+<span class="fc" id="L191">  }</span>
+
+  /**
+   * Clears all recorded invocations and all fake state (deployments, started instances).
+   */
+  public void reset() {
+
+<span class="fc" id="L198">    invocations.clear();</span>
+<span class="fc" id="L199">    deployments.clear();</span>
+<span class="fc" id="L200">    startedInstances.clear();</span>
+<span class="fc" id="L201">    failPreflightForProcessIds.clear();</span>
+<span class="fc" id="L202">    failNextSyncForProcessIds.clear();</span>
+
+<span class="fc" id="L204">  }</span>
+
+  /**
+   * Extracts the BPMN process id from the command. The Process-Engine-API's
+   * {@code StartProcessCommand} interface has no accessor for it, and depending on
+   * the adapter core only for its command type would couple this fake to the
+   * adapter - so the id is read reflectively from a {@code getBpmnProcessId()}
+   * method if present.
+   *
+   * @param cmd The start command
+   * @return The BPMN process id or null if not determinable
+   */
+  private static String bpmnProcessIdOf(
+      final StartProcessCommand cmd) {
+
+    try {
+<span class="fc" id="L220">      return (String) cmd.getClass().getMethod(&quot;getBpmnProcessId&quot;).invoke(cmd);</span>
+<span class="nc" id="L221">    } catch (final Exception e) {</span>
+<span class="nc" id="L222">      return null;</span>
+    }
+
+  }
+
+  private void record(
+      final String api,
+      final String method,
+      final Object command) {
+
+<span class="pc bpc" id="L232" title="1 of 2 branches missed.">    final var executionMode = command instanceof ExecutionModeAware executionModeAware</span>
+<span class="fc" id="L233">        ? executionModeAware.executionMode()</span>
+<span class="pc" id="L234">        : null;</span>
+<span class="fc" id="L235">    invocations.add(new Invocation(api, method, command, executionMode));</span>
+
+<span class="fc" id="L237">  }</span>
+
+  // --- DeploymentApi ---
+
+  @Override
+  public CompletableFuture&lt;DeploymentInformation&gt; deploy(
+      final DeployBundleCommand cmd) {
+
+<span class="fc" id="L245">    record(&quot;DeploymentApi&quot;, &quot;deploy&quot;, cmd);</span>
+<span class="fc" id="L246">    final var deploymentInformation = new DeploymentInformation(</span>
+        &quot;mock-deployment-&quot;
+<span class="fc" id="L248">            + deploymentCounter.incrementAndGet(), Instant.now(), cmd.getTenantId());</span>
+<span class="fc" id="L249">    deployments.add(</span>
+<span class="fc" id="L250">        new Deployment(deploymentInformation.getDeploymentKey(), List.copyOf(cmd.getResources()), cmd.getTenantId()));</span>
+<span class="fc" id="L251">    return CompletableFuture.completedFuture(deploymentInformation);</span>
+
+  }
+
+  // --- StartProcessApi ---
+
+  @Override
+  public CompletableFuture&lt;ProcessInformation&gt; startProcess(
+      final StartProcessCommand cmd) {
+
+<span class="fc" id="L261">    record(&quot;StartProcessApi&quot;, &quot;startProcess&quot;, cmd);</span>
+<span class="fc" id="L262">    final var bpmnProcessId = bpmnProcessIdOf(cmd);</span>
+    // Only ExecutionMode.SYNC creates an instance: this is phase two of VanillaBP's
+    // two-phase start. ExecutionMode.PREFLIGHT_CHECK (phase one) validates only and
+    // must not create one; any other mode is recorded but creates nothing either.
+    // NOTE: the mock cannot validate a PREFLIGHT_CHECK against the deployed
+    // processes - deployed resources are opaque (no BPMN model type, see GAPS.md);
+    // tests inject failures via failPreflightFor instead.
+<span class="fc bfc" id="L269" title="All 2 branches covered.">    if (cmd.executionMode() == ExecutionMode.PREFLIGHT_CHECK) {</span>
+<span class="fc bfc" id="L270" title="All 2 branches covered.">      if (failPreflightForProcessIds.contains(bpmnProcessId)) {</span>
+<span class="fc" id="L271">        return CompletableFuture.failedFuture(new IllegalStateException(</span>
+<span class="fc" id="L272">            &quot;Preflight check failed for BPMN process '%s' (injected by the mock)&quot;.formatted(bpmnProcessId)));</span>
+      }
+<span class="fc" id="L274">      return CompletableFuture.completedFuture(new ProcessInformation(&quot;mock-no-instance&quot;, Map.of()));</span>
+    }
+<span class="pc bpc" id="L276" title="1 of 2 branches missed.">    if (cmd.executionMode() != ExecutionMode.SYNC) {</span>
+<span class="nc" id="L277">      return CompletableFuture.completedFuture(new ProcessInformation(&quot;mock-no-instance&quot;, Map.of()));</span>
+    }
+<span class="fc bfc" id="L279" title="All 2 branches covered.">    if (failNextSyncForProcessIds.remove(bpmnProcessId)) {</span>
+<span class="fc" id="L280">      return CompletableFuture.failedFuture(new IllegalStateException(</span>
+<span class="fc" id="L281">          &quot;Starting BPMN process '%s' failed (injected by the mock, once)&quot;.formatted(bpmnProcessId)));</span>
+    }
+<span class="fc" id="L283">    final Map&lt;String, ?&gt; payload = cmd.get();</span>
+<span class="pc bpc" id="L284" title="1 of 2 branches missed.">    final var variables = payload == null</span>
+<span class="nc" id="L285">        ? Map.&lt;String, Object&gt;of()</span>
+<span class="fc" id="L286">        : new LinkedHashMap&lt;String, Object&gt;(payload);</span>
+<span class="fc" id="L287">    final var aggregateId = variables.get(AGGREGATE_ID_VARIABLE);</span>
+<span class="fc" id="L288">    final var instanceId = &quot;mock-instance-&quot;</span>
+<span class="fc" id="L289">        + instanceCounter.incrementAndGet();</span>
+<span class="fc" id="L290">    startedInstances.add(new StartedInstance(instanceId, aggregateId, variables));</span>
+<span class="fc" id="L291">    return CompletableFuture.completedFuture(new ProcessInformation(instanceId, Map.of()));</span>
+
+  }
+
+  // --- CorrelationApi ---
+
+  @Override
+  public CompletableFuture&lt;Empty&gt; correlateMessage(
+      final CorrelateMessageCmd cmd) {
+
+<span class="nc" id="L301">    record(&quot;CorrelationApi&quot;, &quot;correlateMessage&quot;, cmd);</span>
+<span class="nc" id="L302">    return CompletableFuture.completedFuture(Empty.INSTANCE);</span>
+
+  }
+
+  // --- TaskSubscriptionApi ---
+
+  @Override
+  public CompletableFuture&lt;TaskSubscription&gt; subscribeForTask(
+      final SubscribeForTaskCmd cmd) {
+
+<span class="nc" id="L312">    record(&quot;TaskSubscriptionApi&quot;, &quot;subscribeForTask&quot;, cmd);</span>
+<span class="nc" id="L313">    return CompletableFuture.completedFuture(new TaskSubscription() {</span>
+    });
+
+  }
+
+  @Override
+  public CompletableFuture&lt;Empty&gt; unsubscribe(
+      final UnsubscribeFromTaskCmd cmd) {
+
+<span class="nc" id="L322">    record(&quot;TaskSubscriptionApi&quot;, &quot;unsubscribe&quot;, cmd);</span>
+<span class="nc" id="L323">    return CompletableFuture.completedFuture(Empty.INSTANCE);</span>
+
+  }
+
+  // --- ServiceTaskCompletionApi / UserTaskCompletionApi (shared method signatures) ---
+
+  @Override
+  public CompletableFuture&lt;Empty&gt; completeTask(
+      final CompleteTaskCmd cmd) {
+
+<span class="nc" id="L333">    record(&quot;TaskCompletionApi&quot;, &quot;completeTask&quot;, cmd);</span>
+<span class="nc" id="L334">    return CompletableFuture.completedFuture(Empty.INSTANCE);</span>
+
+  }
+
+  @Override
+  public CompletableFuture&lt;Empty&gt; completeTaskByError(
+      final CompleteTaskByErrorCmd cmd) {
+
+<span class="nc" id="L342">    record(&quot;TaskCompletionApi&quot;, &quot;completeTaskByError&quot;, cmd);</span>
+<span class="nc" id="L343">    return CompletableFuture.completedFuture(Empty.INSTANCE);</span>
+
+  }
+
+  @Override
+  public CompletableFuture&lt;Empty&gt; failTask(
+      final FailTaskCmd cmd) {
+
+<span class="nc" id="L351">    record(&quot;ServiceTaskCompletionApi&quot;, &quot;failTask&quot;, cmd);</span>
+<span class="nc" id="L352">    return CompletableFuture.completedFuture(Empty.INSTANCE);</span>
+
+  }
+
+  // --- MetaInfoAware / RestrictionAware ---
+
+  @Override
+  public MetaInfo meta(
+      final MetaInfoAware instance) {
+
+<span class="nc" id="L362">    return new MetaInfo() {</span>
+    };
+
+  }
+
+  @Override
+  public Set&lt;String&gt; getSupportedRestrictions() {
+
+<span class="nc" id="L370">    return Set.of();</span>
+
+  }
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.15.202606040825</span></div></body></html>

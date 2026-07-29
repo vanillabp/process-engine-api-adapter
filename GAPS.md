@@ -85,3 +85,14 @@ There is no notion of "deploy these resources for workflow module X".
 `tenantId`). Module isolation currently relies on unique BPMN process ids across modules
 (same limitation as Camunda 8). Confirmed with the mock: the deployed bundle has
 `tenantId == null`.
+
+## 5. A `PREFLIGHT_CHECK` cannot be validated against deployed processes (mock)
+
+The in-memory mock cannot honestly validate a `PREFLIGHT_CHECK` against the
+deployed processes: deployed resources are opaque byte streams (see gap 1 - the
+Process-Engine-API has no BPMN model type), so the mock does not know which BPMN
+process ids a deployment contains. A `PREFLIGHT_CHECK` for an undeployed process id
+therefore succeeds in the mock instead of failing. Tests needing a failing
+preflight inject it explicitly via `InMemoryProcessEngine.failPreflightFor(...)`
+(and `failNextSyncFor(...)` for phase-two retry testing) - pretending validation
+would hide exactly the class of bugs the mock-first approach is meant to surface.

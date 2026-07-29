@@ -1,13 +1,12 @@
 package io.vanillabp.pea.processservice;
 
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
 
 import dev.bpmcrafters.processengineapi.ExecutionMode;
-import dev.bpmcrafters.processengineapi.correlation.CorrelationApi;
+import dev.bpmcrafters.processengineapi.process.ProcessInformation;
 import dev.bpmcrafters.processengineapi.process.StartProcessApi;
-import dev.bpmcrafters.processengineapi.task.ServiceTaskCompletionApi;
-import dev.bpmcrafters.processengineapi.task.TaskSubscriptionApi;
-import dev.bpmcrafters.processengineapi.task.UserTaskCompletionApi;
 import io.vanillabp.integration.adapter.spi.MigratableProcessService;
 import io.vanillabp.integration.adapter.spi.WorkflowAwareness;
 import io.vanillabp.integration.spi.AggregatePersistenceAware;
@@ -23,51 +22,32 @@ import io.vanillabp.pea.PeaAdapter;
  * Phase one maps to the Process-Engine-API's {@code ExecutionMode.PREFLIGHT_CHECK} (validate
  * only, inside the caller's transaction) and phase two to {@code ExecutionMode.SYNC} (create
  * the instance, after commit, dispatched via the outbox). The workflow-aggregate id travels
- * as the {@link #AGGREGATE_ID_VARIABLE} payload variable.
+ * as the {@link MigratableProcessService#AGGREGATE_ID_VARIABLE} payload variable.
  * <p>
- * The Process-Engine-API interfaces are constructor parameters so the platform modules
- * inject an implementation - by default the in-memory mock, later a real
- * Process-Engine-API implementation contributed by the application.
+ * The {@link CompletableFuture}s returned by the Process-Engine-API are joined: a failed
+ * {@code PREFLIGHT_CHECK} has to fail the caller's transaction (phase one) and a failed
+ * {@code SYNC} has to throw so the outbox retries the dispatch (phase two) - discarding
+ * the future would consume the outbox entry and the workflow would silently never start.
+ * <p>
+ * Only the Process-Engine-APIs actually used are constructor parameters (currently
+ * {@link StartProcessApi}); upcoming stories add theirs when they consume them. The
+ * platform modules inject an implementation - by default the in-memory mock, later a
+ * real Process-Engine-API implementation contributed by the application.
  *
  * @param <A> The workflow aggregate type
  */
 public class PeaProcessService<A> implements MigratableProcessService<A> {
 
-  /**
-   * Name of the payload variable the workflow-aggregate id is passed as when starting a
-   * process instance. The Process-Engine-API start command has no dedicated
-   * business-key/correlation slot (see {@code GAPS.md}), so the aggregate id travels as an
-   * ordinary process variable. Kept in sync (by convention, not by a shared dependency)
-   * with the mock's {@code InMemoryProcessEngine.AGGREGATE_ID_VARIABLE}.
-   */
-  public static final String AGGREGATE_ID_VARIABLE = "aggregateId";
-
   private final String adapterId;
 
   private final StartProcessApi startProcessApi;
 
-  private final CorrelationApi correlationApi;
-
-  private final TaskSubscriptionApi taskSubscriptionApi;
-
-  private final ServiceTaskCompletionApi serviceTaskCompletionApi;
-
-  private final UserTaskCompletionApi userTaskCompletionApi;
-
   public PeaProcessService(
       final String adapterId,
-      final StartProcessApi startProcessApi,
-      final CorrelationApi correlationApi,
-      final TaskSubscriptionApi taskSubscriptionApi,
-      final ServiceTaskCompletionApi serviceTaskCompletionApi,
-      final UserTaskCompletionApi userTaskCompletionApi) {
+      final StartProcessApi startProcessApi) {
 
     this.adapterId = adapterId;
     this.startProcessApi = startProcessApi;
-    this.correlationApi = correlationApi;
-    this.taskSubscriptionApi = taskSubscriptionApi;
-    this.serviceTaskCompletionApi = serviceTaskCompletionApi;
-    this.userTaskCompletionApi = userTaskCompletionApi;
 
   }
 
@@ -120,11 +100,17 @@ public class PeaProcessService<A> implements MigratableProcessService<A> {
     // Phase one runs inside the caller's local transaction: only validate optimistically
     // (PREFLIGHT_CHECK). The Process-Engine-API is remote, so the instance itself must not
     // be created here - that happens in phase two after the transaction committed, otherwise
-    // a rolled-back transaction would leave a ghost workflow behind.
+    // a rolled-back transaction would leave a ghost workflow behind. A failed check throws
+    // and thereby rolls the caller's transaction back (fail fast instead of committing an
+    // outbox entry which cannot be dispatched).
     final var aggregateId = aggregatePersistence.getAggregateId(workflowAggregate);
-    startProcessApi.startProcess(
-        new PeaStartProcessCommand(
-            bpmnProcessId, Map.of(AGGREGATE_ID_VARIABLE, aggregateId), ExecutionMode.PREFLIGHT_CHECK));
+    await(
+        startProcessApi.startProcess(
+            new PeaStartProcessCommand(
+                bpmnProcessId, Map.of(AGGREGATE_ID_VARIABLE, aggregateId), ExecutionMode.PREFLIGHT_CHECK)),
+        "Preflight check (phase one)",
+        bpmnProcessId,
+        workflowModuleId);
 
   }
 
@@ -136,12 +122,49 @@ public class PeaProcessService<A> implements MigratableProcessService<A> {
 
     // Phase two runs after the local transaction was committed, dispatched via the outbox:
     // actually create the process instance (SYNC). The aggregate id travels as a payload
-    // variable. Idempotency (moduleId+bpmnProcessId+aggregateId) relies on the core-side
+    // variable. A failed start throws so the outbox retries the dispatch. Idempotency
+    // (moduleId+bpmnProcessId+aggregateId) relies on the core-side
     // WorkflowInstanceRegistry - a separate story; until then a crash between a successful
-    // create and the outbox entry removal may duplicate the instance (at-least-once).
-    startProcessApi.startProcess(
-        new PeaStartProcessCommand(
-            bpmnProcessId, Map.of(AGGREGATE_ID_VARIABLE, workflowAggregateId), ExecutionMode.SYNC));
+    // create and marking the outbox entry DONE may duplicate the instance (at-least-once).
+    await(
+        startProcessApi.startProcess(
+            new PeaStartProcessCommand(
+                bpmnProcessId, Map.of(AGGREGATE_ID_VARIABLE, workflowAggregateId), ExecutionMode.SYNC)),
+        "Starting the workflow (phase two)",
+        bpmnProcessId,
+        workflowModuleId);
+
+  }
+
+  /**
+   * Joins the future of a Process-Engine-API command (same pattern as
+   * {@code PeaDeploymentService.deployResources}): the outcome has to reach the
+   * caller - in phase one to roll the local transaction back, in phase two to make
+   * the outbox retry.
+   *
+   * @param future The future returned by the Process-Engine-API
+   * @param operation Description used in error messages
+   * @param bpmnProcessId The BPMN process id (used in error messages)
+   * @param workflowModuleId The workflow module id (used in error messages)
+   */
+  private static void await(
+      final CompletableFuture<ProcessInformation> future,
+      final String operation,
+      final String bpmnProcessId,
+      final String workflowModuleId) {
+
+    try {
+      future.get();
+    } catch (final InterruptedException e) {
+      Thread.currentThread().interrupt();
+      throw new IllegalStateException(
+          "%s of BPMN process '%s' of workflow module '%s' was interrupted"
+              .formatted(operation, bpmnProcessId, workflowModuleId), e);
+    } catch (final ExecutionException e) {
+      throw new IllegalStateException(
+          "%s of BPMN process '%s' of workflow module '%s' failed"
+              .formatted(operation, bpmnProcessId, workflowModuleId), e.getCause());
+    }
 
   }
 

@@ -55,10 +55,14 @@ public class PeaTwoPhaseStartOutboxTest {
   @Autowired
   private InMemoryProcessEngine engine;
 
+  @Autowired
+  private AggregateRepository repository;
+
   @BeforeEach
   public void resetEngine() {
 
     engine.reset();
+    repository.deleteAll();
 
   }
 
@@ -124,8 +128,8 @@ public class PeaTwoPhaseStartOutboxTest {
     assertEquals(BPMN_PROCESS_ID, syncCommand.getBpmnProcessId());
     assertEquals(attached.getId(), syncCommand.get().get(InMemoryProcessEngine.AGGREGATE_ID_VARIABLE));
 
-    final var instance = engine.getStartedInstances().get(attached.getId());
-    assertNotNull(instance, "SYNC must create an instance keyed by the aggregate id");
+    assertEquals(1, engine.getStartedInstances().size(), "SYNC must create exactly one instance");
+    final var instance = engine.getStartedInstances().getFirst();
     assertEquals(attached.getId(), instance.aggregateId());
 
   }
@@ -151,6 +155,60 @@ public class PeaTwoPhaseStartOutboxTest {
     Thread.sleep(1500);
     assertTrue(startsWithMode(ExecutionMode.SYNC).isEmpty(), "no SYNC may be dispatched after rollback");
     assertTrue(engine.getStartedInstances().isEmpty());
+
+  }
+
+  @Test
+  @DisplayName("A failed PREFLIGHT_CHECK (phase one) rolls the caller's transaction back")
+  public void failedPreflightRollsTransactionBack() throws Exception {
+
+    engine.failPreflightFor(BPMN_PROCESS_ID);
+
+    // the joined future's failure surfaces in phase one and aborts the transaction
+    final var exception = assertThrowsExactly(
+        IllegalStateException.class,
+        () -> transactionTemplate.execute(status -> {
+          final var aggregate = new Aggregate();
+          aggregate.setContent("preflight-fail-test");
+          return processService.startWorkflow(aggregate);
+        }));
+    assertTrue(exception.getMessage().contains("Preflight check"));
+    assertTrue(exception.getMessage().contains(BPMN_PROCESS_ID));
+
+    // the transaction rolled back: the aggregate was not persisted
+    assertEquals(0, repository.count(), "the aggregate must not be persisted after a failed preflight");
+
+    // and phase two is never dispatched (no outbox entry was committed)
+    Thread.sleep(1500);
+    assertTrue(startsWithMode(ExecutionMode.SYNC).isEmpty());
+    assertTrue(engine.getStartedInstances().isEmpty());
+
+  }
+
+  @Test
+  @DisplayName("A failed SYNC (phase two) makes the outbox retry the dispatch")
+  public void failedSyncIsRetriedByOutbox() throws Exception {
+
+    engine.failNextSyncFor(BPMN_PROCESS_ID);
+
+    final var attached = transactionTemplate.execute(status -> {
+      final var aggregate = new Aggregate();
+      aggregate.setContent("sync-fail-test");
+      return processService.startWorkflow(aggregate);
+    });
+    assertNotNull(attached);
+
+    // the first SYNC fails (joined future -> outbox retries), the second succeeds:
+    // the retry is visible as a second SYNC invocation and the instance exists
+    final var deadline = System.currentTimeMillis() + 10000;
+    while (startsWithMode(ExecutionMode.SYNC).size() < 2) {
+      assertTrue(
+          System.currentTimeMillis() < deadline,
+          "expected the outbox to retry the failed SYNC dispatch");
+      Thread.sleep(50);
+    }
+    assertEquals(1, engine.getStartedInstances().size(), "the retry has to create the instance exactly once");
+    assertEquals(attached.getId(), engine.getStartedInstances().getFirst().aggregateId());
 
   }
 

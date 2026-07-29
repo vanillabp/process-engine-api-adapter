@@ -1,0 +1,277 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>PeaDeploymentService.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">VanillaBP adapter for the Process-Engine-API - Test coverage report</a> &gt; <a href="../index.html" class="el_bundle">process-engine-api-adapter</a> &gt; <a href="index.source.html" class="el_package">io.vanillabp.pea.deployment</a> &gt; <span class="el_source">PeaDeploymentService.java</span></div><h1>PeaDeploymentService.java</h1><pre class="source lang-java linenums">package io.vanillabp.pea.deployment;
+
+import java.io.ByteArrayInputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ExecutionException;
+
+import javax.xml.stream.XMLInputFactory;
+import javax.xml.stream.XMLStreamConstants;
+import javax.xml.stream.XMLStreamException;
+import javax.xml.stream.XMLStreamReader;
+
+import dev.bpmcrafters.processengineapi.deploy.DeployBundleCommand;
+import dev.bpmcrafters.processengineapi.deploy.DeploymentApi;
+import dev.bpmcrafters.processengineapi.deploy.NamedResource;
+import io.vanillabp.integration.adapter.spi.AdapterDeploymentService;
+import io.vanillabp.integration.adapter.spi.BpmnParseException;
+import io.vanillabp.pea.PeaAdapter;
+import io.vanillabp.pea.PeaBpmnModel;
+import io.vanillabp.pea.PeaProcessingContext;
+import lombok.extern.slf4j.Slf4j;
+
+/**
+ * The Process-Engine-API adapter's deployment service - one instance per configured
+ * adapter id (not per type).
+ * &lt;p&gt;
+ * The Process-Engine-API has no BPMN model type (its {@code DeploymentApi} deploys opaque
+ * {@code NamedResource}s), so {@link #readBpmn} parses the BPMN XML itself - just far enough
+ * to extract the executable process ids - using the JDK's StAX streaming parser
+ * ({@code javax.xml.stream}). See {@code GAPS.md}.
+ * &lt;p&gt;
+ * The {@link DeploymentApi} is injected via the constructor so the platform modules provide
+ * the implementation (by default the in-memory mock, later a real Process-Engine-API
+ * implementation).
+ */
+<span class="fc" id="L40">@Slf4j</span>
+public class PeaDeploymentService implements AdapterDeploymentService&lt;PeaBpmnModel, PeaProcessingContext&gt; {
+
+  private final String adapterId;
+
+  private final DeploymentApi deploymentApi;
+
+  public PeaDeploymentService(
+      final String adapterId,
+<span class="fc" id="L49">      final DeploymentApi deploymentApi) {</span>
+
+<span class="fc" id="L51">    this.adapterId = adapterId;</span>
+<span class="fc" id="L52">    this.deploymentApi = deploymentApi;</span>
+
+<span class="fc" id="L54">  }</span>
+
+  @Override
+  public String getAdapterId() {
+
+<span class="fc" id="L59">    return adapterId;</span>
+
+  }
+
+  @Override
+  public String getAdapterType() {
+
+<span class="fc" id="L66">    return PeaAdapter.ADAPTER_TYPE;</span>
+
+  }
+
+  @Override
+  public Class&lt;PeaBpmnModel&gt; getModelType() {
+
+<span class="nc" id="L73">    return PeaBpmnModel.class;</span>
+
+  }
+
+  @Override
+  public Class&lt;PeaProcessingContext&gt; getProcessContextType() {
+
+<span class="nc" id="L80">    return PeaProcessingContext.class;</span>
+
+  }
+
+  @Override
+  public List&lt;Map.Entry&lt;String, PeaBpmnModel&gt;&gt; readBpmn(
+      final String workflowModuleId,
+      final String filename,
+      final InputStream bpmn,
+      final boolean isVanillaBpBpmn) throws BpmnParseException {
+
+    final byte[] resource;
+    try {
+<span class="fc" id="L93">      resource = bpmn.readAllBytes();</span>
+<span class="nc" id="L94">    } catch (final IOException e) {</span>
+<span class="nc" id="L95">      throw new BpmnParseException(</span>
+<span class="nc" id="L96">          &quot;Could not read BPMN file '%s' of workflow module '%s'&quot;.formatted(filename, workflowModuleId), e);</span>
+<span class="fc" id="L97">    }</span>
+
+<span class="fc" id="L99">    final var result = new ArrayList&lt;Map.Entry&lt;String, PeaBpmnModel&gt;&gt;();</span>
+<span class="fc bfc" id="L100" title="All 2 branches covered.">    for (final var bpmnProcessId : readExecutableProcessIds(workflowModuleId, filename, resource)) {</span>
+<span class="fc" id="L101">      result.add(Map.entry(bpmnProcessId, new PeaBpmnModel(filename, resource, bpmnProcessId)));</span>
+<span class="fc" id="L102">    }</span>
+<span class="fc" id="L103">    return result;</span>
+
+  }
+
+  /**
+   * Streams over the BPMN XML with StAX and collects the ids of all
+   * {@code &lt;bpmn:process isExecutable=&quot;true&quot;&gt;} elements. StAX is used (instead of building
+   * a DOM or depending on a BPMS-specific model API) because the Process-Engine-API has no
+   * BPMN model type and the adapter only needs the executable process ids.
+   *
+   * @param workflowModuleId The workflow module id (used for error messages)
+   * @param filename The BPMN filename (used for error messages)
+   * @param resource The raw BPMN XML bytes
+   * @return The ids of the executable processes contained in the resource
+   * @throws BpmnParseException If the XML cannot be parsed
+   */
+  private List&lt;String&gt; readExecutableProcessIds(
+      final String workflowModuleId,
+      final String filename,
+      final byte[] resource) throws BpmnParseException {
+
+<span class="fc" id="L124">    final var factory = XMLInputFactory.newFactory();</span>
+    // harden the parser: no external entities, no DTDs (defence against XXE)
+<span class="fc" id="L126">    factory.setProperty(XMLInputFactory.IS_SUPPORTING_EXTERNAL_ENTITIES, Boolean.FALSE);</span>
+<span class="fc" id="L127">    factory.setProperty(XMLInputFactory.SUPPORT_DTD, Boolean.FALSE);</span>
+
+<span class="fc" id="L129">    final var processIds = new ArrayList&lt;String&gt;();</span>
+<span class="fc" id="L130">    XMLStreamReader reader = null;</span>
+<span class="fc" id="L131">    try (var in = new ByteArrayInputStream(resource)) {</span>
+<span class="fc" id="L132">      reader = factory.createXMLStreamReader(in);</span>
+<span class="fc bfc" id="L133" title="All 2 branches covered.">      while (reader.hasNext()) {</span>
+<span class="fc bfc" id="L134" title="All 2 branches covered.">        if (reader.next() != XMLStreamConstants.START_ELEMENT) {</span>
+<span class="fc" id="L135">          continue;</span>
+        }
+<span class="fc bfc" id="L137" title="All 2 branches covered.">        if (!&quot;process&quot;.equals(reader.getLocalName())) {</span>
+<span class="fc" id="L138">          continue;</span>
+        }
+<span class="fc bfc" id="L140" title="All 2 branches covered.">        if (!Boolean.parseBoolean(reader.getAttributeValue(null, &quot;isExecutable&quot;))) {</span>
+<span class="fc" id="L141">          continue;</span>
+        }
+<span class="fc" id="L143">        final var bpmnProcessId = reader.getAttributeValue(null, &quot;id&quot;);</span>
+<span class="pc bpc" id="L144" title="2 of 4 branches missed.">        if ((bpmnProcessId != null) &amp;&amp; !bpmnProcessId.isBlank()) {</span>
+<span class="fc" id="L145">          processIds.add(bpmnProcessId);</span>
+        }
+<span class="fc" id="L147">      }</span>
+<span class="fc" id="L148">      return processIds;</span>
+<span class="fc" id="L149">    } catch (final XMLStreamException | IOException e) {</span>
+<span class="fc" id="L150">      throw new BpmnParseException(</span>
+<span class="fc" id="L151">          &quot;Could not parse BPMN file '%s' of workflow module '%s'&quot;.formatted(filename, workflowModuleId), e);</span>
+    } finally {
+<span class="pc bpc" id="L153" title="1 of 2 branches missed.">      if (reader != null) {</span>
+        try {
+<span class="fc" id="L155">          reader.close();</span>
+<span class="nc" id="L156">        } catch (final XMLStreamException e) {</span>
+          // ignore: closing the reader over an in-memory byte array cannot fail meaningfully
+<span class="fc" id="L158">        }</span>
+      }
+    }
+
+  }
+
+  @Override
+  public PeaProcessingContext prepareBpmn(
+      final String workflowModuleId,
+      final PeaProcessingContext existingContext,
+      final String filename,
+      final String bpmnProcessId,
+      final PeaBpmnModel model) {
+
+<span class="pc bpc" id="L172" title="1 of 2 branches missed.">    final var context = existingContext == null</span>
+<span class="fc" id="L173">        ? new PeaProcessingContext(workflowModuleId)</span>
+<span class="pc" id="L174">        : existingContext;</span>
+<span class="fc" id="L175">    context.getModels().add(model);</span>
+<span class="fc" id="L176">    return context;</span>
+
+  }
+
+  @Override
+  public void wireBpmn(
+      final String workflowModuleId,
+      final String filename,
+      final String bpmnProcessId,
+      final PeaBpmnModel model,
+      final PeaProcessingContext context) {
+
+    // Wiring the business code (@WorkflowTask methods) to the BPMN tasks is a later story.
+<span class="fc" id="L189">    log.debug(</span>
+        &quot;Process-Engine-API adapter '{}': wiring of BPMN process '{}' (file '{}', workflow module '{}') is implemented in a later story&quot;,
+        adapterId,
+        bpmnProcessId,
+        filename,
+        workflowModuleId);
+
+<span class="fc" id="L196">  }</span>
+
+  @Override
+  public void deployResources(
+      final String workflowModuleId,
+      final PeaProcessingContext bpmsProcessingContext) throws IllegalStateException {
+
+<span class="fc bfc" id="L203" title="All 4 branches covered.">    if ((bpmsProcessingContext == null) || bpmsProcessingContext.getModels().isEmpty()) {</span>
+<span class="fc" id="L204">      log.info(</span>
+          &quot;Process-Engine-API adapter '{}': no executable BPMN processes found for workflow module '{}' - nothing to deploy&quot;,
+          adapterId,
+          workflowModuleId);
+<span class="fc" id="L208">      return;</span>
+    }
+
+    // A BPMN file may contain several executable processes, so the same resource can show
+    // up multiple times in the context - deploy each file (by name) exactly once.
+<span class="fc" id="L213">    final var resourcesByFilename = new LinkedHashMap&lt;String, byte[]&gt;();</span>
+<span class="fc" id="L214">    bpmsProcessingContext</span>
+<span class="fc" id="L215">        .getModels()</span>
+<span class="fc" id="L216">        .forEach(model -&gt; resourcesByFilename.putIfAbsent(model.filename(), model.resource()));</span>
+<span class="fc" id="L217">    final var resources = resourcesByFilename</span>
+<span class="fc" id="L218">        .entrySet()</span>
+<span class="fc" id="L219">        .stream()</span>
+<span class="fc" id="L220">        .map(entry -&gt; new NamedResource(entry.getKey(), new ByteArrayInputStream(entry.getValue()), Map.of()))</span>
+<span class="fc" id="L221">        .toList();</span>
+
+    // The Process-Engine-API's DeployBundleCommand has an optional tenantId, but a PEA
+    // tenant is the underlying BPMS' multi-tenancy - not a VanillaBP workflow-module
+    // namespace. Deploying &quot;for workflow module X&quot; (Camunda-7-style module-as-tenant
+    // isolation) is therefore not expressible; the bundle is deployed to the default
+    // tenant. See GAPS.md.
+<span class="fc" id="L228">    final var command = new DeployBundleCommand(resources, null);</span>
+    try {
+<span class="fc" id="L230">      final var deploymentInformation = deploymentApi</span>
+<span class="fc" id="L231">          .deploy(command)</span>
+<span class="fc" id="L232">          .get();</span>
+<span class="fc" id="L233">      log.info(</span>
+          &quot;Process-Engine-API adapter '{}': deployed {} BPMN file(s) of workflow module '{}' (deployment '{}')&quot;,
+          adapterId,
+<span class="fc" id="L236">          resources.size(),</span>
+          workflowModuleId,
+<span class="fc" id="L238">          deploymentInformation.getDeploymentKey());</span>
+<span class="nc" id="L239">    } catch (final InterruptedException e) {</span>
+<span class="nc" id="L240">      Thread.currentThread().interrupt();</span>
+<span class="nc" id="L241">      throw new IllegalStateException(</span>
+<span class="nc" id="L242">          &quot;Interrupted while deploying resources of workflow module '%s'&quot;.formatted(workflowModuleId), e);</span>
+<span class="nc" id="L243">    } catch (final ExecutionException e) {</span>
+<span class="nc" id="L244">      throw new IllegalStateException(</span>
+<span class="nc" id="L245">          &quot;Deployment of resources of workflow module '%s' failed&quot;.formatted(workflowModuleId), e.getCause());</span>
+<span class="fc" id="L246">    }</span>
+
+<span class="fc" id="L248">  }</span>
+
+  @Override
+  public void startWorkflowProcessing(
+      final String workflowModuleId,
+      final PeaProcessingContext bpmsProcessingContext) {
+
+    // Task subscription (polling workers) is a later story; the Process-Engine-API has no
+    // per-module &quot;start processing&quot; concept, so there is nothing to do here yet.
+<span class="fc" id="L257">    log.debug(</span>
+        &quot;Process-Engine-API adapter '{}': start workflow processing of workflow module '{}'&quot;,
+        adapterId,
+        workflowModuleId);
+
+<span class="fc" id="L262">  }</span>
+
+  @Override
+  public void stopWorkflowProcessing(
+      final String workflowModuleId,
+      final PeaProcessingContext bpmsProcessingContext) {
+
+<span class="fc" id="L269">    log.debug(</span>
+        &quot;Process-Engine-API adapter '{}': stop workflow processing of workflow module '{}'&quot;,
+        adapterId,
+        workflowModuleId);
+
+<span class="fc" id="L274">  }</span>
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.15.202606040825</span></div></body></html>

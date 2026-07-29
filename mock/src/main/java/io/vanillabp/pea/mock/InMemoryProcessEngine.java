@@ -33,6 +33,7 @@ import dev.bpmcrafters.processengineapi.task.TaskSubscription;
 import dev.bpmcrafters.processengineapi.task.TaskSubscriptionApi;
 import dev.bpmcrafters.processengineapi.task.UnsubscribeFromTaskCmd;
 import dev.bpmcrafters.processengineapi.task.UserTaskCompletionApi;
+import io.vanillabp.integration.adapter.spi.MigratableProcessService;
 
 /**
  * Hand-written, in-memory fake of the bpm-crafters Process-Engine-API. It implements the
@@ -59,13 +60,10 @@ public class InMemoryProcessEngine implements DeploymentApi, StartProcessApi, Co
 
   /**
    * Name of the process variable the fake reads the workflow-aggregate id from when a
-   * process instance is started in {@link ExecutionMode#SYNC}. The Process-Engine-API
-   * start command has no dedicated business-key/correlation slot, so the VanillaBP
-   * adapter passes the aggregate id as an ordinary payload variable under this name (see
-   * {@code GAPS.md}). Kept in sync (by convention, not by a shared dependency) with the
-   * adapter core's {@code PeaProcessService.AGGREGATE_ID_VARIABLE}.
+   * process instance is started in {@link ExecutionMode#SYNC} - the shared
+   * cross-adapter constant of the adapter SPI.
    */
-  public static final String AGGREGATE_ID_VARIABLE = "aggregateId";
+  public static final String AGGREGATE_ID_VARIABLE = MigratableProcessService.AGGREGATE_ID_VARIABLE;
 
   /**
    * A single recorded API invocation.
@@ -112,7 +110,27 @@ public class InMemoryProcessEngine implements DeploymentApi, StartProcessApi, Co
 
   private final List<Deployment> deployments = new CopyOnWriteArrayList<>();
 
-  private final Map<Object, StartedInstance> startedInstances = new ConcurrentHashMap<>();
+  /**
+   * All instances created by {@link ExecutionMode#SYNC} starts, in creation order.
+   * Deliberately a LIST (not a map keyed by aggregate id): duplicate starts for the
+   * same aggregate have to be observable by tests - a map would silently overwrite
+   * and hide exactly the bug the mock is meant to surface.
+   */
+  private final List<StartedInstance> startedInstances = new CopyOnWriteArrayList<>();
+
+  /**
+   * BPMN process ids whose {@link ExecutionMode#PREFLIGHT_CHECK} is injected to
+   * fail - used by tests to assert that a failed phase one rolls the caller's
+   * transaction back.
+   */
+  private final Set<String> failPreflightForProcessIds = ConcurrentHashMap.newKeySet();
+
+  /**
+   * BPMN process ids whose {@link ExecutionMode#SYNC} start is injected to fail
+   * ONCE per entry - used by tests to assert that a failed phase two makes the
+   * outbox retry the dispatch.
+   */
+  private final Set<String> failNextSyncForProcessIds = ConcurrentHashMap.newKeySet();
 
   private final AtomicLong deploymentCounter = new AtomicLong();
 
@@ -137,12 +155,38 @@ public class InMemoryProcessEngine implements DeploymentApi, StartProcessApi, Co
   }
 
   /**
-   * @return All process instances created by a {@link ExecutionMode#SYNC} start, keyed
-   *         by the workflow-aggregate id.
+   * @return All process instances created by a {@link ExecutionMode#SYNC} start, in
+   *         creation order (duplicates for the same aggregate id are visible)
    */
-  public Map<Object, StartedInstance> getStartedInstances() {
+  public List<StartedInstance> getStartedInstances() {
 
     return startedInstances;
+
+  }
+
+  /**
+   * Injects a failing {@link ExecutionMode#PREFLIGHT_CHECK} for the given BPMN
+   * process id (until {@link #reset()}).
+   *
+   * @param bpmnProcessId The BPMN process id whose preflight check should fail
+   */
+  public void failPreflightFor(
+      final String bpmnProcessId) {
+
+    failPreflightForProcessIds.add(bpmnProcessId);
+
+  }
+
+  /**
+   * Injects ONE failing {@link ExecutionMode#SYNC} start for the given BPMN process
+   * id - the next start fails, subsequent starts succeed (retry testing).
+   *
+   * @param bpmnProcessId The BPMN process id whose next SYNC start should fail
+   */
+  public void failNextSyncFor(
+      final String bpmnProcessId) {
+
+    failNextSyncForProcessIds.add(bpmnProcessId);
 
   }
 
@@ -154,6 +198,29 @@ public class InMemoryProcessEngine implements DeploymentApi, StartProcessApi, Co
     invocations.clear();
     deployments.clear();
     startedInstances.clear();
+    failPreflightForProcessIds.clear();
+    failNextSyncForProcessIds.clear();
+
+  }
+
+  /**
+   * Extracts the BPMN process id from the command. The Process-Engine-API's
+   * {@code StartProcessCommand} interface has no accessor for it, and depending on
+   * the adapter core only for its command type would couple this fake to the
+   * adapter - so the id is read reflectively from a {@code getBpmnProcessId()}
+   * method if present.
+   *
+   * @param cmd The start command
+   * @return The BPMN process id or null if not determinable
+   */
+  private static String bpmnProcessIdOf(
+      final StartProcessCommand cmd) {
+
+    try {
+      return (String) cmd.getClass().getMethod("getBpmnProcessId").invoke(cmd);
+    } catch (final Exception e) {
+      return null;
+    }
 
   }
 
@@ -192,11 +259,26 @@ public class InMemoryProcessEngine implements DeploymentApi, StartProcessApi, Co
       final StartProcessCommand cmd) {
 
     record("StartProcessApi", "startProcess", cmd);
+    final var bpmnProcessId = bpmnProcessIdOf(cmd);
     // Only ExecutionMode.SYNC creates an instance: this is phase two of VanillaBP's
     // two-phase start. ExecutionMode.PREFLIGHT_CHECK (phase one) validates only and
     // must not create one; any other mode is recorded but creates nothing either.
+    // NOTE: the mock cannot validate a PREFLIGHT_CHECK against the deployed
+    // processes - deployed resources are opaque (no BPMN model type, see GAPS.md);
+    // tests inject failures via failPreflightFor instead.
+    if (cmd.executionMode() == ExecutionMode.PREFLIGHT_CHECK) {
+      if (failPreflightForProcessIds.contains(bpmnProcessId)) {
+        return CompletableFuture.failedFuture(new IllegalStateException(
+            "Preflight check failed for BPMN process '%s' (injected by the mock)".formatted(bpmnProcessId)));
+      }
+      return CompletableFuture.completedFuture(new ProcessInformation("mock-no-instance", Map.of()));
+    }
     if (cmd.executionMode() != ExecutionMode.SYNC) {
       return CompletableFuture.completedFuture(new ProcessInformation("mock-no-instance", Map.of()));
+    }
+    if (failNextSyncForProcessIds.remove(bpmnProcessId)) {
+      return CompletableFuture.failedFuture(new IllegalStateException(
+          "Starting BPMN process '%s' failed (injected by the mock, once)".formatted(bpmnProcessId)));
     }
     final Map<String, ?> payload = cmd.get();
     final var variables = payload == null
@@ -205,9 +287,7 @@ public class InMemoryProcessEngine implements DeploymentApi, StartProcessApi, Co
     final var aggregateId = variables.get(AGGREGATE_ID_VARIABLE);
     final var instanceId = "mock-instance-"
         + instanceCounter.incrementAndGet();
-    if (aggregateId != null) {
-      startedInstances.put(aggregateId, new StartedInstance(instanceId, aggregateId, variables));
-    }
+    startedInstances.add(new StartedInstance(instanceId, aggregateId, variables));
     return CompletableFuture.completedFuture(new ProcessInformation(instanceId, Map.of()));
 
   }

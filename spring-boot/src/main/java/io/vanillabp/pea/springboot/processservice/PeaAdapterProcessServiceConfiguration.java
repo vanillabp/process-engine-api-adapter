@@ -7,16 +7,13 @@ import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.context.annotation.Bean;
 
-import dev.bpmcrafters.processengineapi.correlation.CorrelationApi;
 import dev.bpmcrafters.processengineapi.process.StartProcessApi;
-import dev.bpmcrafters.processengineapi.task.ServiceTaskCompletionApi;
-import dev.bpmcrafters.processengineapi.task.TaskSubscriptionApi;
-import dev.bpmcrafters.processengineapi.task.UserTaskCompletionApi;
 import io.vanillabp.integration.adapter.migration.config.MigrationAdapterProperties;
 import io.vanillabp.integration.adapter.spi.MigratableProcessService;
 import io.vanillabp.pea.PeaAdapter;
 import io.vanillabp.pea.mock.InMemoryProcessEngine;
 import io.vanillabp.pea.processservice.PeaProcessService;
+import lombok.extern.slf4j.Slf4j;
 
 /**
  * Provides the Process-Engine-API adapter's {@link MigratableProcessService} bean picked up
@@ -30,6 +27,7 @@ import io.vanillabp.pea.processservice.PeaProcessService;
  * bean of the respective API interfaces.
  */
 @AutoConfiguration
+@Slf4j
 public class PeaAdapterProcessServiceConfiguration {
 
   /**
@@ -43,18 +41,26 @@ public class PeaAdapterProcessServiceConfiguration {
   @ConditionalOnMissingBean
   public InMemoryProcessEngine peaInMemoryProcessEngine() {
 
+    // full startup config validation is a later story - this single warning is the
+    // safety net against accidentally running the volatile mock in production
+    log.warn(
+        """
+            The IN-MEMORY MOCK is the active Process-Engine-API implementation: all workflow state is \
+            VOLATILE and lost on shutdown! To plug a real engine, define beans implementing the \
+            Process-Engine-API interfaces (e.g. dev.bpmcrafters.processengineapi.process.StartProcessApi, \
+            ...deploy.DeploymentApi) - the mock backs off automatically.""");
     return new InMemoryProcessEngine();
 
   }
 
+  /**
+   * Only the Process-Engine-APIs the adapter actually uses are injected (currently
+   * {@link StartProcessApi}); upcoming stories add theirs when they consume them.
+   */
   @Bean
   public MigratableProcessService<?> peaMigratableProcessService(
       final ObjectProvider<MigrationAdapterProperties> properties,
-      final StartProcessApi startProcessApi,
-      final CorrelationApi correlationApi,
-      final TaskSubscriptionApi taskSubscriptionApi,
-      final ServiceTaskCompletionApi serviceTaskCompletionApi,
-      final UserTaskCompletionApi userTaskCompletionApi) {
+      final StartProcessApi startProcessApi) {
 
     final var adapterId = properties
         .getObject()
@@ -66,8 +72,7 @@ public class PeaAdapterProcessServiceConfiguration {
         .findFirst()
         .orElse("");
 
-    return new PeaProcessService<>(
-        adapterId, startProcessApi, correlationApi, taskSubscriptionApi, serviceTaskCompletionApi, userTaskCompletionApi);
+    return new PeaProcessService<>(adapterId, startProcessApi);
 
   }
 

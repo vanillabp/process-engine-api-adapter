@@ -2,11 +2,7 @@ package io.vanillabp.pea.quarkus.runtime;
 
 import java.util.Map;
 
-import dev.bpmcrafters.processengineapi.correlation.CorrelationApi;
 import dev.bpmcrafters.processengineapi.process.StartProcessApi;
-import dev.bpmcrafters.processengineapi.task.ServiceTaskCompletionApi;
-import dev.bpmcrafters.processengineapi.task.TaskSubscriptionApi;
-import dev.bpmcrafters.processengineapi.task.UserTaskCompletionApi;
 import io.vanillabp.integration.adapter.migration.config.MigrationAdapterProperties;
 import io.vanillabp.pea.PeaAdapter;
 import io.vanillabp.pea.processservice.PeaProcessService;
@@ -25,14 +21,14 @@ import jakarta.enterprise.inject.Produces;
 @ApplicationScoped
 public class PeaProcessServiceProducer {
 
+  /**
+   * Only the Process-Engine-APIs the adapter actually uses are injected (currently
+   * {@link StartProcessApi}); upcoming stories add theirs when they consume them.
+   */
   @Produces
   public PeaProcessService<Object> peaMigratableProcessService(
       final MigrationAdapterProperties properties,
-      final StartProcessApi startProcessApi,
-      final CorrelationApi correlationApi,
-      final TaskSubscriptionApi taskSubscriptionApi,
-      final ServiceTaskCompletionApi serviceTaskCompletionApi,
-      final UserTaskCompletionApi userTaskCompletionApi) {
+      final StartProcessApi startProcessApi) {
 
     final var adapterId = properties
         .getAdapters()
@@ -43,8 +39,7 @@ public class PeaProcessServiceProducer {
         .findFirst()
         .orElse("");
 
-    return new PeaProcessService<>(
-        adapterId, startProcessApi, correlationApi, taskSubscriptionApi, serviceTaskCompletionApi, userTaskCompletionApi);
+    return new PeaProcessService<>(adapterId, startProcessApi);
 
   }
 

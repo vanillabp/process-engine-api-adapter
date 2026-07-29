@@ -60,3 +60,21 @@ Process-Engine-API interfaces and need no implementation.
 
 Not yet implemented (added when the corresponding feature story needs them):
 `correlation.SignalApi`, `task.UserTaskModificationApi`, `decision.EvaluateDecisionApi`.
+
+## Failure injection
+
+For testing VanillaBP's two-phase start the fake can inject failures per BPMN
+process id:
+
+- `failPreflightFor(bpmnProcessId)` — every `ExecutionMode.PREFLIGHT_CHECK` for
+  that process fails (until `reset()`): asserts that a failed phase one rolls the
+  caller's transaction back.
+- `failNextSyncFor(bpmnProcessId)` — the NEXT `ExecutionMode.SYNC` start fails
+  once, subsequent starts succeed: asserts that a failed phase two makes the
+  outbox retry the dispatch.
+
+`getStartedInstances()` returns a LIST in creation order (not a map keyed by
+aggregate id) so duplicate starts for the same aggregate are observable - a map
+would silently overwrite and hide exactly the bug the fake is meant to surface.
+Note the fake cannot validate a `PREFLIGHT_CHECK` against deployed processes
+(opaque resources, see `GAPS.md` entry 5) - inject failures instead.

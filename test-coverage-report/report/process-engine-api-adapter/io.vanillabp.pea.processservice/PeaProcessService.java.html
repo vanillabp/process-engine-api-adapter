@@ -1,0 +1,172 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>PeaProcessService.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">VanillaBP adapter for the Process-Engine-API - Test coverage report</a> &gt; <a href="../index.html" class="el_bundle">process-engine-api-adapter</a> &gt; <a href="index.source.html" class="el_package">io.vanillabp.pea.processservice</a> &gt; <span class="el_source">PeaProcessService.java</span></div><h1>PeaProcessService.java</h1><pre class="source lang-java linenums">package io.vanillabp.pea.processservice;
+
+import java.util.Map;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
+
+import dev.bpmcrafters.processengineapi.ExecutionMode;
+import dev.bpmcrafters.processengineapi.process.ProcessInformation;
+import dev.bpmcrafters.processengineapi.process.StartProcessApi;
+import io.vanillabp.integration.adapter.spi.MigratableProcessService;
+import io.vanillabp.integration.adapter.spi.WorkflowAwareness;
+import io.vanillabp.integration.spi.AggregatePersistenceAware;
+import io.vanillabp.pea.PeaAdapter;
+
+/**
+ * The Process-Engine-API adapter's per-adapter runtime the migration adapter delegates
+ * to - one instance per configured adapter id.
+ * &lt;p&gt;
+ * The Process-Engine-API is treated as a remote BPMS: it cannot join the application's
+ * local transaction, therefore {@link #needsTwoPhaseCommitForStartingWorkflows()}
+ * returns {@code true} and workflow starts are routed through the generic outbox path.
+ * Phase one maps to the Process-Engine-API's {@code ExecutionMode.PREFLIGHT_CHECK} (validate
+ * only, inside the caller's transaction) and phase two to {@code ExecutionMode.SYNC} (create
+ * the instance, after commit, dispatched via the outbox). The workflow-aggregate id travels
+ * as the {@link MigratableProcessService#AGGREGATE_ID_VARIABLE} payload variable.
+ * &lt;p&gt;
+ * The {@link CompletableFuture}s returned by the Process-Engine-API are joined: a failed
+ * {@code PREFLIGHT_CHECK} has to fail the caller's transaction (phase one) and a failed
+ * {@code SYNC} has to throw so the outbox retries the dispatch (phase two) - discarding
+ * the future would consume the outbox entry and the workflow would silently never start.
+ * &lt;p&gt;
+ * Only the Process-Engine-APIs actually used are constructor parameters (currently
+ * {@link StartProcessApi}); upcoming stories add theirs when they consume them. The
+ * platform modules inject an implementation - by default the in-memory mock, later a
+ * real Process-Engine-API implementation contributed by the application.
+ *
+ * @param &lt;A&gt; The workflow aggregate type
+ */
+public class PeaProcessService&lt;A&gt; implements MigratableProcessService&lt;A&gt; {
+
+  private final String adapterId;
+
+  private final StartProcessApi startProcessApi;
+
+  public PeaProcessService(
+      final String adapterId,
+<span class="fc" id="L47">      final StartProcessApi startProcessApi) {</span>
+
+<span class="fc" id="L49">    this.adapterId = adapterId;</span>
+<span class="fc" id="L50">    this.startProcessApi = startProcessApi;</span>
+
+<span class="fc" id="L52">  }</span>
+
+  public String getAdapterType() {
+
+<span class="nc" id="L56">    return PeaAdapter.ADAPTER_TYPE;</span>
+
+  }
+
+  @Override
+  public String getAdapterId() {
+
+<span class="fc" id="L63">    return adapterId;</span>
+
+  }
+
+  @Override
+  public boolean needsTwoPhaseCommitForStartingWorkflows() {
+
+    // The Process-Engine-API is treated as a remote BPMS: it cannot join the local
+    // transaction, so starting a workflow has to run through the generic outbox path.
+<span class="fc" id="L72">    return true;</span>
+
+  }
+
+  @Override
+  public WorkflowAwareness awarenessOfTask(
+      final Object workflowAggregateId,
+      final String taskId) {
+
+<span class="nc" id="L81">    throw new UnsupportedOperationException(&quot;awarenessOfTask is implemented in a later story&quot;);</span>
+
+  }
+
+  @Override
+  public WorkflowAwareness awarenessOfWorkflow(
+      final Object workflowAggregateId) {
+
+<span class="nc" id="L89">    throw new UnsupportedOperationException(&quot;awarenessOfWorkflow is implemented in a later story&quot;);</span>
+
+  }
+
+  @Override
+  public void startWorkflowPhaseOne(
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final AggregatePersistenceAware&lt;A&gt; aggregatePersistence,
+      final A workflowAggregate) {
+
+    // Phase one runs inside the caller's local transaction: only validate optimistically
+    // (PREFLIGHT_CHECK). The Process-Engine-API is remote, so the instance itself must not
+    // be created here - that happens in phase two after the transaction committed, otherwise
+    // a rolled-back transaction would leave a ghost workflow behind. A failed check throws
+    // and thereby rolls the caller's transaction back (fail fast instead of committing an
+    // outbox entry which cannot be dispatched).
+<span class="fc" id="L106">    final var aggregateId = aggregatePersistence.getAggregateId(workflowAggregate);</span>
+<span class="fc" id="L107">    await(</span>
+<span class="fc" id="L108">        startProcessApi.startProcess(</span>
+            new PeaStartProcessCommand(
+<span class="fc" id="L110">                bpmnProcessId, Map.of(AGGREGATE_ID_VARIABLE, aggregateId), ExecutionMode.PREFLIGHT_CHECK)),</span>
+        &quot;Preflight check (phase one)&quot;,
+        bpmnProcessId,
+        workflowModuleId);
+
+<span class="fc" id="L115">  }</span>
+
+  @Override
+  public void startWorkflowPhaseTwo(
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final Object workflowAggregateId) {
+
+    // Phase two runs after the local transaction was committed, dispatched via the outbox:
+    // actually create the process instance (SYNC). The aggregate id travels as a payload
+    // variable. A failed start throws so the outbox retries the dispatch. Idempotency
+    // (moduleId+bpmnProcessId+aggregateId) relies on the core-side
+    // WorkflowInstanceRegistry - a separate story; until then a crash between a successful
+    // create and marking the outbox entry DONE may duplicate the instance (at-least-once).
+<span class="fc" id="L129">    await(</span>
+<span class="fc" id="L130">        startProcessApi.startProcess(</span>
+            new PeaStartProcessCommand(
+<span class="fc" id="L132">                bpmnProcessId, Map.of(AGGREGATE_ID_VARIABLE, workflowAggregateId), ExecutionMode.SYNC)),</span>
+        &quot;Starting the workflow (phase two)&quot;,
+        bpmnProcessId,
+        workflowModuleId);
+
+<span class="fc" id="L137">  }</span>
+
+  /**
+   * Joins the future of a Process-Engine-API command (same pattern as
+   * {@code PeaDeploymentService.deployResources}): the outcome has to reach the
+   * caller - in phase one to roll the local transaction back, in phase two to make
+   * the outbox retry.
+   *
+   * @param future The future returned by the Process-Engine-API
+   * @param operation Description used in error messages
+   * @param bpmnProcessId The BPMN process id (used in error messages)
+   * @param workflowModuleId The workflow module id (used in error messages)
+   */
+  private static void await(
+      final CompletableFuture&lt;ProcessInformation&gt; future,
+      final String operation,
+      final String bpmnProcessId,
+      final String workflowModuleId) {
+
+    try {
+<span class="fc" id="L157">      future.get();</span>
+<span class="nc" id="L158">    } catch (final InterruptedException e) {</span>
+<span class="nc" id="L159">      Thread.currentThread().interrupt();</span>
+<span class="nc" id="L160">      throw new IllegalStateException(</span>
+          &quot;%s of BPMN process '%s' of workflow module '%s' was interrupted&quot;
+<span class="nc" id="L162">              .formatted(operation, bpmnProcessId, workflowModuleId), e);</span>
+<span class="fc" id="L163">    } catch (final ExecutionException e) {</span>
+<span class="fc" id="L164">      throw new IllegalStateException(</span>
+          &quot;%s of BPMN process '%s' of workflow module '%s' failed&quot;
+<span class="fc" id="L166">              .formatted(operation, bpmnProcessId, workflowModuleId), e.getCause());</span>
+<span class="fc" id="L167">    }</span>
+
+<span class="fc" id="L169">  }</span>
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.15.202606040825</span></div></body></html>

@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>PeaProcessEngineProducer.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">VanillaBP adapter for the Process-Engine-API - Test coverage report</a> &gt; <a href="../index.html" class="el_bundle">process-engine-api-adapter-quarkus</a> &gt; <a href="index.source.html" class="el_package">io.vanillabp.pea.quarkus.runtime</a> &gt; <span class="el_source">PeaProcessEngineProducer.java</span></div><h1>PeaProcessEngineProducer.java</h1><pre class="source lang-java linenums">package io.vanillabp.pea.quarkus.runtime;
+
+import io.quarkus.arc.DefaultBean;
+import io.vanillabp.pea.mock.InMemoryProcessEngine;
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.enterprise.inject.Produces;
+import jakarta.inject.Singleton;
+import lombok.extern.slf4j.Slf4j;
+
+/**
+ * Produces the default Process-Engine-API implementation: an in-memory mock. The bean is a
+ * {@link DefaultBean}, so an application bringing a real Process-Engine-API implementation
+ * (providing beans of the respective API interfaces) transparently replaces it.
+ * &lt;p&gt;
+ * The single {@link InMemoryProcessEngine} instance implements all Process-Engine-API
+ * interfaces the adapter needs, therefore it is injectable wherever any of these interfaces
+ * is required.
+ */
+@ApplicationScoped
+<span class="fc" id="L20">@Slf4j</span>
+<span class="fc" id="L21">public class PeaProcessEngineProducer {</span>
+
+  @Produces
+  @Singleton
+  @DefaultBean
+  public InMemoryProcessEngine peaInMemoryProcessEngine() {
+
+    // full startup config validation is a later story - this single warning is the
+    // safety net against accidentally running the volatile mock in production
+<span class="fc" id="L30">    log.warn(</span>
+        &quot;&quot;&quot;
+            The IN-MEMORY MOCK is the active Process-Engine-API implementation: all workflow state is \
+            VOLATILE and lost on shutdown! To plug a real engine, define beans implementing the \
+            Process-Engine-API interfaces (e.g. dev.bpmcrafters.processengineapi.process.StartProcessApi, \
+            ...deploy.DeploymentApi) - the mock backs off automatically.&quot;&quot;&quot;);
+<span class="fc" id="L36">    return new InMemoryProcessEngine();</span>
+
+  }
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.15.202606040825</span></div></body></html>
