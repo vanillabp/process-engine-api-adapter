@@ -64,7 +64,7 @@ public class PeaAdapterProcessServiceConfiguration {
 
     final var adapterId = properties
         .getObject()
-        .getAdapters()
+        .adapterTypes()
         .entrySet()
         .stream()
         .filter(adapter -> PeaAdapter.ADAPTER_TYPE.equals(adapter.getValue()))

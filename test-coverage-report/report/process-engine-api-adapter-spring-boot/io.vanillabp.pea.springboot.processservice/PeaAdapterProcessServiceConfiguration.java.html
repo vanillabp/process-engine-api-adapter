@@ -64,7 +64,7 @@ import lombok.extern.slf4j.Slf4j;
 
 <span class="fc" id="L65">    final var adapterId = properties</span>
 <span class="fc" id="L66">        .getObject()</span>
-<span class="fc" id="L67">        .getAdapters()</span>
+<span class="fc" id="L67">        .adapterTypes()</span>
 <span class="fc" id="L68">        .entrySet()</span>
 <span class="fc" id="L69">        .stream()</span>
 <span class="fc" id="L70">        .filter(adapter -&gt; PeaAdapter.ADAPTER_TYPE.equals(adapter.getValue()))</span>

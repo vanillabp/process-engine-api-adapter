@@ -32,7 +32,7 @@ public class PeaAdapterDeploymentConfiguration {
       final DeploymentApi deploymentApi) {
 
     final var adapterId = properties
-        .getAdapters()
+        .adapterTypes()
         .entrySet()
         .stream()
         .filter(adapter -> adapter.getValue().equals(PeaAdapter.ADAPTER_TYPE))

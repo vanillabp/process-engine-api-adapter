@@ -31,7 +31,7 @@ import jakarta.enterprise.inject.Produces;
       final StartProcessApi startProcessApi) {
 
 <span class="nc" id="L33">    final var adapterId = properties</span>
-<span class="nc" id="L34">        .getAdapters()</span>
+<span class="nc" id="L34">        .adapterTypes()</span>
 <span class="nc" id="L35">        .entrySet()</span>
 <span class="nc" id="L36">        .stream()</span>
 <span class="nc" id="L37">        .filter(adapter -&gt; PeaAdapter.ADAPTER_TYPE.equals(adapter.getValue()))</span>

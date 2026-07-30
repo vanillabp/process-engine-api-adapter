@@ -32,7 +32,7 @@ import io.vanillabp.pea.deployment.PeaDeploymentService;
       final DeploymentApi deploymentApi) {
 
 <span class="fc" id="L34">    final var adapterId = properties</span>
-<span class="fc" id="L35">        .getAdapters()</span>
+<span class="fc" id="L35">        .adapterTypes()</span>
 <span class="fc" id="L36">        .entrySet()</span>
 <span class="fc" id="L37">        .stream()</span>
 <span class="fc" id="L38">        .filter(adapter -&gt; adapter.getValue().equals(PeaAdapter.ADAPTER_TYPE))</span>

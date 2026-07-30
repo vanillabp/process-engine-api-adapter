@@ -31,7 +31,7 @@ public class PeaProcessServiceProducer {
       final StartProcessApi startProcessApi) {
 
     final var adapterId = properties
-        .getAdapters()
+        .adapterTypes()
         .entrySet()
         .stream()
         .filter(adapter -> PeaAdapter.ADAPTER_TYPE.equals(adapter.getValue()))
