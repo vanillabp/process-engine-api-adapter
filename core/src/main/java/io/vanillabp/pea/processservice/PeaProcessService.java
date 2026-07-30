@@ -22,7 +22,10 @@ import io.vanillabp.pea.PeaAdapter;
  * Phase one maps to the Process-Engine-API's {@code ExecutionMode.PREFLIGHT_CHECK} (validate
  * only, inside the caller's transaction) and phase two to {@code ExecutionMode.SYNC} (create
  * the instance, after commit, dispatched via the outbox). The workflow-aggregate id travels
- * as the {@link MigratableProcessService#AGGREGATE_ID_VARIABLE} payload variable.
+ * as a payload variable named after the aggregate's ID property (see
+ * {@link AggregatePersistenceAware#getAggregateIdName()}) - how the aggregate's ID is
+ * stored in the BPMS is the adapter's decision, and the Process-Engine-API (like Camunda 8)
+ * stores it as a payload variable.
  * <p>
  * The {@link CompletableFuture}s returned by the Process-Engine-API are joined: a failed
  * {@code PREFLIGHT_CHECK} has to fail the caller's transaction (phase one) and a failed
@@ -107,7 +110,8 @@ public class PeaProcessService<A> implements MigratableProcessService<A> {
     await(
         startProcessApi.startProcess(
             new PeaStartProcessCommand(
-                bpmnProcessId, Map.of(AGGREGATE_ID_VARIABLE, aggregateId), ExecutionMode.PREFLIGHT_CHECK)),
+                bpmnProcessId, Map
+                    .of(aggregatePersistence.getAggregateIdName(), aggregateId), ExecutionMode.PREFLIGHT_CHECK)),
         "Preflight check (phase one)",
         bpmnProcessId,
         workflowModuleId);
@@ -118,18 +122,21 @@ public class PeaProcessService<A> implements MigratableProcessService<A> {
   public void startWorkflowPhaseTwo(
       final String workflowModuleId,
       final String bpmnProcessId,
+      final AggregatePersistenceAware<A> aggregatePersistence,
       final Object workflowAggregateId) {
 
     // Phase two runs after the local transaction was committed, dispatched via the outbox:
     // actually create the process instance (SYNC). The aggregate id travels as a payload
-    // variable. A failed start throws so the outbox retries the dispatch. Idempotency
-    // (moduleId+bpmnProcessId+aggregateId) relies on the core-side
-    // WorkflowInstanceRegistry - a separate story; until then a crash between a successful
-    // create and marking the outbox entry DONE may duplicate the instance (at-least-once).
+    // variable named after the aggregate's ID property. A failed start throws so the
+    // outbox retries the dispatch. Idempotency (moduleId+bpmnProcessId+aggregateId)
+    // relies on the core-side WorkflowInstanceRegistry - a separate story; until then a
+    // crash between a successful create and marking the outbox entry DONE may duplicate
+    // the instance (at-least-once).
     await(
         startProcessApi.startProcess(
             new PeaStartProcessCommand(
-                bpmnProcessId, Map.of(AGGREGATE_ID_VARIABLE, workflowAggregateId), ExecutionMode.SYNC)),
+                bpmnProcessId, Map
+                    .of(aggregatePersistence.getAggregateIdName(), workflowAggregateId), ExecutionMode.SYNC)),
         "Starting the workflow (phase two)",
         bpmnProcessId,
         workflowModuleId);

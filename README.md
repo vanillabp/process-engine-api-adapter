@@ -100,7 +100,8 @@ replaces the mock with a real Process-Engine-API implementation.
 - **Starting workflows** is two-phase (the Process-Engine-API is treated as a remote BPMS):
   phase one maps to `ExecutionMode.PREFLIGHT_CHECK` (validate only, inside the transaction),
   phase two (after commit, via the outbox) to `ExecutionMode.SYNC` (create the instance). The
-  aggregate id travels as the `aggregateId` process variable (there is no business-key slot —
+  aggregate id travels as a process variable named after the aggregate's ID property
+  (`AggregatePersistenceAware.getAggregateIdName()`; there is no business-key slot —
   [`GAPS.md`](GAPS.md), entry 3). Phase two is at-least-once, so duplicates are possible until
   the core-side `WorkflowInstanceRegistry` story lands.
 - **Platform coverage:** deployment is wired and integration-tested on **Spring Boot**. On

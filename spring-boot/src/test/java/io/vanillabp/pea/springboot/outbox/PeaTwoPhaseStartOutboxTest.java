@@ -46,6 +46,12 @@ public class PeaTwoPhaseStartOutboxTest {
 
   private static final String BPMN_PROCESS_ID = "PeaTestProcess";
 
+  /**
+   * The name of the payload variable carrying the aggregate's ID: the adapter names it
+   * after the aggregate's ID property ({@link Aggregate#getId()}).
+   */
+  private static final String AGGREGATE_ID_VARIABLE = "id";
+
   @Autowired
   private ProcessService<Aggregate> processService;
 
@@ -119,18 +125,18 @@ public class PeaTwoPhaseStartOutboxTest {
     final var preflight = startsWithMode(ExecutionMode.PREFLIGHT_CHECK).getFirst();
     final var preflightCommand = assertInstanceOf(PeaStartProcessCommand.class, preflight.command());
     assertEquals(BPMN_PROCESS_ID, preflightCommand.getBpmnProcessId());
-    assertEquals(attached.getId(), preflightCommand.get().get(InMemoryProcessEngine.AGGREGATE_ID_VARIABLE));
+    assertEquals(attached.getId(), preflightCommand.get().get(AGGREGATE_ID_VARIABLE));
 
     // after commit: exactly one SYNC is dispatched, creating the instance
     final var sync = awaitStartWithMode(ExecutionMode.SYNC, 10000);
     assertNotNull(sync, "phase two (SYNC) must be dispatched after commit");
     final var syncCommand = assertInstanceOf(PeaStartProcessCommand.class, sync.command());
     assertEquals(BPMN_PROCESS_ID, syncCommand.getBpmnProcessId());
-    assertEquals(attached.getId(), syncCommand.get().get(InMemoryProcessEngine.AGGREGATE_ID_VARIABLE));
+    assertEquals(attached.getId(), syncCommand.get().get(AGGREGATE_ID_VARIABLE));
 
     assertEquals(1, engine.getStartedInstances().size(), "SYNC must create exactly one instance");
     final var instance = engine.getStartedInstances().getFirst();
-    assertEquals(attached.getId(), instance.aggregateId());
+    assertEquals(attached.getId(), instance.variables().get(AGGREGATE_ID_VARIABLE));
 
   }
 
@@ -208,7 +214,8 @@ public class PeaTwoPhaseStartOutboxTest {
       Thread.sleep(50);
     }
     assertEquals(1, engine.getStartedInstances().size(), "the retry has to create the instance exactly once");
-    assertEquals(attached.getId(), engine.getStartedInstances().getFirst().aggregateId());
+    assertEquals(
+        attached.getId(), engine.getStartedInstances().getFirst().variables().get(AGGREGATE_ID_VARIABLE));
 
   }
 

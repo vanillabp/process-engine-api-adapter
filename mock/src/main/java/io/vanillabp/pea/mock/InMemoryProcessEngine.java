@@ -33,7 +33,6 @@ import dev.bpmcrafters.processengineapi.task.TaskSubscription;
 import dev.bpmcrafters.processengineapi.task.TaskSubscriptionApi;
 import dev.bpmcrafters.processengineapi.task.UnsubscribeFromTaskCmd;
 import dev.bpmcrafters.processengineapi.task.UserTaskCompletionApi;
-import io.vanillabp.integration.adapter.spi.MigratableProcessService;
 
 /**
  * Hand-written, in-memory fake of the bpm-crafters Process-Engine-API. It implements the
@@ -57,13 +56,6 @@ import io.vanillabp.integration.adapter.spi.MigratableProcessService;
  * platform modules can inject the same bean wherever any of these interfaces is required.
  */
 public class InMemoryProcessEngine implements DeploymentApi, StartProcessApi, CorrelationApi, TaskSubscriptionApi, ServiceTaskCompletionApi, UserTaskCompletionApi {
-
-  /**
-   * Name of the process variable the fake reads the workflow-aggregate id from when a
-   * process instance is started in {@link ExecutionMode#SYNC} - the shared
-   * cross-adapter constant of the adapter SPI.
-   */
-  public static final String AGGREGATE_ID_VARIABLE = MigratableProcessService.AGGREGATE_ID_VARIABLE;
 
   /**
    * A single recorded API invocation.
@@ -92,13 +84,14 @@ public class InMemoryProcessEngine implements DeploymentApi, StartProcessApi, Co
 
   /**
    * An in-memory process instance created by a {@link ExecutionMode#SYNC} start (phase
-   * two of VanillaBP's two-phase start).
+   * two of VanillaBP's two-phase start). The workflow-aggregate id is one of the
+   * {@code variables} - which one is the adapter's decision (the variable is named
+   * after the aggregate's ID property), so the engine fake does not single it out.
    *
    * @param instanceId The generated instance id
-   * @param aggregateId The workflow-aggregate id the instance was keyed by
    * @param variables The process variables the instance was started with
    */
-  public record StartedInstance(String instanceId, Object aggregateId, Map<String, Object> variables) {
+  public record StartedInstance(String instanceId, Map<String, Object> variables) {
 
   }
 
@@ -284,10 +277,9 @@ public class InMemoryProcessEngine implements DeploymentApi, StartProcessApi, Co
     final var variables = payload == null
         ? Map.<String, Object>of()
         : new LinkedHashMap<String, Object>(payload);
-    final var aggregateId = variables.get(AGGREGATE_ID_VARIABLE);
     final var instanceId = "mock-instance-"
         + instanceCounter.incrementAndGet();
-    startedInstances.add(new StartedInstance(instanceId, aggregateId, variables));
+    startedInstances.add(new StartedInstance(instanceId, variables));
     return CompletableFuture.completedFuture(new ProcessInformation(instanceId, Map.of()));
 
   }

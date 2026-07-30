@@ -26,9 +26,11 @@ otherwise (e.g. task subscription commands). Beyond recording, two APIs carry re
   per invocation (inspectable via `getDeployments()`) and returns a `DeploymentInformation`.
 - **`startProcess(StartProcessCommand)`** records the command and its `ExecutionMode`.
   Only for `ExecutionMode.SYNC` (phase two of VanillaBP's two-phase start) it creates a
-  `StartedInstance(instanceId, aggregateId, variables)` keyed by the value of the payload
-  variable `AGGREGATE_ID_VARIABLE` (`"aggregateId"`), inspectable via `getStartedInstances()`.
-  `ExecutionMode.PREFLIGHT_CHECK` (phase one) and any other mode create no instance.
+  `StartedInstance(instanceId, variables)`, inspectable via `getStartedInstances()`. The
+  aggregate id is one of the `variables` - which one is the adapter's decision (the
+  variable is named after the aggregate's ID property), so the engine fake does not
+  single it out. `ExecutionMode.PREFLIGHT_CHECK` (phase one) and any other mode create
+  no instance.
 
 All other methods still return a completed future / empty result of the declared type.
 `reset()` clears the recordings and all fake state (deployments, started instances).

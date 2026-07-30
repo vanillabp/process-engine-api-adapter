@@ -22,7 +22,10 @@ import io.vanillabp.pea.PeaAdapter;
  * Phase one maps to the Process-Engine-API's {@code ExecutionMode.PREFLIGHT_CHECK} (validate
  * only, inside the caller's transaction) and phase two to {@code ExecutionMode.SYNC} (create
  * the instance, after commit, dispatched via the outbox). The workflow-aggregate id travels
- * as the {@link MigratableProcessService#AGGREGATE_ID_VARIABLE} payload variable.
+ * as a payload variable named after the aggregate's ID property (see
+ * {@link AggregatePersistenceAware#getAggregateIdName()}) - how the aggregate's ID is
+ * stored in the BPMS is the adapter's decision, and the Process-Engine-API (like Camunda 8)
+ * stores it as a payload variable.
  * &lt;p&gt;
  * The {@link CompletableFuture}s returned by the Process-Engine-API are joined: a failed
  * {@code PREFLIGHT_CHECK} has to fail the caller's transaction (phase one) and a failed
@@ -44,23 +47,23 @@ public class PeaProcessService&lt;A&gt; implements MigratableProcessService&lt;A
 
   public PeaProcessService(
       final String adapterId,
-<span class="fc" id="L47">      final StartProcessApi startProcessApi) {</span>
+<span class="fc" id="L50">      final StartProcessApi startProcessApi) {</span>
 
-<span class="fc" id="L49">    this.adapterId = adapterId;</span>
-<span class="fc" id="L50">    this.startProcessApi = startProcessApi;</span>
+<span class="fc" id="L52">    this.adapterId = adapterId;</span>
+<span class="fc" id="L53">    this.startProcessApi = startProcessApi;</span>
 
-<span class="fc" id="L52">  }</span>
+<span class="fc" id="L55">  }</span>
 
   public String getAdapterType() {
 
-<span class="nc" id="L56">    return PeaAdapter.ADAPTER_TYPE;</span>
+<span class="nc" id="L59">    return PeaAdapter.ADAPTER_TYPE;</span>
 
   }
 
   @Override
   public String getAdapterId() {
 
-<span class="fc" id="L63">    return adapterId;</span>
+<span class="fc" id="L66">    return adapterId;</span>
 
   }
 
@@ -69,7 +72,7 @@ public class PeaProcessService&lt;A&gt; implements MigratableProcessService&lt;A
 
     // The Process-Engine-API is treated as a remote BPMS: it cannot join the local
     // transaction, so starting a workflow has to run through the generic outbox path.
-<span class="fc" id="L72">    return true;</span>
+<span class="fc" id="L75">    return true;</span>
 
   }
 
@@ -78,7 +81,7 @@ public class PeaProcessService&lt;A&gt; implements MigratableProcessService&lt;A
       final Object workflowAggregateId,
       final String taskId) {
 
-<span class="nc" id="L81">    throw new UnsupportedOperationException(&quot;awarenessOfTask is implemented in a later story&quot;);</span>
+<span class="nc" id="L84">    throw new UnsupportedOperationException(&quot;awarenessOfTask is implemented in a later story&quot;);</span>
 
   }
 
@@ -86,7 +89,7 @@ public class PeaProcessService&lt;A&gt; implements MigratableProcessService&lt;A
   public WorkflowAwareness awarenessOfWorkflow(
       final Object workflowAggregateId) {
 
-<span class="nc" id="L89">    throw new UnsupportedOperationException(&quot;awarenessOfWorkflow is implemented in a later story&quot;);</span>
+<span class="nc" id="L92">    throw new UnsupportedOperationException(&quot;awarenessOfWorkflow is implemented in a later story&quot;);</span>
 
   }
 
@@ -103,38 +106,42 @@ public class PeaProcessService&lt;A&gt; implements MigratableProcessService&lt;A
     // a rolled-back transaction would leave a ghost workflow behind. A failed check throws
     // and thereby rolls the caller's transaction back (fail fast instead of committing an
     // outbox entry which cannot be dispatched).
-<span class="fc" id="L106">    final var aggregateId = aggregatePersistence.getAggregateId(workflowAggregate);</span>
-<span class="fc" id="L107">    await(</span>
-<span class="fc" id="L108">        startProcessApi.startProcess(</span>
+<span class="fc" id="L109">    final var aggregateId = aggregatePersistence.getAggregateId(workflowAggregate);</span>
+<span class="fc" id="L110">    await(</span>
+<span class="fc" id="L111">        startProcessApi.startProcess(</span>
             new PeaStartProcessCommand(
-<span class="fc" id="L110">                bpmnProcessId, Map.of(AGGREGATE_ID_VARIABLE, aggregateId), ExecutionMode.PREFLIGHT_CHECK)),</span>
+                bpmnProcessId, Map
+<span class="fc" id="L114">                    .of(aggregatePersistence.getAggregateIdName(), aggregateId), ExecutionMode.PREFLIGHT_CHECK)),</span>
         &quot;Preflight check (phase one)&quot;,
         bpmnProcessId,
         workflowModuleId);
 
-<span class="fc" id="L115">  }</span>
+<span class="fc" id="L119">  }</span>
 
   @Override
   public void startWorkflowPhaseTwo(
       final String workflowModuleId,
       final String bpmnProcessId,
+      final AggregatePersistenceAware&lt;A&gt; aggregatePersistence,
       final Object workflowAggregateId) {
 
     // Phase two runs after the local transaction was committed, dispatched via the outbox:
     // actually create the process instance (SYNC). The aggregate id travels as a payload
-    // variable. A failed start throws so the outbox retries the dispatch. Idempotency
-    // (moduleId+bpmnProcessId+aggregateId) relies on the core-side
-    // WorkflowInstanceRegistry - a separate story; until then a crash between a successful
-    // create and marking the outbox entry DONE may duplicate the instance (at-least-once).
-<span class="fc" id="L129">    await(</span>
-<span class="fc" id="L130">        startProcessApi.startProcess(</span>
+    // variable named after the aggregate's ID property. A failed start throws so the
+    // outbox retries the dispatch. Idempotency (moduleId+bpmnProcessId+aggregateId)
+    // relies on the core-side WorkflowInstanceRegistry - a separate story; until then a
+    // crash between a successful create and marking the outbox entry DONE may duplicate
+    // the instance (at-least-once).
+<span class="fc" id="L135">    await(</span>
+<span class="fc" id="L136">        startProcessApi.startProcess(</span>
             new PeaStartProcessCommand(
-<span class="fc" id="L132">                bpmnProcessId, Map.of(AGGREGATE_ID_VARIABLE, workflowAggregateId), ExecutionMode.SYNC)),</span>
+                bpmnProcessId, Map
+<span class="fc" id="L139">                    .of(aggregatePersistence.getAggregateIdName(), workflowAggregateId), ExecutionMode.SYNC)),</span>
         &quot;Starting the workflow (phase two)&quot;,
         bpmnProcessId,
         workflowModuleId);
 
-<span class="fc" id="L137">  }</span>
+<span class="fc" id="L144">  }</span>
 
   /**
    * Joins the future of a Process-Engine-API command (same pattern as
@@ -154,19 +161,19 @@ public class PeaProcessService&lt;A&gt; implements MigratableProcessService&lt;A
       final String workflowModuleId) {
 
     try {
-<span class="fc" id="L157">      future.get();</span>
-<span class="nc" id="L158">    } catch (final InterruptedException e) {</span>
-<span class="nc" id="L159">      Thread.currentThread().interrupt();</span>
-<span class="nc" id="L160">      throw new IllegalStateException(</span>
+<span class="fc" id="L164">      future.get();</span>
+<span class="nc" id="L165">    } catch (final InterruptedException e) {</span>
+<span class="nc" id="L166">      Thread.currentThread().interrupt();</span>
+<span class="nc" id="L167">      throw new IllegalStateException(</span>
           &quot;%s of BPMN process '%s' of workflow module '%s' was interrupted&quot;
-<span class="nc" id="L162">              .formatted(operation, bpmnProcessId, workflowModuleId), e);</span>
-<span class="fc" id="L163">    } catch (final ExecutionException e) {</span>
-<span class="fc" id="L164">      throw new IllegalStateException(</span>
+<span class="nc" id="L169">              .formatted(operation, bpmnProcessId, workflowModuleId), e);</span>
+<span class="fc" id="L170">    } catch (final ExecutionException e) {</span>
+<span class="fc" id="L171">      throw new IllegalStateException(</span>
           &quot;%s of BPMN process '%s' of workflow module '%s' failed&quot;
-<span class="fc" id="L166">              .formatted(operation, bpmnProcessId, workflowModuleId), e.getCause());</span>
-<span class="fc" id="L167">    }</span>
+<span class="fc" id="L173">              .formatted(operation, bpmnProcessId, workflowModuleId), e.getCause());</span>
+<span class="fc" id="L174">    }</span>
 
-<span class="fc" id="L169">  }</span>
+<span class="fc" id="L176">  }</span>
 
 }
 </pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.15.202606040825</span></div></body></html>

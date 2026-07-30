@@ -14,10 +14,6 @@
 
   <dependencies>
     <dependency>
-      <groupId>io.vanillabp.adapter</groupId>
-      <artifactId>migration-adapter-spi</artifactId>
-    </dependency>
-    <dependency>
       <groupId>dev.bpm-crafters.process-engine-api</groupId>
       <artifactId>process-engine-api</artifactId>
     </dependency>

@@ -68,9 +68,10 @@ id.
 correlation-id slot (unlike Camunda 7's business key).
 
 **Consequence for the adapter:** the aggregate id is passed as an ordinary payload variable
-named `aggregateId` (`PeaProcessService.AGGREGATE_ID_VARIABLE`, mirrored by the mock's
-`InMemoryProcessEngine.AGGREGATE_ID_VARIABLE`). This matches how Camunda 8 handles it, so it
-is acceptable; documented here because it is not a first-class concept of the API.
+named after the aggregate's ID property (`AggregatePersistenceAware.getAggregateIdName()`) -
+how the aggregate's ID is stored in the BPMS is the adapter's decision. This matches how
+Camunda 8 handles it, so it is acceptable; documented here because it is not a first-class
+concept of the API.
 
 ## 4. Deploying "for a workflow module" (module-as-tenant) is not expressible
 

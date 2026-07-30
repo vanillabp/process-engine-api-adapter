@@ -33,7 +33,6 @@ import dev.bpmcrafters.processengineapi.task.TaskSubscription;
 import dev.bpmcrafters.processengineapi.task.TaskSubscriptionApi;
 import dev.bpmcrafters.processengineapi.task.UnsubscribeFromTaskCmd;
 import dev.bpmcrafters.processengineapi.task.UserTaskCompletionApi;
-import io.vanillabp.integration.adapter.spi.MigratableProcessService;
 
 /**
  * Hand-written, in-memory fake of the bpm-crafters Process-Engine-API. It implements the
@@ -56,14 +55,7 @@ import io.vanillabp.integration.adapter.spi.MigratableProcessService;
  * A single instance implements all Process-Engine-API interfaces the adapter needs, so the
  * platform modules can inject the same bean wherever any of these interfaces is required.
  */
-<span class="fc" id="L59">public class InMemoryProcessEngine implements DeploymentApi, StartProcessApi, CorrelationApi, TaskSubscriptionApi, ServiceTaskCompletionApi, UserTaskCompletionApi {</span>
-
-  /**
-   * Name of the process variable the fake reads the workflow-aggregate id from when a
-   * process instance is started in {@link ExecutionMode#SYNC} - the shared
-   * cross-adapter constant of the adapter SPI.
-   */
-  public static final String AGGREGATE_ID_VARIABLE = MigratableProcessService.AGGREGATE_ID_VARIABLE;
+<span class="fc" id="L58">public class InMemoryProcessEngine implements DeploymentApi, StartProcessApi, CorrelationApi, TaskSubscriptionApi, ServiceTaskCompletionApi, UserTaskCompletionApi {</span>
 
   /**
    * A single recorded API invocation.
@@ -74,7 +66,7 @@ import io.vanillabp.integration.adapter.spi.MigratableProcessService;
    * @param executionMode The command's {@link ExecutionMode}, or {@code null} if the
    *          command does not carry one (e.g. task subscription commands)
    */
-<span class="fc" id="L77">  public record Invocation(String api, String method, Object command, ExecutionMode executionMode) {</span>
+<span class="fc" id="L69">  public record Invocation(String api, String method, Object command, ExecutionMode executionMode) {</span>
 
   }
 
@@ -86,19 +78,20 @@ import io.vanillabp.integration.adapter.spi.MigratableProcessService;
    * @param tenantId The tenant the bundle was deployed for, or {@code null} for the
    *          default tenant
    */
-<span class="fc" id="L89">  public record Deployment(String deploymentKey, List&lt;NamedResource&gt; resources, String tenantId) {</span>
+<span class="fc" id="L81">  public record Deployment(String deploymentKey, List&lt;NamedResource&gt; resources, String tenantId) {</span>
 
   }
 
   /**
    * An in-memory process instance created by a {@link ExecutionMode#SYNC} start (phase
-   * two of VanillaBP's two-phase start).
+   * two of VanillaBP's two-phase start). The workflow-aggregate id is one of the
+   * {@code variables} - which one is the adapter's decision (the variable is named
+   * after the aggregate's ID property), so the engine fake does not single it out.
    *
    * @param instanceId The generated instance id
-   * @param aggregateId The workflow-aggregate id the instance was keyed by
    * @param variables The process variables the instance was started with
    */
-<span class="fc" id="L101">  public record StartedInstance(String instanceId, Object aggregateId, Map&lt;String, Object&gt; variables) {</span>
+<span class="fc" id="L94">  public record StartedInstance(String instanceId, Map&lt;String, Object&gt; variables) {</span>
 
   }
 
@@ -106,9 +99,9 @@ import io.vanillabp.integration.adapter.spi.MigratableProcessService;
    * All invocations recorded so far, in call order. Public and inspectable on purpose:
    * tests assert against it directly.
    */
-<span class="fc" id="L109">  public final List&lt;Invocation&gt; invocations = new CopyOnWriteArrayList&lt;&gt;();</span>
+<span class="fc" id="L102">  public final List&lt;Invocation&gt; invocations = new CopyOnWriteArrayList&lt;&gt;();</span>
 
-<span class="fc" id="L111">  private final List&lt;Deployment&gt; deployments = new CopyOnWriteArrayList&lt;&gt;();</span>
+<span class="fc" id="L104">  private final List&lt;Deployment&gt; deployments = new CopyOnWriteArrayList&lt;&gt;();</span>
 
   /**
    * All instances created by {@link ExecutionMode#SYNC} starts, in creation order.
@@ -116,32 +109,32 @@ import io.vanillabp.integration.adapter.spi.MigratableProcessService;
    * same aggregate have to be observable by tests - a map would silently overwrite
    * and hide exactly the bug the mock is meant to surface.
    */
-<span class="fc" id="L119">  private final List&lt;StartedInstance&gt; startedInstances = new CopyOnWriteArrayList&lt;&gt;();</span>
+<span class="fc" id="L112">  private final List&lt;StartedInstance&gt; startedInstances = new CopyOnWriteArrayList&lt;&gt;();</span>
 
   /**
    * BPMN process ids whose {@link ExecutionMode#PREFLIGHT_CHECK} is injected to
    * fail - used by tests to assert that a failed phase one rolls the caller's
    * transaction back.
    */
-<span class="fc" id="L126">  private final Set&lt;String&gt; failPreflightForProcessIds = ConcurrentHashMap.newKeySet();</span>
+<span class="fc" id="L119">  private final Set&lt;String&gt; failPreflightForProcessIds = ConcurrentHashMap.newKeySet();</span>
 
   /**
    * BPMN process ids whose {@link ExecutionMode#SYNC} start is injected to fail
    * ONCE per entry - used by tests to assert that a failed phase two makes the
    * outbox retry the dispatch.
    */
-<span class="fc" id="L133">  private final Set&lt;String&gt; failNextSyncForProcessIds = ConcurrentHashMap.newKeySet();</span>
+<span class="fc" id="L126">  private final Set&lt;String&gt; failNextSyncForProcessIds = ConcurrentHashMap.newKeySet();</span>
 
-<span class="fc" id="L135">  private final AtomicLong deploymentCounter = new AtomicLong();</span>
+<span class="fc" id="L128">  private final AtomicLong deploymentCounter = new AtomicLong();</span>
 
-<span class="fc" id="L137">  private final AtomicLong instanceCounter = new AtomicLong();</span>
+<span class="fc" id="L130">  private final AtomicLong instanceCounter = new AtomicLong();</span>
 
   /**
    * @return All invocations recorded so far, in call order.
    */
   public List&lt;Invocation&gt; getInvocations() {
 
-<span class="fc" id="L144">    return invocations;</span>
+<span class="fc" id="L137">    return invocations;</span>
 
   }
 
@@ -150,7 +143,7 @@ import io.vanillabp.integration.adapter.spi.MigratableProcessService;
    */
   public List&lt;Deployment&gt; getDeployments() {
 
-<span class="fc" id="L153">    return deployments;</span>
+<span class="fc" id="L146">    return deployments;</span>
 
   }
 
@@ -160,7 +153,7 @@ import io.vanillabp.integration.adapter.spi.MigratableProcessService;
    */
   public List&lt;StartedInstance&gt; getStartedInstances() {
 
-<span class="fc" id="L163">    return startedInstances;</span>
+<span class="fc" id="L156">    return startedInstances;</span>
 
   }
 
@@ -173,9 +166,9 @@ import io.vanillabp.integration.adapter.spi.MigratableProcessService;
   public void failPreflightFor(
       final String bpmnProcessId) {
 
-<span class="fc" id="L176">    failPreflightForProcessIds.add(bpmnProcessId);</span>
+<span class="fc" id="L169">    failPreflightForProcessIds.add(bpmnProcessId);</span>
 
-<span class="fc" id="L178">  }</span>
+<span class="fc" id="L171">  }</span>
 
   /**
    * Injects ONE failing {@link ExecutionMode#SYNC} start for the given BPMN process
@@ -186,22 +179,22 @@ import io.vanillabp.integration.adapter.spi.MigratableProcessService;
   public void failNextSyncFor(
       final String bpmnProcessId) {
 
-<span class="fc" id="L189">    failNextSyncForProcessIds.add(bpmnProcessId);</span>
+<span class="fc" id="L182">    failNextSyncForProcessIds.add(bpmnProcessId);</span>
 
-<span class="fc" id="L191">  }</span>
+<span class="fc" id="L184">  }</span>
 
   /**
    * Clears all recorded invocations and all fake state (deployments, started instances).
    */
   public void reset() {
 
-<span class="fc" id="L198">    invocations.clear();</span>
-<span class="fc" id="L199">    deployments.clear();</span>
-<span class="fc" id="L200">    startedInstances.clear();</span>
-<span class="fc" id="L201">    failPreflightForProcessIds.clear();</span>
-<span class="fc" id="L202">    failNextSyncForProcessIds.clear();</span>
+<span class="fc" id="L191">    invocations.clear();</span>
+<span class="fc" id="L192">    deployments.clear();</span>
+<span class="fc" id="L193">    startedInstances.clear();</span>
+<span class="fc" id="L194">    failPreflightForProcessIds.clear();</span>
+<span class="fc" id="L195">    failNextSyncForProcessIds.clear();</span>
 
-<span class="fc" id="L204">  }</span>
+<span class="fc" id="L197">  }</span>
 
   /**
    * Extracts the BPMN process id from the command. The Process-Engine-API's
@@ -217,9 +210,9 @@ import io.vanillabp.integration.adapter.spi.MigratableProcessService;
       final StartProcessCommand cmd) {
 
     try {
-<span class="fc" id="L220">      return (String) cmd.getClass().getMethod(&quot;getBpmnProcessId&quot;).invoke(cmd);</span>
-<span class="nc" id="L221">    } catch (final Exception e) {</span>
-<span class="nc" id="L222">      return null;</span>
+<span class="fc" id="L213">      return (String) cmd.getClass().getMethod(&quot;getBpmnProcessId&quot;).invoke(cmd);</span>
+<span class="nc" id="L214">    } catch (final Exception e) {</span>
+<span class="nc" id="L215">      return null;</span>
     }
 
   }
@@ -229,12 +222,12 @@ import io.vanillabp.integration.adapter.spi.MigratableProcessService;
       final String method,
       final Object command) {
 
-<span class="pc bpc" id="L232" title="1 of 2 branches missed.">    final var executionMode = command instanceof ExecutionModeAware executionModeAware</span>
-<span class="fc" id="L233">        ? executionModeAware.executionMode()</span>
-<span class="pc" id="L234">        : null;</span>
-<span class="fc" id="L235">    invocations.add(new Invocation(api, method, command, executionMode));</span>
+<span class="pc bpc" id="L225" title="1 of 2 branches missed.">    final var executionMode = command instanceof ExecutionModeAware executionModeAware</span>
+<span class="fc" id="L226">        ? executionModeAware.executionMode()</span>
+<span class="pc" id="L227">        : null;</span>
+<span class="fc" id="L228">    invocations.add(new Invocation(api, method, command, executionMode));</span>
 
-<span class="fc" id="L237">  }</span>
+<span class="fc" id="L230">  }</span>
 
   // --- DeploymentApi ---
 
@@ -242,13 +235,13 @@ import io.vanillabp.integration.adapter.spi.MigratableProcessService;
   public CompletableFuture&lt;DeploymentInformation&gt; deploy(
       final DeployBundleCommand cmd) {
 
-<span class="fc" id="L245">    record(&quot;DeploymentApi&quot;, &quot;deploy&quot;, cmd);</span>
-<span class="fc" id="L246">    final var deploymentInformation = new DeploymentInformation(</span>
+<span class="fc" id="L238">    record(&quot;DeploymentApi&quot;, &quot;deploy&quot;, cmd);</span>
+<span class="fc" id="L239">    final var deploymentInformation = new DeploymentInformation(</span>
         &quot;mock-deployment-&quot;
-<span class="fc" id="L248">            + deploymentCounter.incrementAndGet(), Instant.now(), cmd.getTenantId());</span>
-<span class="fc" id="L249">    deployments.add(</span>
-<span class="fc" id="L250">        new Deployment(deploymentInformation.getDeploymentKey(), List.copyOf(cmd.getResources()), cmd.getTenantId()));</span>
-<span class="fc" id="L251">    return CompletableFuture.completedFuture(deploymentInformation);</span>
+<span class="fc" id="L241">            + deploymentCounter.incrementAndGet(), Instant.now(), cmd.getTenantId());</span>
+<span class="fc" id="L242">    deployments.add(</span>
+<span class="fc" id="L243">        new Deployment(deploymentInformation.getDeploymentKey(), List.copyOf(cmd.getResources()), cmd.getTenantId()));</span>
+<span class="fc" id="L244">    return CompletableFuture.completedFuture(deploymentInformation);</span>
 
   }
 
@@ -258,37 +251,36 @@ import io.vanillabp.integration.adapter.spi.MigratableProcessService;
   public CompletableFuture&lt;ProcessInformation&gt; startProcess(
       final StartProcessCommand cmd) {
 
-<span class="fc" id="L261">    record(&quot;StartProcessApi&quot;, &quot;startProcess&quot;, cmd);</span>
-<span class="fc" id="L262">    final var bpmnProcessId = bpmnProcessIdOf(cmd);</span>
+<span class="fc" id="L254">    record(&quot;StartProcessApi&quot;, &quot;startProcess&quot;, cmd);</span>
+<span class="fc" id="L255">    final var bpmnProcessId = bpmnProcessIdOf(cmd);</span>
     // Only ExecutionMode.SYNC creates an instance: this is phase two of VanillaBP's
     // two-phase start. ExecutionMode.PREFLIGHT_CHECK (phase one) validates only and
     // must not create one; any other mode is recorded but creates nothing either.
     // NOTE: the mock cannot validate a PREFLIGHT_CHECK against the deployed
     // processes - deployed resources are opaque (no BPMN model type, see GAPS.md);
     // tests inject failures via failPreflightFor instead.
-<span class="fc bfc" id="L269" title="All 2 branches covered.">    if (cmd.executionMode() == ExecutionMode.PREFLIGHT_CHECK) {</span>
-<span class="fc bfc" id="L270" title="All 2 branches covered.">      if (failPreflightForProcessIds.contains(bpmnProcessId)) {</span>
-<span class="fc" id="L271">        return CompletableFuture.failedFuture(new IllegalStateException(</span>
-<span class="fc" id="L272">            &quot;Preflight check failed for BPMN process '%s' (injected by the mock)&quot;.formatted(bpmnProcessId)));</span>
+<span class="fc bfc" id="L262" title="All 2 branches covered.">    if (cmd.executionMode() == ExecutionMode.PREFLIGHT_CHECK) {</span>
+<span class="fc bfc" id="L263" title="All 2 branches covered.">      if (failPreflightForProcessIds.contains(bpmnProcessId)) {</span>
+<span class="fc" id="L264">        return CompletableFuture.failedFuture(new IllegalStateException(</span>
+<span class="fc" id="L265">            &quot;Preflight check failed for BPMN process '%s' (injected by the mock)&quot;.formatted(bpmnProcessId)));</span>
       }
-<span class="fc" id="L274">      return CompletableFuture.completedFuture(new ProcessInformation(&quot;mock-no-instance&quot;, Map.of()));</span>
+<span class="fc" id="L267">      return CompletableFuture.completedFuture(new ProcessInformation(&quot;mock-no-instance&quot;, Map.of()));</span>
     }
-<span class="pc bpc" id="L276" title="1 of 2 branches missed.">    if (cmd.executionMode() != ExecutionMode.SYNC) {</span>
-<span class="nc" id="L277">      return CompletableFuture.completedFuture(new ProcessInformation(&quot;mock-no-instance&quot;, Map.of()));</span>
+<span class="pc bpc" id="L269" title="1 of 2 branches missed.">    if (cmd.executionMode() != ExecutionMode.SYNC) {</span>
+<span class="nc" id="L270">      return CompletableFuture.completedFuture(new ProcessInformation(&quot;mock-no-instance&quot;, Map.of()));</span>
     }
-<span class="fc bfc" id="L279" title="All 2 branches covered.">    if (failNextSyncForProcessIds.remove(bpmnProcessId)) {</span>
-<span class="fc" id="L280">      return CompletableFuture.failedFuture(new IllegalStateException(</span>
-<span class="fc" id="L281">          &quot;Starting BPMN process '%s' failed (injected by the mock, once)&quot;.formatted(bpmnProcessId)));</span>
+<span class="fc bfc" id="L272" title="All 2 branches covered.">    if (failNextSyncForProcessIds.remove(bpmnProcessId)) {</span>
+<span class="fc" id="L273">      return CompletableFuture.failedFuture(new IllegalStateException(</span>
+<span class="fc" id="L274">          &quot;Starting BPMN process '%s' failed (injected by the mock, once)&quot;.formatted(bpmnProcessId)));</span>
     }
-<span class="fc" id="L283">    final Map&lt;String, ?&gt; payload = cmd.get();</span>
-<span class="pc bpc" id="L284" title="1 of 2 branches missed.">    final var variables = payload == null</span>
-<span class="nc" id="L285">        ? Map.&lt;String, Object&gt;of()</span>
-<span class="fc" id="L286">        : new LinkedHashMap&lt;String, Object&gt;(payload);</span>
-<span class="fc" id="L287">    final var aggregateId = variables.get(AGGREGATE_ID_VARIABLE);</span>
-<span class="fc" id="L288">    final var instanceId = &quot;mock-instance-&quot;</span>
-<span class="fc" id="L289">        + instanceCounter.incrementAndGet();</span>
-<span class="fc" id="L290">    startedInstances.add(new StartedInstance(instanceId, aggregateId, variables));</span>
-<span class="fc" id="L291">    return CompletableFuture.completedFuture(new ProcessInformation(instanceId, Map.of()));</span>
+<span class="fc" id="L276">    final Map&lt;String, ?&gt; payload = cmd.get();</span>
+<span class="pc bpc" id="L277" title="1 of 2 branches missed.">    final var variables = payload == null</span>
+<span class="nc" id="L278">        ? Map.&lt;String, Object&gt;of()</span>
+<span class="fc" id="L279">        : new LinkedHashMap&lt;String, Object&gt;(payload);</span>
+<span class="fc" id="L280">    final var instanceId = &quot;mock-instance-&quot;</span>
+<span class="fc" id="L281">        + instanceCounter.incrementAndGet();</span>
+<span class="fc" id="L282">    startedInstances.add(new StartedInstance(instanceId, variables));</span>
+<span class="fc" id="L283">    return CompletableFuture.completedFuture(new ProcessInformation(instanceId, Map.of()));</span>
 
   }
 
@@ -298,8 +290,8 @@ import io.vanillabp.integration.adapter.spi.MigratableProcessService;
   public CompletableFuture&lt;Empty&gt; correlateMessage(
       final CorrelateMessageCmd cmd) {
 
-<span class="nc" id="L301">    record(&quot;CorrelationApi&quot;, &quot;correlateMessage&quot;, cmd);</span>
-<span class="nc" id="L302">    return CompletableFuture.completedFuture(Empty.INSTANCE);</span>
+<span class="nc" id="L293">    record(&quot;CorrelationApi&quot;, &quot;correlateMessage&quot;, cmd);</span>
+<span class="nc" id="L294">    return CompletableFuture.completedFuture(Empty.INSTANCE);</span>
 
   }
 
@@ -309,8 +301,8 @@ import io.vanillabp.integration.adapter.spi.MigratableProcessService;
   public CompletableFuture&lt;TaskSubscription&gt; subscribeForTask(
       final SubscribeForTaskCmd cmd) {
 
-<span class="nc" id="L312">    record(&quot;TaskSubscriptionApi&quot;, &quot;subscribeForTask&quot;, cmd);</span>
-<span class="nc" id="L313">    return CompletableFuture.completedFuture(new TaskSubscription() {</span>
+<span class="nc" id="L304">    record(&quot;TaskSubscriptionApi&quot;, &quot;subscribeForTask&quot;, cmd);</span>
+<span class="nc" id="L305">    return CompletableFuture.completedFuture(new TaskSubscription() {</span>
     });
 
   }
@@ -319,8 +311,8 @@ import io.vanillabp.integration.adapter.spi.MigratableProcessService;
   public CompletableFuture&lt;Empty&gt; unsubscribe(
       final UnsubscribeFromTaskCmd cmd) {
 
-<span class="nc" id="L322">    record(&quot;TaskSubscriptionApi&quot;, &quot;unsubscribe&quot;, cmd);</span>
-<span class="nc" id="L323">    return CompletableFuture.completedFuture(Empty.INSTANCE);</span>
+<span class="nc" id="L314">    record(&quot;TaskSubscriptionApi&quot;, &quot;unsubscribe&quot;, cmd);</span>
+<span class="nc" id="L315">    return CompletableFuture.completedFuture(Empty.INSTANCE);</span>
 
   }
 
@@ -330,8 +322,8 @@ import io.vanillabp.integration.adapter.spi.MigratableProcessService;
   public CompletableFuture&lt;Empty&gt; completeTask(
       final CompleteTaskCmd cmd) {
 
-<span class="nc" id="L333">    record(&quot;TaskCompletionApi&quot;, &quot;completeTask&quot;, cmd);</span>
-<span class="nc" id="L334">    return CompletableFuture.completedFuture(Empty.INSTANCE);</span>
+<span class="nc" id="L325">    record(&quot;TaskCompletionApi&quot;, &quot;completeTask&quot;, cmd);</span>
+<span class="nc" id="L326">    return CompletableFuture.completedFuture(Empty.INSTANCE);</span>
 
   }
 
@@ -339,8 +331,8 @@ import io.vanillabp.integration.adapter.spi.MigratableProcessService;
   public CompletableFuture&lt;Empty&gt; completeTaskByError(
       final CompleteTaskByErrorCmd cmd) {
 
-<span class="nc" id="L342">    record(&quot;TaskCompletionApi&quot;, &quot;completeTaskByError&quot;, cmd);</span>
-<span class="nc" id="L343">    return CompletableFuture.completedFuture(Empty.INSTANCE);</span>
+<span class="nc" id="L334">    record(&quot;TaskCompletionApi&quot;, &quot;completeTaskByError&quot;, cmd);</span>
+<span class="nc" id="L335">    return CompletableFuture.completedFuture(Empty.INSTANCE);</span>
 
   }
 
@@ -348,8 +340,8 @@ import io.vanillabp.integration.adapter.spi.MigratableProcessService;
   public CompletableFuture&lt;Empty&gt; failTask(
       final FailTaskCmd cmd) {
 
-<span class="nc" id="L351">    record(&quot;ServiceTaskCompletionApi&quot;, &quot;failTask&quot;, cmd);</span>
-<span class="nc" id="L352">    return CompletableFuture.completedFuture(Empty.INSTANCE);</span>
+<span class="nc" id="L343">    record(&quot;ServiceTaskCompletionApi&quot;, &quot;failTask&quot;, cmd);</span>
+<span class="nc" id="L344">    return CompletableFuture.completedFuture(Empty.INSTANCE);</span>
 
   }
 
@@ -359,7 +351,7 @@ import io.vanillabp.integration.adapter.spi.MigratableProcessService;
   public MetaInfo meta(
       final MetaInfoAware instance) {
 
-<span class="nc" id="L362">    return new MetaInfo() {</span>
+<span class="nc" id="L354">    return new MetaInfo() {</span>
     };
 
   }
@@ -367,7 +359,7 @@ import io.vanillabp.integration.adapter.spi.MigratableProcessService;
   @Override
   public Set&lt;String&gt; getSupportedRestrictions() {
 
-<span class="nc" id="L370">    return Set.of();</span>
+<span class="nc" id="L362">    return Set.of();</span>
 
   }
 
