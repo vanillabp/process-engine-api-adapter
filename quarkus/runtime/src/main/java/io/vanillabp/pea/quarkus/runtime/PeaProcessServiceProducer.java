@@ -1,9 +1,11 @@
 package io.vanillabp.pea.quarkus.runtime;
 
+import java.util.List;
 import java.util.Map;
 
 import dev.bpmcrafters.processengineapi.process.StartProcessApi;
 import io.vanillabp.integration.adapter.migration.config.MigrationAdapterProperties;
+import io.vanillabp.integration.adapter.spi.MigratableProcessService;
 import io.vanillabp.pea.PeaAdapter;
 import io.vanillabp.pea.processservice.PeaProcessService;
 import jakarta.enterprise.context.ApplicationScoped;
@@ -26,20 +28,25 @@ public class PeaProcessServiceProducer {
    * {@link StartProcessApi}); upcoming stories add theirs when they consume them.
    */
   @Produces
-  public PeaProcessService<Object> peaMigratableProcessService(
+  public List<MigratableProcessService<Object>> peaMigratableProcessServices(
       final MigrationAdapterProperties properties,
       final StartProcessApi startProcessApi) {
 
-    final var adapterId = properties
+    // ONE bean of type List with one instance PER configured adapter id of this
+    // adapter's type (a CDI producer cannot yield N element beans for N
+    // runtime-configured ids); the platform's collection point flattens List beans
+    // alongside element beans. The id set always comes from the platform's core
+    // properties.
+    return properties
         .adapterTypes()
         .entrySet()
         .stream()
         .filter(adapter -> PeaAdapter.ADAPTER_TYPE.equals(adapter.getValue()))
         .map(Map.Entry::getKey)
-        .findFirst()
-        .orElse("");
-
-    return new PeaProcessService<>(adapterId, startProcessApi);
+        .sorted()
+        .<MigratableProcessService<Object>>map(
+            adapterId -> new PeaProcessService<>(adapterId, startProcessApi))
+        .toList();
 
   }
 

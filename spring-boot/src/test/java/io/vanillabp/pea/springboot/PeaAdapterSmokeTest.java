@@ -14,7 +14,6 @@ import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 import io.vanillabp.integration.workflowmodule.WorkflowModuleAutoConfiguration;
 import io.vanillabp.pea.PeaAdapter;
 import io.vanillabp.pea.mock.InMemoryProcessEngine;
-import io.vanillabp.pea.springboot.deployment.PeaAdapterDeploymentConfiguration;
 import io.vanillabp.pea.springboot.processservice.PeaAdapterProcessServiceConfiguration;
 
 /**
@@ -25,7 +24,7 @@ import io.vanillabp.pea.springboot.processservice.PeaAdapterProcessServiceConfig
  */
 @SpringBootTest(
     classes = {
-        PeaAdapterConfiguration.class, PeaAdapterDeploymentConfiguration.class, PeaAdapterProcessServiceConfiguration.class, WorkflowModuleAutoConfiguration.class, SpringBootMigrationAdapterAutoConfiguration.class, TestPersistenceConfiguration.class
+        PeaAdapterConfiguration.class, PeaAdapterProcessServiceConfiguration.class, WorkflowModuleAutoConfiguration.class, SpringBootMigrationAdapterAutoConfiguration.class, TestPersistenceConfiguration.class
     })
 @ExtendWith(SuppressOutputExtension.class)
 public class PeaAdapterSmokeTest {

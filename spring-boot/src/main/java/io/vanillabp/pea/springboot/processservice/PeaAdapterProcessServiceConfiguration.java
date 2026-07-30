@@ -1,18 +1,14 @@
 package io.vanillabp.pea.springboot.processservice;
 
-import java.util.Map;
 
-import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Import;
 
-import dev.bpmcrafters.processengineapi.process.StartProcessApi;
-import io.vanillabp.integration.adapter.migration.config.MigrationAdapterProperties;
 import io.vanillabp.integration.adapter.spi.MigratableProcessService;
-import io.vanillabp.pea.PeaAdapter;
 import io.vanillabp.pea.mock.InMemoryProcessEngine;
-import io.vanillabp.pea.processservice.PeaProcessService;
+import io.vanillabp.pea.springboot.PeaAdapterBeanRegistrar;
 import lombok.extern.slf4j.Slf4j;
 
 /**
@@ -28,6 +24,7 @@ import lombok.extern.slf4j.Slf4j;
  */
 @AutoConfiguration
 @Slf4j
+@Import(PeaAdapterBeanRegistrar.class)
 public class PeaAdapterProcessServiceConfiguration {
 
   /**
@@ -53,27 +50,5 @@ public class PeaAdapterProcessServiceConfiguration {
 
   }
 
-  /**
-   * Only the Process-Engine-APIs the adapter actually uses are injected (currently
-   * {@link StartProcessApi}); upcoming stories add theirs when they consume them.
-   */
-  @Bean
-  public MigratableProcessService<?> peaMigratableProcessService(
-      final ObjectProvider<MigrationAdapterProperties> properties,
-      final StartProcessApi startProcessApi) {
-
-    final var adapterId = properties
-        .getObject()
-        .adapterTypes()
-        .entrySet()
-        .stream()
-        .filter(adapter -> PeaAdapter.ADAPTER_TYPE.equals(adapter.getValue()))
-        .map(Map.Entry::getKey)
-        .findFirst()
-        .orElse("");
-
-    return new PeaProcessService<>(adapterId, startProcessApi);
-
-  }
 
 }

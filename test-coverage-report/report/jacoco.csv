@@ -10,10 +10,10 @@ VanillaBP adapter for the Process-Engine-API - Test coverage report/process-engi
 VanillaBP adapter for the Process-Engine-API - Test coverage report/process-engine-api-mock,io.vanillabp.pea.mock,InMemoryProcessEngine.new TaskSubscription() {...},3,0,0,0,1,0,1,0,1,0
 VanillaBP adapter for the Process-Engine-API - Test coverage report/process-engine-api-mock,io.vanillabp.pea.mock,InMemoryProcessEngine.StartedInstance,0,9,0,0,0,1,0,1,0,1
 VanillaBP adapter for the Process-Engine-API - Test coverage report/process-engine-api-mock,io.vanillabp.pea.mock,InMemoryProcessEngine,71,229,3,9,18,51,11,14,8,11
-VanillaBP adapter for the Process-Engine-API - Test coverage report/process-engine-api-adapter-spring-boot,io.vanillabp.pea.springboot.deployment,PeaAdapterDeploymentConfiguration,0,28,0,0,0,10,0,3,0,3
-VanillaBP adapter for the Process-Engine-API - Test coverage report/process-engine-api-adapter-spring-boot,io.vanillabp.pea.springboot.processservice,PeaAdapterProcessServiceConfiguration,0,40,0,0,0,14,0,5,0,5
+VanillaBP adapter for the Process-Engine-API - Test coverage report/process-engine-api-adapter-spring-boot,io.vanillabp.pea.springboot.processservice,PeaAdapterProcessServiceConfiguration,0,14,0,0,0,4,0,3,0,3
+VanillaBP adapter for the Process-Engine-API - Test coverage report/process-engine-api-adapter-spring-boot,io.vanillabp.pea.springboot,PeaAdapterBeanRegistrar,0,66,0,0,0,12,0,7,0,7
 VanillaBP adapter for the Process-Engine-API - Test coverage report/process-engine-api-adapter-spring-boot,io.vanillabp.pea.springboot,PeaAdapterConfiguration,0,5,0,0,0,2,0,2,0,2
-VanillaBP adapter for the Process-Engine-API - Test coverage report/process-engine-api-adapter-quarkus,io.vanillabp.pea.quarkus.runtime,PeaProcessServiceProducer,27,0,0,0,10,0,3,0,3,0
+VanillaBP adapter for the Process-Engine-API - Test coverage report/process-engine-api-adapter-quarkus,io.vanillabp.pea.quarkus.runtime,PeaProcessServiceProducer,28,0,0,0,11,0,4,0,4,0
 VanillaBP adapter for the Process-Engine-API - Test coverage report/process-engine-api-adapter-quarkus,io.vanillabp.pea.quarkus.runtime,PeaProcessEngineProducer,0,14,0,0,0,4,0,3,0,3
 VanillaBP adapter for the Process-Engine-API - Test coverage report/process-engine-api-adapter-quarkus-deployment,io.vanillabp.pea.quarkus.deployment,PeaIntegrationProcessor..accessor,4,0,0,0,1,0,1,0,1,0
 VanillaBP adapter for the Process-Engine-API - Test coverage report/process-engine-api-adapter-quarkus-deployment,io.vanillabp.pea.quarkus.deployment,PeaIntegrationProcessor,0,23,0,0,0,12,0,3,0,3

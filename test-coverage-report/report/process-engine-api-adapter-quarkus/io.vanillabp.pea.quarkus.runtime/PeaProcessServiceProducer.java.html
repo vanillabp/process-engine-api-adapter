@@ -1,9 +1,11 @@
 <?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../../jacoco-resources/report.gif" type="image/gif"/><title>PeaProcessServiceProducer.java</title><link rel="stylesheet" href="../../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../../index.html" class="el_report">VanillaBP adapter for the Process-Engine-API - Test coverage report</a> &gt; <a href="../index.html" class="el_bundle">process-engine-api-adapter-quarkus</a> &gt; <a href="index.source.html" class="el_package">io.vanillabp.pea.quarkus.runtime</a> &gt; <span class="el_source">PeaProcessServiceProducer.java</span></div><h1>PeaProcessServiceProducer.java</h1><pre class="source lang-java linenums">package io.vanillabp.pea.quarkus.runtime;
 
+import java.util.List;
 import java.util.Map;
 
 import dev.bpmcrafters.processengineapi.process.StartProcessApi;
 import io.vanillabp.integration.adapter.migration.config.MigrationAdapterProperties;
+import io.vanillabp.integration.adapter.spi.MigratableProcessService;
 import io.vanillabp.pea.PeaAdapter;
 import io.vanillabp.pea.processservice.PeaProcessService;
 import jakarta.enterprise.context.ApplicationScoped;
@@ -19,27 +21,32 @@ import jakarta.enterprise.inject.Produces;
  * mock-backed {@link io.vanillabp.pea.mock.InMemoryProcessEngine} default bean.
  */
 @ApplicationScoped
-<span class="nc" id="L22">public class PeaProcessServiceProducer {</span>
+<span class="nc" id="L24">public class PeaProcessServiceProducer {</span>
 
   /**
    * Only the Process-Engine-APIs the adapter actually uses are injected (currently
    * {@link StartProcessApi}); upcoming stories add theirs when they consume them.
    */
   @Produces
-  public PeaProcessService&lt;Object&gt; peaMigratableProcessService(
+  public List&lt;MigratableProcessService&lt;Object&gt;&gt; peaMigratableProcessServices(
       final MigrationAdapterProperties properties,
       final StartProcessApi startProcessApi) {
 
-<span class="nc" id="L33">    final var adapterId = properties</span>
-<span class="nc" id="L34">        .adapterTypes()</span>
-<span class="nc" id="L35">        .entrySet()</span>
-<span class="nc" id="L36">        .stream()</span>
-<span class="nc" id="L37">        .filter(adapter -&gt; PeaAdapter.ADAPTER_TYPE.equals(adapter.getValue()))</span>
-<span class="nc" id="L38">        .map(Map.Entry::getKey)</span>
-<span class="nc" id="L39">        .findFirst()</span>
-<span class="nc" id="L40">        .orElse(&quot;&quot;);</span>
-
-<span class="nc" id="L42">    return new PeaProcessService&lt;&gt;(adapterId, startProcessApi);</span>
+    // ONE bean of type List with one instance PER configured adapter id of this
+    // adapter's type (a CDI producer cannot yield N element beans for N
+    // runtime-configured ids); the platform's collection point flattens List beans
+    // alongside element beans. The id set always comes from the platform's core
+    // properties.
+<span class="nc" id="L40">    return properties</span>
+<span class="nc" id="L41">        .adapterTypes()</span>
+<span class="nc" id="L42">        .entrySet()</span>
+<span class="nc" id="L43">        .stream()</span>
+<span class="nc" id="L44">        .filter(adapter -&gt; PeaAdapter.ADAPTER_TYPE.equals(adapter.getValue()))</span>
+<span class="nc" id="L45">        .map(Map.Entry::getKey)</span>
+<span class="nc" id="L46">        .sorted()</span>
+<span class="nc" id="L47">        .&lt;MigratableProcessService&lt;Object&gt;&gt;map(</span>
+<span class="nc" id="L48">            adapterId -&gt; new PeaProcessService&lt;&gt;(adapterId, startProcessApi))</span>
+<span class="nc" id="L49">        .toList();</span>
 
   }
 
