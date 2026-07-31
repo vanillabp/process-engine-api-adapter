@@ -24,7 +24,7 @@ import io.vanillabp.pea.springboot.processservice.PeaAdapterProcessServiceConfig
  */
 @SpringBootTest(
     classes = {
-        PeaAdapterConfiguration.class, PeaAdapterProcessServiceConfiguration.class, WorkflowModuleAutoConfiguration.class, SpringBootMigrationAdapterAutoConfiguration.class, TestPersistenceConfiguration.class
+        PeaAdapterConfiguration.class, PeaAdapterProcessServiceConfiguration.class, WorkflowModuleAutoConfiguration.class, SpringBootMigrationAdapterAutoConfiguration.class, TestPersistenceConfiguration.class, TestOutboxConfiguration.class
     })
 @ExtendWith(SuppressOutputExtension.class)
 public class PeaAdapterSmokeTest {

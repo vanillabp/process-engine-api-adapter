@@ -26,7 +26,7 @@ import io.vanillabp.pea.springboot.processservice.PeaAdapterProcessServiceConfig
  */
 @SpringBootTest(
     classes = {
-        PeaAdapterConfiguration.class, PeaAdapterProcessServiceConfiguration.class, WorkflowModuleAutoConfiguration.class, SpringBootMigrationAdapterAutoConfiguration.class, TestPersistenceConfiguration.class
+        PeaAdapterConfiguration.class, PeaAdapterProcessServiceConfiguration.class, WorkflowModuleAutoConfiguration.class, SpringBootMigrationAdapterAutoConfiguration.class, TestPersistenceConfiguration.class, TestOutboxConfiguration.class
     },
     properties = {
         "vanillabp.prioritized-adapters=pea,pea-two", "vanillabp.adapters.pea-two.type=process-engine-api", "vanillabp.workflow-modules.pea-test-module.adapters.pea-two.resources-location=classpath*:pea-test-module/processes/none"
