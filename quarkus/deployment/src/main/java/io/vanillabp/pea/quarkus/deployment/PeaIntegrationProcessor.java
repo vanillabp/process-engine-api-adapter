@@ -4,9 +4,11 @@ import io.quarkus.arc.deployment.AdditionalBeanBuildItem;
 import io.quarkus.deployment.annotations.BuildProducer;
 import io.quarkus.deployment.annotations.BuildStep;
 import io.quarkus.deployment.builditem.FeatureBuildItem;
+import io.vanillabp.integration.deployment.pipeline.VanillaBpAdapterDeploymentServiceBuildItem;
 import io.vanillabp.integration.deployment.processservice.VanillaBpMigratableProcessServiceBuildItem;
 import io.vanillabp.pea.PeaAdapter;
 import io.vanillabp.pea.quarkus.deployment.config.PeaProperties;
+import io.vanillabp.pea.quarkus.runtime.PeaDeploymentServiceProducer;
 import io.vanillabp.pea.quarkus.runtime.PeaProcessEngineProducer;
 import io.vanillabp.pea.quarkus.runtime.PeaProcessServiceProducer;
 
@@ -45,6 +47,26 @@ class PeaIntegrationProcessor {
   }
 
   /**
+   * Builds the {@link VanillaBpAdapterDeploymentServiceBuildItem} used by the VanillaBP
+   * Quarkus integration to determine and register the deployment-service bean of the
+   * Process-Engine-API adapter - consumed by the platform's runtime deployment pipeline
+   * (readBpmn &rarr; prepareBpmn &rarr; wireBpmn &rarr; deployResources &rarr;
+   * startWorkflowProcessing).
+   *
+   * @return The {@link VanillaBpAdapterDeploymentServiceBuildItem}
+   */
+  @BuildStep
+  VanillaBpAdapterDeploymentServiceBuildItem buildDeploymentServices() {
+
+    return VanillaBpAdapterDeploymentServiceBuildItem
+        .builder()
+        .adapterType(PeaAdapter.ADAPTER_TYPE)
+        .deploymentServiceBeanClass(PeaDeploymentServiceProducer.class.getName())
+        .build();
+
+  }
+
+  /**
    * Registers the runtime producers: the Process-Engine-API adapter's process service and
    * the default in-memory mock engine backing it.
    *
@@ -53,8 +75,9 @@ class PeaIntegrationProcessor {
   @BuildStep
   AdditionalBeanBuildItem registerProducers() {
 
-    // the process-service producer is registered by the VanillaBP extension via
-    // the build item above - only the mock-engine producer is registered here
+    // the process-service and deployment-service producers are registered by the
+    // VanillaBP extension via the build items above - only the mock-engine producer
+    // is registered here
     return AdditionalBeanBuildItem
         .builder()
         .addBeanClass(PeaProcessEngineProducer.class)

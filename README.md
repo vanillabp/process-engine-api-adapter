@@ -104,10 +104,11 @@ replaces the mock with a real Process-Engine-API implementation.
   (`AggregatePersistenceAware.getAggregateIdName()`; there is no business-key slot —
   [`GAPS.md`](GAPS.md), entry 3). Phase two is at-least-once, so duplicates are possible until
   the core-side `WorkflowInstanceRegistry` story lands.
-- **Platform coverage:** deployment is wired and integration-tested on **Spring Boot**. On
-  **Quarkus** the adapter and the mock engine are wired and smoke-tested, but the
-  deployment-service producer is not wired yet (mirroring the Quarkus dummy-adapter template,
-  which does not wire deployment services either) — a later story.
+- **Platform coverage:** deployment is wired and integration-tested on **both platforms**:
+  Spring Boot (`PeaDeploymentServiceTest`, `DeploymentIntegrationTest`) and Quarkus
+  (`PeaDeploymentPipelineTest` - since story 26b the Quarkus platform integration runs the
+  deployment pipeline at boot; the test proves `deployResources` reaches the in-memory mock
+  engine, `InMemoryProcessEngine.getDeployments()`).
 
 ## Build
 

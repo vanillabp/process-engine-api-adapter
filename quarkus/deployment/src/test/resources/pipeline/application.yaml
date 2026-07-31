@@ -1,0 +1,11 @@
+vanillabp:
+  prioritized-adapters:
+    - pea
+  adapters:
+    pea:
+      type: process-engine-api
+  workflow-modules:
+    pea-test-module:
+      adapters:
+        pea:
+          resources-location: classpath:pea-test-module/processes/deploy
