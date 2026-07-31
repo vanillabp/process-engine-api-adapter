@@ -3,7 +3,7 @@ package io.vanillabp.pea.springboot;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
-import io.vanillabp.integration.adapter.spi.PhaseTwoOutbox;
+import io.vanillabp.integration.spi.PhaseTwoOutbox;
 
 /**
  * Provides a {@link PhaseTwoOutbox} stub for smoke tests booting WITHOUT a database:
