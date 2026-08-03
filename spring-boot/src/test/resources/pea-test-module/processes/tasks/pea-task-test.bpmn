@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:zeebe="http://camunda.org/schema/zeebe/1.0" id="Definitions_peatasks" targetNamespace="http://bpmn.io/schema/bpmn">
+  <bpmn:process id="PeaTaskProcess" isExecutable="true">
+    <bpmn:startEvent id="start">
+      <bpmn:outgoing>f1</bpmn:outgoing>
+    </bpmn:startEvent>
+    <bpmn:sequenceFlow id="f1" sourceRef="start" targetRef="t_happy" />
+    <bpmn:serviceTask id="t_happy">
+      <bpmn:extensionElements>
+        <zeebe:taskDefinition type="peaHappy" />
+      </bpmn:extensionElements>
+      <bpmn:incoming>f1</bpmn:incoming>
+      <bpmn:outgoing>f2</bpmn:outgoing>
+    </bpmn:serviceTask>
+    <bpmn:sequenceFlow id="f2" sourceRef="t_happy" targetRef="t_error" />
+    <bpmn:serviceTask id="t_error">
+      <bpmn:extensionElements>
+        <zeebe:taskDefinition type="peaError" />
+      </bpmn:extensionElements>
+      <bpmn:incoming>f2</bpmn:incoming>
+      <bpmn:outgoing>f3</bpmn:outgoing>
+    </bpmn:serviceTask>
+    <bpmn:sequenceFlow id="f3" sourceRef="t_error" targetRef="t_fails" />
+    <bpmn:serviceTask id="t_fails">
+      <bpmn:extensionElements>
+        <zeebe:taskDefinition type="peaFails" />
+      </bpmn:extensionElements>
+      <bpmn:incoming>f3</bpmn:incoming>
+      <bpmn:outgoing>f4</bpmn:outgoing>
+    </bpmn:serviceTask>
+    <bpmn:sequenceFlow id="f4" sourceRef="t_fails" targetRef="t_async" />
+    <bpmn:serviceTask id="t_async">
+      <bpmn:extensionElements>
+        <zeebe:taskDefinition type="peaAsync" />
+      </bpmn:extensionElements>
+      <bpmn:incoming>f4</bpmn:incoming>
+      <bpmn:outgoing>f5</bpmn:outgoing>
+    </bpmn:serviceTask>
+    <bpmn:sequenceFlow id="f5" sourceRef="t_async" targetRef="end" />
+    <bpmn:endEvent id="end">
+      <bpmn:incoming>f5</bpmn:incoming>
+    </bpmn:endEvent>
+  </bpmn:process>
+</bpmn:definitions>

@@ -17,11 +17,19 @@ import javax.xml.stream.XMLStreamReader;
 import dev.bpmcrafters.processengineapi.deploy.DeployBundleCommand;
 import dev.bpmcrafters.processengineapi.deploy.DeploymentApi;
 import dev.bpmcrafters.processengineapi.deploy.NamedResource;
+import dev.bpmcrafters.processengineapi.task.ServiceTaskCompletionApi;
+import dev.bpmcrafters.processengineapi.task.SubscribeForTaskCmd;
+import dev.bpmcrafters.processengineapi.task.TaskSubscriptionApi;
+import dev.bpmcrafters.processengineapi.task.TaskType;
+import dev.bpmcrafters.processengineapi.task.UnsubscribeFromTaskCmd;
 import io.vanillabp.integration.adapter.spi.AdapterDeploymentService;
 import io.vanillabp.integration.adapter.spi.BpmnParseException;
+import io.vanillabp.integration.adapter.spi.workflowtask.BpmnTaskSpec;
+import io.vanillabp.integration.adapter.spi.workflowtask.WorkflowTaskInvoker;
 import io.vanillabp.pea.PeaAdapter;
 import io.vanillabp.pea.PeaBpmnModel;
 import io.vanillabp.pea.PeaProcessingContext;
+import io.vanillabp.pea.wiring.PeaTaskHandler;
 import lombok.extern.slf4j.Slf4j;
 
 /**
@@ -44,12 +52,28 @@ public class PeaDeploymentService implements AdapterDeploymentService<PeaBpmnMod
 
   private final DeploymentApi deploymentApi;
 
+  /**
+   * The core's task-processing entry point: wiring validation during
+   * {@link #wireBpmn} and task dispatch at runtime.
+   */
+  private final WorkflowTaskInvoker workflowTaskInvoker;
+
+  private final TaskSubscriptionApi taskSubscriptionApi;
+
+  private final ServiceTaskCompletionApi serviceTaskCompletionApi;
+
   public PeaDeploymentService(
       final String adapterId,
-      final DeploymentApi deploymentApi) {
+      final DeploymentApi deploymentApi,
+      final WorkflowTaskInvoker workflowTaskInvoker,
+      final TaskSubscriptionApi taskSubscriptionApi,
+      final ServiceTaskCompletionApi serviceTaskCompletionApi) {
 
     this.adapterId = adapterId;
     this.deploymentApi = deploymentApi;
+    this.workflowTaskInvoker = workflowTaskInvoker;
+    this.taskSubscriptionApi = taskSubscriptionApi;
+    this.serviceTaskCompletionApi = serviceTaskCompletionApi;
 
   }
 
@@ -97,26 +121,42 @@ public class PeaDeploymentService implements AdapterDeploymentService<PeaBpmnMod
     }
 
     final var result = new ArrayList<Map.Entry<String, PeaBpmnModel>>();
-    for (final var bpmnProcessId : readExecutableProcessIds(workflowModuleId, filename, resource)) {
-      result.add(Map.entry(bpmnProcessId, new PeaBpmnModel(filename, resource, bpmnProcessId)));
+    final var parsed = parseBpmn(workflowModuleId, filename, resource);
+    for (final var process : parsed) {
+      result.add(Map.entry(
+          process.bpmnProcessId(),
+          new PeaBpmnModel(filename, resource, process.bpmnProcessId(), process.tasks())));
     }
     return result;
 
   }
 
   /**
-   * Streams over the BPMN XML with StAX and collects the ids of all
-   * {@code <bpmn:process isExecutable="true">} elements. StAX is used (instead of building
-   * a DOM or depending on a BPMS-specific model API) because the Process-Engine-API has no
-   * BPMN model type and the adapter only needs the executable process ids.
+   * One executable process parsed from a BPMN file: its id and its service-like
+   * tasks (activity id + <code>zeebe:taskDefinition</code> type).
+   */
+  private record ParsedProcess(
+                               String bpmnProcessId,
+                               List<BpmnTaskSpec> tasks) {
+  }
+
+  /**
+   * Streams over the BPMN XML with StAX and collects all
+   * {@code <bpmn:process isExecutable="true">} elements together with their
+   * service-like tasks. StAX is used (instead of building a DOM or depending on a
+   * BPMS-specific model API) because the Process-Engine-API has no BPMN model type.
+   * The task definition is read from the <code>zeebe:taskDefinition</code>
+   * extension (Camunda-8-style - the Process-Engine-API does not define how BPMN
+   * names task definitions, see {@code GAPS.md}); a task without one is reported
+   * by the wiring validation.
    *
    * @param workflowModuleId The workflow module id (used for error messages)
    * @param filename The BPMN filename (used for error messages)
    * @param resource The raw BPMN XML bytes
-   * @return The ids of the executable processes contained in the resource
+   * @return The executable processes contained in the resource
    * @throws BpmnParseException If the XML cannot be parsed
    */
-  private List<String> readExecutableProcessIds(
+  private List<ParsedProcess> parseBpmn(
       final String workflowModuleId,
       final String filename,
       final byte[] resource) throws BpmnParseException {
@@ -126,26 +166,54 @@ public class PeaDeploymentService implements AdapterDeploymentService<PeaBpmnMod
     factory.setProperty(XMLInputFactory.IS_SUPPORTING_EXTERNAL_ENTITIES, Boolean.FALSE);
     factory.setProperty(XMLInputFactory.SUPPORT_DTD, Boolean.FALSE);
 
-    final var processIds = new ArrayList<String>();
+    final var serviceLikeTasks = java.util.Set.of("serviceTask", "sendTask", "businessRuleTask", "scriptTask");
+
+    final var processes = new ArrayList<ParsedProcess>();
+    ParsedProcess currentProcess = null;
+    String currentTaskId = null;
+    boolean currentTaskHasDefinition = false;
+
     XMLStreamReader reader = null;
     try (var in = new ByteArrayInputStream(resource)) {
       reader = factory.createXMLStreamReader(in);
       while (reader.hasNext()) {
-        if (reader.next() != XMLStreamConstants.START_ELEMENT) {
-          continue;
-        }
-        if (!"process".equals(reader.getLocalName())) {
-          continue;
-        }
-        if (!Boolean.parseBoolean(reader.getAttributeValue(null, "isExecutable"))) {
-          continue;
-        }
-        final var bpmnProcessId = reader.getAttributeValue(null, "id");
-        if ((bpmnProcessId != null) && !bpmnProcessId.isBlank()) {
-          processIds.add(bpmnProcessId);
+        final var event = reader.next();
+        if (event == XMLStreamConstants.START_ELEMENT) {
+          final var element = reader.getLocalName();
+          if ("process".equals(element)) {
+            final var bpmnProcessId = reader.getAttributeValue(null, "id");
+            currentProcess = Boolean.parseBoolean(
+                reader.getAttributeValue(null, "isExecutable")) && (bpmnProcessId != null) && !bpmnProcessId.isBlank()
+                    ? new ParsedProcess(bpmnProcessId, new ArrayList<>())
+                    : null;
+            if (currentProcess != null) {
+              processes.add(currentProcess);
+            }
+          } else if ((currentProcess != null) && serviceLikeTasks.contains(element)) {
+            currentTaskId = reader.getAttributeValue(null, "id");
+            currentTaskHasDefinition = false;
+          } else if ((currentTaskId != null) && "taskDefinition".equals(element)) {
+            currentProcess
+                .tasks()
+                .add(new BpmnTaskSpec(currentTaskId, reader.getAttributeValue(null, "type")));
+            currentTaskHasDefinition = true;
+          }
+        } else if (event == XMLStreamConstants.END_ELEMENT) {
+          final var element = reader.getLocalName();
+          if (serviceLikeTasks.contains(element) && (currentTaskId != null)) {
+            if (!currentTaskHasDefinition && (currentProcess != null)) {
+              // no zeebe:taskDefinition: reported by the wiring validation
+              currentProcess
+                  .tasks()
+                  .add(new BpmnTaskSpec(currentTaskId, null));
+            }
+            currentTaskId = null;
+          } else if ("process".equals(element)) {
+            currentProcess = null;
+          }
         }
       }
-      return processIds;
+      return processes;
     } catch (final XMLStreamException | IOException e) {
       throw new BpmnParseException(
           "Could not parse BPMN file '%s' of workflow module '%s'".formatted(filename, workflowModuleId), e);
@@ -185,10 +253,14 @@ public class PeaDeploymentService implements AdapterDeploymentService<PeaBpmnMod
       final PeaBpmnModel model,
       final PeaProcessingContext context) {
 
-    // Wiring the business code (@WorkflowTask methods) to the BPMN tasks is a later story.
-    log.debug(
-        "Process-Engine-API adapter '{}': wiring of BPMN process '{}' (file '{}', workflow module '{}') is implemented in a later story",
+    // validate the BPMN's tasks against the registered @WorkflowTask methods;
+    // throwing here honors the deployment-failure policy
+    workflowTaskInvoker.validateTaskWiring(workflowModuleId, bpmnProcessId, model.tasks());
+
+    log.info(
+        "Process-Engine-API adapter '{}': wired {} task(s) of BPMN process '{}' (file '{}', workflow module '{}')",
         adapterId,
+        model.tasks().size(),
         bpmnProcessId,
         filename,
         workflowModuleId);
@@ -245,6 +317,11 @@ public class PeaDeploymentService implements AdapterDeploymentService<PeaBpmnMod
           "Deployment of resources of workflow module '%s' failed".formatted(workflowModuleId), e.getCause());
     }
 
+
+    // after ALL processes of the module were wired: methods matching no task of
+    // any wired process are a defect (per-module check, honors the policy)
+    workflowTaskInvoker.validateNoUnwiredWorkflowTaskMethods(workflowModuleId);
+
   }
 
   @Override
@@ -252,12 +329,56 @@ public class PeaDeploymentService implements AdapterDeploymentService<PeaBpmnMod
       final String workflowModuleId,
       final PeaProcessingContext bpmsProcessingContext) {
 
-    // Task subscription (polling workers) is a later story; the Process-Engine-API has no
-    // per-module "start processing" concept, so there is nothing to do here yet.
-    log.debug(
-        "Process-Engine-API adapter '{}': start workflow processing of workflow module '{}'",
-        adapterId,
-        workflowModuleId);
+    if (bpmsProcessingContext == null) {
+      return;
+    }
+
+    // one task subscription per DISTINCT task definition of the module; the task
+    // handler dispatches through the core's WorkflowTaskInvoker. The BPMN process
+    // a delivered task belongs to travels in TaskInformation.meta (adapter
+    // convention key 'bpmnProcessId' - see GAPS.md); if absent, the task
+    // definition has to be unique across the module's processes
+    final var processesByTaskDefinition = new LinkedHashMap<String, List<String>>();
+    bpmsProcessingContext
+        .getModels()
+        .forEach(model -> model
+            .tasks()
+            .stream()
+            .filter(task -> task.taskDefinition() != null)
+            .forEach(task -> processesByTaskDefinition
+                .computeIfAbsent(task.taskDefinition(), key -> new ArrayList<>())
+                .add(model.bpmnProcessId())));
+
+    processesByTaskDefinition.forEach((
+        taskDefinition,
+        bpmnProcessIds) -> {
+      final var handler = new PeaTaskHandler(
+          adapterId, workflowModuleId, taskDefinition, List
+              .copyOf(bpmnProcessIds), workflowTaskInvoker, serviceTaskCompletionApi);
+      try {
+        final var subscription = taskSubscriptionApi
+            .subscribeForTask(new SubscribeForTaskCmd(
+                Map.of(), // no restrictions
+                TaskType.EXTERNAL, taskDefinition, java.util.Set.of(), // all payload variables
+                handler, (java.util.function.Consumer<String>) taskId -> log.debug(
+                    "Process-Engine-API adapter '{}': task '{}' terminated", adapterId, taskId)))
+            .get();
+        bpmsProcessingContext.getSubscriptions().add(subscription);
+      } catch (final InterruptedException e) {
+        Thread.currentThread().interrupt();
+        throw new IllegalStateException(
+            "Interrupted while subscribing for task definition '%s'".formatted(taskDefinition), e);
+      } catch (final ExecutionException e) {
+        throw new IllegalStateException(
+            "Could not subscribe for task definition '%s' of workflow module '%s' (adapter '%s')!"
+                .formatted(taskDefinition, workflowModuleId, adapterId), e.getCause());
+      }
+      log.info(
+          "Process-Engine-API adapter '{}': subscribed for task definition '{}' of workflow module '{}'",
+          adapterId,
+          taskDefinition,
+          workflowModuleId);
+    });
 
   }
 
@@ -266,8 +387,30 @@ public class PeaDeploymentService implements AdapterDeploymentService<PeaBpmnMod
       final String workflowModuleId,
       final PeaProcessingContext bpmsProcessingContext) {
 
-    log.debug(
-        "Process-Engine-API adapter '{}': stop workflow processing of workflow module '{}'",
+    if (bpmsProcessingContext == null) {
+      return;
+    }
+    // unsubscribe in reverse order (graceful shutdown parity with the pipeline)
+    final var subscriptions = bpmsProcessingContext.getSubscriptions();
+    for (var i = subscriptions.size() - 1; i >= 0; --i) {
+      try {
+        taskSubscriptionApi
+            .unsubscribe(new UnsubscribeFromTaskCmd(subscriptions.get(i)))
+            .get();
+      } catch (final InterruptedException e) {
+        Thread.currentThread().interrupt();
+        return;
+      } catch (final ExecutionException e) {
+        log.warn(
+            "Process-Engine-API adapter '{}': could not unsubscribe a task subscription of workflow module '{}'",
+            adapterId,
+            workflowModuleId,
+            e.getCause());
+      }
+    }
+    subscriptions.clear();
+    log.info(
+        "Process-Engine-API adapter '{}': stopped workflow processing of workflow module '{}'",
         adapterId,
         workflowModuleId);
 

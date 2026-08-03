@@ -10,7 +10,7 @@ BPMS-agnostic [bpm-crafters Process-Engine-API](https://github.com/bpm-crafters/
 > [`GAPS.md`](GAPS.md). Implemented so far: **BPMN parsing and deployment** and the
 > **two-phase `startWorkflow`** (phase one `PREFLIGHT_CHECK`, phase two `SYNC`), proven
 > end-to-end through `ProcessService#startWorkflow` with the JPA outbox against the mock.
-> Message correlation and task subscription are later stories.
+> Message correlation is a later story.
 
 ## Why an adapter against the Process-Engine-API?
 
@@ -109,6 +109,24 @@ replaces the mock with a real Process-Engine-API implementation.
   (`PeaDeploymentPipelineTest` - since story 26b the Quarkus platform integration runs the
   deployment pipeline at boot; the test proves `deployResources` reaches the in-memory mock
   engine, `InMemoryProcessEngine.getDeployments()`).
+- **Task processing** (story 21c): at `startWorkflowProcessing` the adapter subscribes ONE
+  `TaskSubscriptionApi` subscription per distinct task definition of the module's BPMN files
+  (the `zeebe:taskDefinition` type of service/send/business-rule/script tasks - the API does
+  not define the mapping, [`GAPS.md`](GAPS.md), entry 7). Task wiring is validated during
+  `wireBpmn`; unwired `@WorkflowTask` methods are reported at the end of `deployResources`.
+  A delivered task runs the `@WorkflowTask` method in a NEW local transaction which commits
+  BEFORE the completion command is sent (at-least-once ordering; handlers must be idempotent).
+  Outcomes: normal return → `completeTask`; `TaskException` → `completeTaskByError` with the
+  error code (aggregate changes committed - the V1 contract); `@TaskId` handlers leave the
+  task open for asynchronous completion (upcoming story); any other exception → local rollback
+  plus `failTask` (retry semantics are the underlying engine's). All completion commands carry
+  **`ExecutionMode.SYNC`** - they run AFTER the local commit, the phase-two shape; the built-in
+  command classes cannot carry a non-default mode, so the adapter subclasses them
+  ([`GAPS.md`](GAPS.md), entry 8). Routing a delivered task to its BPMN process relies on the
+  adapter meta-key convention `bpmnProcessId` ([`GAPS.md`](GAPS.md), entry 6); without the meta
+  entry the task definition has to be unique across the module's processes. A completion
+  failing AFTER the local commit is tolerated with a WARN - the engine redelivers and the
+  idempotent handler converges.
 
 ## Build
 

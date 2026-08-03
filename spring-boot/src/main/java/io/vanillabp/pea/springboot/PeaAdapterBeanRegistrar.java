@@ -47,7 +47,11 @@ public class PeaAdapterBeanRegistrar implements BeanRegistrar {
               "Pea_DeploymentService_%s".formatted(adapterId),
               PeaDeploymentService.class,
               spec -> spec.supplier(supplierContext -> new PeaDeploymentService(
-                  adapterId, supplierContext.bean(DeploymentApi.class))));
+                  adapterId, supplierContext.bean(DeploymentApi.class), supplierContext
+                      .bean(
+                          io.vanillabp.integration.adapter.spi.workflowtask.WorkflowTaskInvoker.class), supplierContext
+                              .bean(dev.bpmcrafters.processengineapi.task.TaskSubscriptionApi.class), supplierContext
+                                  .bean(dev.bpmcrafters.processengineapi.task.ServiceTaskCompletionApi.class))));
 
         });
 

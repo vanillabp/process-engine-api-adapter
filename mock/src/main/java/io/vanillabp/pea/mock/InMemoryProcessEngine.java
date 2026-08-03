@@ -186,11 +186,32 @@ public class InMemoryProcessEngine implements DeploymentApi, StartProcessApi, Co
   /**
    * Clears all recorded invocations and all fake state (deployments, started instances).
    */
+  /**
+   * Clears only the task-processing recordings (invocations, completed/errored/failed
+   * tasks and one-shot failure triggers) while KEEPING deployments, started instances
+   * and active subscriptions - for tests exercising several deliveries against the
+   * subscriptions opened at startup.
+   */
+  public void clearTaskRecordings() {
+
+    invocations.clear();
+    completedTasks.clear();
+    erroredTasks.clear();
+    failedTasks.clear();
+    failNextCompletionForTaskIds.clear();
+
+  }
+
   public void reset() {
 
     invocations.clear();
     deployments.clear();
     startedInstances.clear();
+    subscriptions.clear();
+    completedTasks.clear();
+    erroredTasks.clear();
+    failedTasks.clear();
+    failNextCompletionForTaskIds.clear();
     failPreflightForProcessIds.clear();
     failNextSyncForProcessIds.clear();
 
@@ -297,13 +318,74 @@ public class InMemoryProcessEngine implements DeploymentApi, StartProcessApi, Co
 
   // --- TaskSubscriptionApi ---
 
+  /**
+   * One active task subscription: the subscribed task definition and the handler
+   * task deliveries are dispatched to.
+   *
+   * @param taskDescriptionKey The subscribed task definition
+   * @param handler The subscriber's task handler
+   */
+  public record ActiveSubscription(
+                                   String taskDescriptionKey,
+                                   dev.bpmcrafters.processengineapi.task.TaskHandler handler) implements TaskSubscription {
+  }
+
+  /**
+   * The active task subscriptions - inspectable by tests.
+   */
+  private final List<ActiveSubscription> subscriptions = new CopyOnWriteArrayList<>();
+
+  public List<ActiveSubscription> getSubscriptions() {
+
+    return subscriptions;
+
+  }
+
+  /**
+   * Delivers a task to the subscription matching the given task definition - the
+   * mock cannot derive tasks from the deployed (opaque) resources, so tests drive
+   * deliveries explicitly (incl. DUPLICATE deliveries for at-least-once tests).
+   * The BPMN process ID travels in the {@code TaskInformation} meta (adapter
+   * convention key <code>bpmnProcessId</code>).
+   *
+   * @param taskId The delivered task's ID
+   * @param taskDefinition The task definition (matched against subscriptions)
+   * @param bpmnProcessId The BPMN process the task belongs to
+   * @param payload The task's payload variables
+   */
+  public void deliverTask(
+      final String taskId,
+      final String taskDefinition,
+      final String bpmnProcessId,
+      final Map<String, Object> payload) {
+
+    final var subscription = subscriptions
+        .stream()
+        .filter(candidate -> candidate.taskDescriptionKey().equals(taskDefinition))
+        .findFirst()
+        .orElseThrow(() -> new IllegalStateException(
+            "No subscription for task definition '%s' - subscribed: %s"
+                .formatted(taskDefinition, subscriptions
+                    .stream()
+                    .map(ActiveSubscription::taskDescriptionKey)
+                    .toList())));
+    subscription
+        .handler()
+        .accept(
+            new dev.bpmcrafters.processengineapi.task.TaskInformation(
+                taskId, Map.of("bpmnProcessId", bpmnProcessId)),
+            payload);
+
+  }
+
   @Override
   public CompletableFuture<TaskSubscription> subscribeForTask(
       final SubscribeForTaskCmd cmd) {
 
     record("TaskSubscriptionApi", "subscribeForTask", cmd);
-    return CompletableFuture.completedFuture(new TaskSubscription() {
-    });
+    final var subscription = new ActiveSubscription(cmd.getTaskDescriptionKey(), cmd.getAction());
+    subscriptions.add(subscription);
+    return CompletableFuture.completedFuture(subscription);
 
   }
 
@@ -312,17 +394,81 @@ public class InMemoryProcessEngine implements DeploymentApi, StartProcessApi, Co
       final UnsubscribeFromTaskCmd cmd) {
 
     record("TaskSubscriptionApi", "unsubscribe", cmd);
+    if (cmd.getSubscription() instanceof ActiveSubscription active) {
+      subscriptions.remove(active);
+    }
     return CompletableFuture.completedFuture(Empty.INSTANCE);
 
   }
 
   // --- ServiceTaskCompletionApi / UserTaskCompletionApi (shared method signatures) ---
 
+  /**
+   * A completed task (via {@code completeTask}) - inspectable by tests.
+   */
+  public record CompletedTask(String taskId) {
+  }
+
+  /**
+   * A task completed by BPMN error - inspectable by tests.
+   */
+  public record ErroredTask(String taskId, String errorCode, String errorMessage) {
+  }
+
+  /**
+   * A failed task (via {@code failTask}) - inspectable by tests.
+   */
+  public record FailedTask(String taskId, String reason) {
+  }
+
+  private final List<CompletedTask> completedTasks = new CopyOnWriteArrayList<>();
+
+  private final List<ErroredTask> erroredTasks = new CopyOnWriteArrayList<>();
+
+  private final List<FailedTask> failedTasks = new CopyOnWriteArrayList<>();
+
+  /**
+   * Task IDs whose NEXT completeTask fails once (removed on use) - lets tests
+   * exercise the at-least-once residual (completion fails after the local commit,
+   * the engine redelivers, the handler converges).
+   */
+  private final Set<String> failNextCompletionForTaskIds = ConcurrentHashMap.newKeySet();
+
+  public List<CompletedTask> getCompletedTasks() {
+
+    return completedTasks;
+
+  }
+
+  public List<ErroredTask> getErroredTasks() {
+
+    return erroredTasks;
+
+  }
+
+  public List<FailedTask> getFailedTasks() {
+
+    return failedTasks;
+
+  }
+
+  public void failNextCompletionFor(
+      final String taskId) {
+
+    failNextCompletionForTaskIds.add(taskId);
+
+  }
+
   @Override
   public CompletableFuture<Empty> completeTask(
       final CompleteTaskCmd cmd) {
 
     record("TaskCompletionApi", "completeTask", cmd);
+    if (failNextCompletionForTaskIds.remove(cmd.getTaskId())) {
+      return CompletableFuture.failedFuture(new IllegalStateException(
+          "Completing task '%s' failed (injected by the mock)".formatted(cmd.getTaskId())));
+    }
+    completedTasks.add(new CompletedTask(cmd.getTaskId()));
     return CompletableFuture.completedFuture(Empty.INSTANCE);
 
   }
@@ -332,6 +478,7 @@ public class InMemoryProcessEngine implements DeploymentApi, StartProcessApi, Co
       final CompleteTaskByErrorCmd cmd) {
 
     record("TaskCompletionApi", "completeTaskByError", cmd);
+    erroredTasks.add(new ErroredTask(cmd.getTaskId(), cmd.getErrorCode(), cmd.getErrorMessage()));
     return CompletableFuture.completedFuture(Empty.INSTANCE);
 
   }
@@ -341,6 +488,7 @@ public class InMemoryProcessEngine implements DeploymentApi, StartProcessApi, Co
       final FailTaskCmd cmd) {
 
     record("ServiceTaskCompletionApi", "failTask", cmd);
+    failedTasks.add(new FailedTask(cmd.getTaskId(), cmd.getReason()));
     return CompletableFuture.completedFuture(Empty.INSTANCE);
 
   }

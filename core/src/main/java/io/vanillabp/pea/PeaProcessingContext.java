@@ -41,4 +41,16 @@ public class PeaProcessingContext {
 
   }
 
+  /**
+   * The task subscriptions opened by startWorkflowProcessing, closed by
+   * stopWorkflowProcessing (reverse order).
+   */
+  private final List<dev.bpmcrafters.processengineapi.task.TaskSubscription> subscriptions = new ArrayList<>();
+
+  public List<dev.bpmcrafters.processengineapi.task.TaskSubscription> getSubscriptions() {
+
+    return subscriptions;
+
+  }
+
 }

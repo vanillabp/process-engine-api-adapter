@@ -97,3 +97,54 @@ therefore succeeds in the mock instead of failing. Tests needing a failing
 preflight inject it explicitly via `InMemoryProcessEngine.failPreflightFor(...)`
 (and `failNextSyncFor(...)` for phase-two retry testing) - pretending validation
 would hide exactly the class of bugs the mock-first approach is meant to surface.
+
+## 6. Task deliveries do not carry the BPMN process id (routing gap)
+
+**Needed by VanillaBP:** a delivered service task must be routed to the
+`@WorkflowService` responsible for its BPMN process - the workflow-task registry is
+keyed by (workflow module, BPMN process id). The task definition alone is not
+sufficient: the same task definition may legally appear in several processes.
+
+**Offered by the Process-Engine-API:** `TaskInformation` has a free-form
+`meta: Map<String, String>` but no defined key for the BPMN process id;
+`SubscribeForTaskCmd` subscribes by `taskDescriptionKey` only.
+
+**Consequence for the adapter:** adapter convention - the engine (the mock, and any
+real PEA implementation used underneath) is expected to supply the meta entry
+`bpmnProcessId` (`PeaTaskHandler.META_BPMN_PROCESS_ID`). Without it the adapter
+falls back to routing by task definition, which only works while the definition is
+unique across the module's processes; an ambiguous definition without the meta
+entry fails the delivery with a guiding message. A defined meta-key vocabulary in
+the API would remove this convention.
+
+## 7. BPMN task-definition naming is not defined by the API
+
+**Needed by VanillaBP:** at deployment time the adapter must know which service
+tasks exist in a BPMN process and under which name ("task definition") the engine
+will deliver them, to validate `@WorkflowTask` wiring and to subscribe.
+
+**Offered by the Process-Engine-API:** nothing - resources are opaque
+(`NamedResource`), and the API does not define how a BPMN service task maps to a
+`taskDescriptionKey`.
+
+**Consequence for the adapter:** the adapter parses the BPMN itself (StAX) and
+applies the `zeebe:taskDefinition type="..."` convention (service, send, business
+rule and script tasks). Engines with a different convention (e.g. Camunda 7 topic
+names) would need an adapter-side switch. A defined mapping in the API would make
+this portable.
+
+## 8. Completion commands cannot carry a non-default `ExecutionMode`
+
+**Needed by VanillaBP:** task completions issued by the adapter after the local
+transaction committed must run in the engine-synchronous phase-two shape
+(`ExecutionMode.SYNC`), consistent with the two-phase pattern used everywhere else.
+
+**Offered by the Process-Engine-API:** `CompleteTaskCmd`, `CompleteTaskByErrorCmd`
+and `FailTaskCmd` are `ExecutionModeAware` via a `default` method returning
+`ExecutionMode.DEFAULT` - the built-in command classes offer no constructor or
+setter to choose a different mode.
+
+**Consequence for the adapter:** own subclasses (`PeaCompleteTaskCmd`,
+`PeaCompleteTaskByErrorCmd`, `PeaFailTaskCmd`) override `executionMode()` to return
+`SYNC`. Constructor/builder support for the execution mode on the built-in commands
+would remove the subclasses.

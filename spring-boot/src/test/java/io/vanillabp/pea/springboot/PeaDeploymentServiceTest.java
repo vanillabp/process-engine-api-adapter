@@ -21,7 +21,7 @@ public class PeaDeploymentServiceTest {
 
   private final InMemoryProcessEngine engine = new InMemoryProcessEngine();
 
-  private final PeaDeploymentService service = new PeaDeploymentService("pea", engine);
+  private final PeaDeploymentService service = new PeaDeploymentService("pea", engine, new PermissiveInvoker(), engine, engine);
 
   private static ByteArrayInputStream bpmn(
       final String xml) {
@@ -102,10 +102,13 @@ public class PeaDeploymentServiceTest {
 
     final var context = new PeaProcessingContext("mod");
     // two executable processes in the same file must be deployed as ONE resource...
-    context.getModels().add(new PeaBpmnModel("a.bpmn", "a-bytes".getBytes(StandardCharsets.UTF_8), "P1"));
-    context.getModels().add(new PeaBpmnModel("a.bpmn", "a-bytes".getBytes(StandardCharsets.UTF_8), "P2"));
+    context.getModels()
+        .add(new PeaBpmnModel("a.bpmn", "a-bytes".getBytes(StandardCharsets.UTF_8), "P1", java.util.List.of()));
+    context.getModels()
+        .add(new PeaBpmnModel("a.bpmn", "a-bytes".getBytes(StandardCharsets.UTF_8), "P2", java.util.List.of()));
     // ...and a second file as another resource
-    context.getModels().add(new PeaBpmnModel("b.bpmn", "b-bytes".getBytes(StandardCharsets.UTF_8), "P3"));
+    context.getModels()
+        .add(new PeaBpmnModel("b.bpmn", "b-bytes".getBytes(StandardCharsets.UTF_8), "P3", java.util.List.of()));
 
     service.deployResources("mod", context);
 
@@ -127,6 +130,287 @@ public class PeaDeploymentServiceTest {
     service.deployResources("mod", new PeaProcessingContext("mod"));
 
     Assertions.assertTrue(engine.getDeployments().isEmpty());
+
+  }
+
+
+  @Test
+  public void readBpmnExtractsTaskDefinitionsIncludingUndefinedOnes() {
+
+    final var xml = """
+        <?xml version="1.0" encoding="UTF-8"?>
+        <bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:zeebe="http://camunda.org/schema/zeebe/1.0">
+          <bpmn:process id="TaskedProcess" isExecutable="true">
+            <bpmn:serviceTask id="t1">
+              <bpmn:extensionElements>
+                <zeebe:taskDefinition type="doIt" />
+              </bpmn:extensionElements>
+            </bpmn:serviceTask>
+            <bpmn:sendTask id="t2">
+              <bpmn:extensionElements>
+                <zeebe:taskDefinition type="sendIt" />
+              </bpmn:extensionElements>
+            </bpmn:sendTask>
+            <bpmn:serviceTask id="t3" />
+          </bpmn:process>
+        </bpmn:definitions>
+        """;
+
+    final var models = service.readBpmn("mod", "tasks.bpmn", bpmn(xml), true);
+
+    Assertions.assertEquals(1, models.size());
+    final var tasks = models.get(0).getValue().tasks();
+    Assertions.assertEquals(3, tasks.size());
+    Assertions.assertEquals("doIt", tasks.get(0).taskDefinition());
+    Assertions.assertEquals("t1", tasks.get(0).activityId());
+    Assertions.assertEquals("sendIt", tasks.get(1).taskDefinition());
+    // a service-like task WITHOUT a task definition yields a null-definition spec
+    // (the wiring validation reports it with a guiding message)
+    Assertions.assertEquals("t3", tasks.get(2).activityId());
+    Assertions.assertNull(tasks.get(2).taskDefinition());
+
+  }
+
+  @Test
+  public void startWorkflowProcessingSubscribesPerDistinctTaskDefinitionAndStopUnsubscribes() {
+
+    final var xml = """
+        <?xml version="1.0" encoding="UTF-8"?>
+        <bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:zeebe="http://camunda.org/schema/zeebe/1.0">
+          <bpmn:process id="P1" isExecutable="true">
+            <bpmn:serviceTask id="a">
+              <bpmn:extensionElements>
+                <zeebe:taskDefinition type="shared" />
+              </bpmn:extensionElements>
+            </bpmn:serviceTask>
+          </bpmn:process>
+          <bpmn:process id="P2" isExecutable="true">
+            <bpmn:serviceTask id="b">
+              <bpmn:extensionElements>
+                <zeebe:taskDefinition type="shared" />
+              </bpmn:extensionElements>
+            </bpmn:serviceTask>
+            <bpmn:serviceTask id="c">
+              <bpmn:extensionElements>
+                <zeebe:taskDefinition type="own" />
+              </bpmn:extensionElements>
+            </bpmn:serviceTask>
+          </bpmn:process>
+        </bpmn:definitions>
+        """;
+
+    PeaProcessingContext context = null;
+    for (final var entry : service.readBpmn("mod", "two.bpmn", bpmn(xml), true)) {
+      context = service.prepareBpmn("mod", context, "two.bpmn", entry.getKey(), entry.getValue());
+    }
+
+    service.startWorkflowProcessing("mod", context);
+
+    // 'shared' is used by both processes but subscribed ONCE
+    Assertions.assertEquals(2, engine.getSubscriptions().size());
+    Assertions.assertEquals(
+        java.util.List.of("shared", "own"),
+        engine
+            .getSubscriptions()
+            .stream()
+            .map(InMemoryProcessEngine.ActiveSubscription::taskDescriptionKey)
+            .toList());
+
+    service.stopWorkflowProcessing("mod", context);
+    Assertions.assertTrue(engine.getSubscriptions().isEmpty());
+
+  }
+
+  @Test
+  public void lifecycleMethodsTolerateAModuleWithoutModels() {
+
+    service.startWorkflowProcessing("mod", null);
+    service.stopWorkflowProcessing("mod", null);
+    Assertions.assertTrue(engine.getSubscriptions().isEmpty());
+
+  }
+
+  @Test
+  public void adapterMetadataIsExposed() {
+
+    Assertions.assertEquals("pea", service.getAdapterId());
+    Assertions.assertEquals("process-engine-api", service.getAdapterType());
+    Assertions.assertEquals(PeaBpmnModel.class, service.getModelType());
+    Assertions.assertEquals(PeaProcessingContext.class, service.getProcessContextType());
+
+  }
+
+  @Test
+  public void readBpmnWrapsIoErrorsInBpmnParseException() {
+
+    final var failing = new java.io.InputStream() {
+
+      @Override
+      public int read() throws java.io.IOException {
+        throw new java.io.IOException("boom");
+      }
+
+    };
+
+    Assertions.assertThrows(
+        io.vanillabp.integration.adapter.spi.BpmnParseException.class,
+        () -> service.readBpmn("mod", "broken.bpmn", failing, true));
+
+  }
+
+  @Test
+  public void failingDeploymentYieldsGuidingIllegalState() {
+
+    final var failingDeploy = new dev.bpmcrafters.processengineapi.deploy.DeploymentApi() {
+
+      @Override
+      public java.util.concurrent.CompletableFuture<dev.bpmcrafters.processengineapi.deploy.DeploymentInformation> deploy(
+          final dev.bpmcrafters.processengineapi.deploy.DeployBundleCommand command) {
+        return java.util.concurrent.CompletableFuture.failedFuture(new IllegalStateException("engine down"));
+      }
+
+      @Override
+      public dev.bpmcrafters.processengineapi.MetaInfo meta(
+          final dev.bpmcrafters.processengineapi.MetaInfoAware instance) {
+        return new dev.bpmcrafters.processengineapi.MetaInfo() {
+        };
+      }
+
+    };
+    final var failingService = new PeaDeploymentService(
+        "pea", failingDeploy, new PermissiveInvoker(), engine, engine);
+
+    final var xml = """
+        <?xml version="1.0" encoding="UTF-8"?>
+        <bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL">
+          <bpmn:process id="OnlyProcess" isExecutable="true"/>
+        </bpmn:definitions>
+        """;
+    PeaProcessingContext context = null;
+    for (final var entry : failingService.readBpmn("mod", "one.bpmn", bpmn(xml), true)) {
+      context = failingService.prepareBpmn("mod", context, "one.bpmn", entry.getKey(), entry.getValue());
+    }
+    final var finalContext = context;
+
+    final var failure = Assertions.assertThrows(
+        IllegalStateException.class,
+        () -> failingService.deployResources("mod", finalContext));
+    Assertions.assertTrue(failure.getMessage().contains("mod"));
+
+  }
+
+  @Test
+  public void failingSubscriptionYieldsGuidingIllegalState() {
+
+    final var failingSubscribe = new dev.bpmcrafters.processengineapi.task.TaskSubscriptionApi() {
+
+      @Override
+      public java.util.concurrent.CompletableFuture<dev.bpmcrafters.processengineapi.task.TaskSubscription> subscribeForTask(
+          final dev.bpmcrafters.processengineapi.task.SubscribeForTaskCmd cmd) {
+        return java.util.concurrent.CompletableFuture.failedFuture(new IllegalStateException("engine down"));
+      }
+
+      @Override
+      public java.util.concurrent.CompletableFuture<dev.bpmcrafters.processengineapi.Empty> unsubscribe(
+          final dev.bpmcrafters.processengineapi.task.UnsubscribeFromTaskCmd cmd) {
+        return java.util.concurrent.CompletableFuture.failedFuture(new IllegalStateException("engine down"));
+      }
+
+      @Override
+      public dev.bpmcrafters.processengineapi.MetaInfo meta(
+          final dev.bpmcrafters.processengineapi.MetaInfoAware instance) {
+        return new dev.bpmcrafters.processengineapi.MetaInfo() {
+        };
+      }
+
+      @Override
+      public java.util.Set<String> getSupportedRestrictions() {
+        return java.util.Set.of();
+      }
+
+    };
+    final var failingService = new PeaDeploymentService(
+        "pea", engine, new PermissiveInvoker(), failingSubscribe, engine);
+
+    final var context = contextWithOneTask(failingService);
+
+    final var failure = Assertions.assertThrows(
+        IllegalStateException.class,
+        () -> failingService.startWorkflowProcessing("mod", context));
+    Assertions.assertTrue(
+        failure.getMessage().contains("doIt"),
+        "expected the failing task definition to be named but got: "
+            + failure.getMessage());
+
+    // a failing UNsubscribe on stop is only logged (graceful shutdown)
+    context
+        .getSubscriptions()
+        .add(new dev.bpmcrafters.processengineapi.task.TaskSubscription() {
+        });
+    Assertions.assertDoesNotThrow(() -> failingService.stopWorkflowProcessing("mod", context));
+
+  }
+
+  private PeaProcessingContext contextWithOneTask(
+      final PeaDeploymentService target) {
+
+    final var xml = """
+        <?xml version="1.0" encoding="UTF-8"?>
+        <bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:zeebe="http://camunda.org/schema/zeebe/1.0">
+          <bpmn:process id="TaskedProcess" isExecutable="true">
+            <bpmn:serviceTask id="t1">
+              <bpmn:extensionElements>
+                <zeebe:taskDefinition type="doIt" />
+              </bpmn:extensionElements>
+            </bpmn:serviceTask>
+          </bpmn:process>
+        </bpmn:definitions>
+        """;
+    PeaProcessingContext context = null;
+    for (final var entry : target.readBpmn("mod", "one.bpmn", bpmn(xml), true)) {
+      context = target.prepareBpmn("mod", context, "one.bpmn", entry.getKey(), entry.getValue());
+    }
+    return context;
+
+  }
+
+  static class PermissiveInvoker implements io.vanillabp.integration.adapter.spi.workflowtask.WorkflowTaskInvoker {
+
+    @Override
+    public void validateTaskWiring(
+        final String workflowModuleId,
+        final String bpmnProcessId,
+        final java.util.Collection<io.vanillabp.integration.adapter.spi.workflowtask.BpmnTaskSpec> tasks) {
+    }
+
+    @Override
+    public void validateNoUnwiredWorkflowTaskMethods(
+        final String workflowModuleId) {
+    }
+
+    @Override
+    public io.vanillabp.integration.adapter.spi.workflowtask.WorkflowTaskOutcome invokeWorkflowTask(
+        final String workflowModuleId,
+        final String bpmnProcessId,
+        final io.vanillabp.integration.adapter.spi.workflowtask.TaskInvocationContext context) {
+      throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public Object resolveWorkflowAggregateProperty(
+        final String workflowModuleId,
+        final String bpmnProcessId,
+        final String workflowAggregateId,
+        final String propertyName) {
+      return null;
+    }
+
+    @Override
+    public String resolveWorkflowAggregateIdName(
+        final String workflowModuleId,
+        final String bpmnProcessId) {
+      return "id";
+    }
 
   }
 

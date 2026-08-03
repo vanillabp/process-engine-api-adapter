@@ -40,7 +40,10 @@ public class PeaDeploymentServiceProducer {
   })
   public List<AdapterDeploymentService<Object, Object>> peaAdapterDeploymentServices(
       final MigrationAdapterProperties properties,
-      final DeploymentApi deploymentApi) {
+      final DeploymentApi deploymentApi,
+      final io.vanillabp.integration.adapter.migration.workflowtask.WorkflowTaskRegistry workflowTaskRegistry,
+      final dev.bpmcrafters.processengineapi.task.TaskSubscriptionApi taskSubscriptionApi,
+      final dev.bpmcrafters.processengineapi.task.ServiceTaskCompletionApi serviceTaskCompletionApi) {
 
     return (List) properties
         .adapterTypes()
@@ -49,7 +52,8 @@ public class PeaDeploymentServiceProducer {
         .filter(adapter -> PeaAdapter.ADAPTER_TYPE.equals(adapter.getValue()))
         .map(Map.Entry::getKey)
         .sorted()
-        .map(adapterId -> new PeaDeploymentService(adapterId, deploymentApi))
+        .map(adapterId -> new PeaDeploymentService(
+            adapterId, deploymentApi, workflowTaskRegistry, taskSubscriptionApi, serviceTaskCompletionApi))
         .toList();
 
   }

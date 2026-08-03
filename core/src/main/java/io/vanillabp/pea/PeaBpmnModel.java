@@ -17,7 +17,15 @@ package io.vanillabp.pea;
  * @param filename The name of the BPMN resource (used for logging and deployment)
  * @param resource The raw BPMN XML bytes
  * @param bpmnProcessId The id of the executable process contained in the resource
+ * @param tasks The service-like tasks of the process to be wired to
+ *          {@code @WorkflowTask} methods (activity id + task definition - the
+ *          <code>zeebe:taskDefinition</code> type; the Process-Engine-API itself
+ *          has no notion of task definitions in BPMN, see {@code GAPS.md})
  */
-public record PeaBpmnModel(String filename, byte[] resource, String bpmnProcessId) {
+public record PeaBpmnModel(
+                           String filename,
+                           byte[] resource,
+                           String bpmnProcessId,
+                           java.util.List<io.vanillabp.integration.adapter.spi.workflowtask.BpmnTaskSpec> tasks) {
 
 }
