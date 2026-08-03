@@ -148,3 +148,22 @@ setter to choose a different mode.
 `PeaCompleteTaskByErrorCmd`, `PeaFailTaskCmd`) override `executionMode()` to return
 `SYNC`. Constructor/builder support for the execution mode on the built-in commands
 would remove the subclasses.
+
+## 9. The BPMN attribute carrying the task definition is engine-specific
+
+**Needed by VanillaBP:** at deployment time the adapter parses the BPMN itself (gap 7)
+and must know WHERE a service-like task's definition is written - and that place
+differs per engine underneath the Process-Engine-API: Camunda 8 uses
+`<bpmn:extensionElements><zeebe:taskDefinition type="kkk"/></bpmn:extensionElements>`,
+ZenBPM uses `zenbpm:taskDefinition`, other engines use just the task element's id
+(`<bpmn:serviceTask id="kkk">`).
+
+**Offered by the Process-Engine-API:** nothing - the API neither parses BPMN nor
+defines the mapping.
+
+**Consequence for the adapter:** currently hard-wired to the `zeebe:taskDefinition`
+convention. The extraction strategy should become CONFIGURABLE per adapter instance
+(e.g. `vanillabp.adapters.<id>.task-definition-source` = `zeebe` | `zenbpm` |
+`task-id`, extensible for other namespaces) so the same adapter serves different
+engines. To be implemented in a later story; documented here so the limitation is
+tracked.
