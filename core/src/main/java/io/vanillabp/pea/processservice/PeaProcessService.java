@@ -395,6 +395,24 @@ public class PeaProcessService<A> implements MigratableProcessService<A> {
 
   private final java.util.concurrent.atomic.AtomicBoolean noWorkflowAwarenessWarned = new java.util.concurrent.atomic.AtomicBoolean();
 
+  /**
+   * The START re-dispatch mitigation probe (story 25) - STRICTER contract than
+   * {@link #awarenessOfWorkflow(Object)}: the answer must NEVER be optimistic.
+   * The Process-Engine-API cannot probe a workflow's existence at all (GAPS.md
+   * entry 11), so the honest answer is
+   * {@link WorkflowAwareness#UNKNOWN_TO_BPMS}: the recovered start proceeds and
+   * {@link #startWorkflowPhaseTwo}'s at-least-once contract applies (a duplicate
+   * is the accepted residual - the election's optimistic ACTIVE would instead
+   * SKIP the start and LOSE the workflow).
+   */
+  @Override
+  public WorkflowAwareness awarenessOfWorkflowForRedispatch(
+      final Object workflowAggregateId) {
+
+    return WorkflowAwareness.UNKNOWN_TO_BPMS;
+
+  }
+
   @Override
   public void correlateMessagePhaseOne(
       final String workflowModuleId,

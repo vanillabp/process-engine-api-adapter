@@ -210,3 +210,11 @@ NO phase-one preflight is possible, and `awarenessOfWorkflow` cannot be probed a
 migration scenarios. Opening the command classes (or accepting interfaces) plus a
 workflow-existence query would resolve this. The mock treats a DEFAULT-mode
 `StartProcessByMessageCmd` as the phase-two start (documented in the mock).
+
+Follow-up (election story 25): the START re-dispatch mitigation probes
+`awarenessOfWorkflowForRedispatch` before re-dispatching a recovered start entry.
+That probe must NEVER be optimistic (a wrong "known" skips the start and LOSES the
+workflow), so the adapter overrides it to an honest `UNKNOWN_TO_BPMS` - recovered
+starts always proceed and duplicate starts remain possible within the documented
+at-least-once residual. A workflow-existence query in the Process-Engine-API would
+enable the mitigation here, too.

@@ -7,10 +7,13 @@ BPMS-agnostic [bpm-crafters Process-Engine-API](https://github.com/bpm-crafters/
 > **Experimental, mock-first.** This adapter is developed against an in-memory fake of the
 > Process-Engine-API (module `mock/`) to discover — feature by feature — where either
 > VanillaBP or the Process-Engine-API needs an extension. Those findings are collected in
-> [`GAPS.md`](GAPS.md). Implemented so far: **BPMN parsing and deployment** and the
-> **two-phase `startWorkflow`** (phase one `PREFLIGHT_CHECK`, phase two `SYNC`), proven
-> end-to-end through `ProcessService#startWorkflow` with the JPA outbox against the mock.
-> Message correlation is a later story.
+> [`GAPS.md`](GAPS.md). Implemented so far: **BPMN parsing and deployment**, the
+> **two-phase `startWorkflow`** (phase one `PREFLIGHT_CHECK`, phase two `SYNC`, proven
+> end-to-end through `ProcessService#startWorkflow` with the JPA outbox against the
+> mock), **task processing** (`@WorkflowTask` via task subscriptions),
+> **completing/canceling asynchronous and user tasks**, **message correlation**
+> (start-by-message included) and the **BPMS-election awareness probes**. The
+> viewer/history API and `@SyncWithBPMS` are later stories.
 
 ## Why an adapter against the Process-Engine-API?
 
@@ -145,7 +148,6 @@ replaces the mock with a real Process-Engine-API implementation.
   `completeUserTask`/`cancelUserTask` run through the `UserTaskCompletionApi` with the same
   PREFLIGHT_CHECK (phase one) / SYNC (phase two) mapping as service tasks; failing
   notifications are logged loudly but never break the user task itself.
-
 - **Message correlation** (story 23): `correlateMessage` sends a `CorrelateMessageCmd` with
   `correlationKey = correlationId ?? aggregate ID` after the caller's commit (outbox); no
   payload travels. `startWorkflowByMessage` sends a `StartProcessByMessageCmd` carrying only

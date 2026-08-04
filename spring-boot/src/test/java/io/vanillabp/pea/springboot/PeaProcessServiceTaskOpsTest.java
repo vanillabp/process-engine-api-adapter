@@ -110,4 +110,19 @@ public class PeaProcessServiceTaskOpsTest {
 
   }
 
+  @Test
+  @DisplayName("The re-dispatch probe is never optimistic - unlike the election's workflow awareness")
+  public void redispatchProbeIsNeverOptimistic() {
+
+    // the election answers optimistically because the Process-Engine-API cannot
+    // query workflows at all (GAPS 11) - correlation must keep working
+    assertEquals(WorkflowAwareness.ACTIVE, service.awarenessOfWorkflow("42"));
+
+    // the START re-dispatch mitigation must NOT be optimistic: skipping a
+    // recovered start would LOSE the workflow, whereas proceeding only risks the
+    // documented at-least-once duplicate
+    assertEquals(WorkflowAwareness.UNKNOWN_TO_BPMS, service.awarenessOfWorkflowForRedispatch("42"));
+
+  }
+
 }
