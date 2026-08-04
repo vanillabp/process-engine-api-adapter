@@ -238,6 +238,35 @@ public class TaskProcessingIntegrationTest {
 
     }
 
+    public PeaTaskAggregate completeUserTask(
+        final PeaTaskAggregate aggregate,
+        final String taskId) {
+
+      return processService.completeUserTask(aggregate, taskId);
+
+    }
+
+    public PeaTaskAggregate cancelUserTask(
+        final PeaTaskAggregate aggregate,
+        final String taskId,
+        final String bpmnErrorCode) {
+
+      return processService.cancelUserTask(aggregate, taskId, bpmnErrorCode);
+
+    }
+
+    @WorkflowTask(taskDefinition = "peaApprove")
+    public void peaApproveNotification(
+        final PeaTaskAggregate aggregate,
+        @TaskId final String taskId,
+        @io.vanillabp.spi.service.TaskEvent final io.vanillabp.spi.service.TaskEvent.Event event) {
+
+      aggregate.taskId = taskId;
+      aggregate.appendResult("usertask-"
+          + event.name().toLowerCase());
+
+    }
+
     @WorkflowTask
     public void peaAsync(
         final PeaTaskAggregate aggregate,
@@ -492,6 +521,83 @@ public class TaskProcessingIntegrationTest {
         () -> transactionTemplate.executeWithoutResult(status -> taskWorkflowService
             .completeAsyncTask(stored("4724"), "no-such-task")));
     assertTrue(exception.getMessage().contains("no-such-task"));
+
+  }
+
+  @Test
+  @DisplayName("User task: CREATED notification via USER subscription, completeUserTask PREFLIGHT/SYNC ordering")
+  public void userTaskNotificationAndCompletion() throws Exception {
+
+    // the adapter subscribed for user tasks by their external form reference
+    assertTrue(
+        engine
+            .getSubscriptions()
+            .stream()
+            .map(InMemoryProcessEngine.ActiveSubscription::taskDescriptionKey)
+            .anyMatch("peaApprove"::equals),
+        "expected a USER subscription for 'peaApprove'");
+
+    seed("4731");
+    engine.deliverTask("utask-1", "peaApprove", PROCESS, Map.of("id", "4731"));
+
+    // the CREATED notification ran (committed) - the task itself stays open
+    assertEquals("usertask-created", stored("4731").results);
+    assertEquals("utask-1", stored("4731").taskId);
+    assertTrue(engine.getCompletedTasks().isEmpty(), "a notification must not complete the task");
+
+    transactionTemplate.executeWithoutResult(status -> {
+      final var aggregate = stored("4731");
+      aggregate.appendResult("approving");
+      taskWorkflowService.completeUserTask(aggregate, "utask-1");
+      assertTrue(
+          completionModes("completeTask", "utask-1")
+              .stream()
+              .allMatch(mode -> mode == ExecutionMode.PREFLIGHT_CHECK),
+          "before the commit only PREFLIGHT_CHECK commands may run");
+    });
+
+    awaitUntil(
+        () -> completionModes("completeTask", "utask-1").contains(ExecutionMode.SYNC),
+        "the SYNC user-task completion to be dispatched after the commit");
+    awaitUntil(
+        () -> engine
+            .getCompletedTasks()
+            .contains(new InMemoryProcessEngine.CompletedTask("utask-1")),
+        "the user task to be completed");
+
+  }
+
+  @Test
+  @DisplayName("cancelUserTask sends the SYNC completeTaskByError after the commit")
+  public void cancelUserTaskSendsByError() throws Exception {
+
+    seed("4732");
+    engine.deliverTask("utask-2", "peaApprove", PROCESS, Map.of("id", "4732"));
+
+    transactionTemplate.executeWithoutResult(status -> taskWorkflowService
+        .cancelUserTask(stored("4732"), "utask-2", "APPROVAL_WITHDRAWN"));
+
+    awaitUntil(
+        () -> engine
+            .getErroredTasks()
+            .stream()
+            .anyMatch(
+                errored -> "utask-2".equals(errored.taskId()) && "APPROVAL_WITHDRAWN".equals(errored.errorCode())),
+        "the SYNC user-task cancellation to be dispatched after the commit");
+
+  }
+
+  @Test
+  @DisplayName("An unknown user task raises the guiding TaskNotFoundException")
+  public void unknownUserTaskRaisesGuidingException() {
+
+    seed("4733");
+
+    final var exception = org.junit.jupiter.api.Assertions.assertThrows(
+        io.vanillabp.spi.process.TaskNotFoundException.class,
+        () -> transactionTemplate.executeWithoutResult(status -> taskWorkflowService
+            .completeUserTask(stored("4733"), "utask-unknown")));
+    assertTrue(exception.getMessage().contains("utask-unknown"));
 
   }
 

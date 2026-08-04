@@ -342,6 +342,33 @@ public class PeaDeploymentServiceTest {
         "expected the failing task definition to be named but got: "
             + failure.getMessage());
 
+    // failing USER-task subscriptions are equally guiding (story 24)
+    final var userTaskXml = """
+        <?xml version="1.0" encoding="UTF-8"?>
+        <bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:zeebe="http://camunda.org/schema/zeebe/1.0">
+          <bpmn:process id="UTProcess" isExecutable="true">
+            <bpmn:userTask id="ut1">
+              <bpmn:extensionElements>
+                <zeebe:userTask />
+                <zeebe:formDefinition externalReference="utApprove" />
+              </bpmn:extensionElements>
+            </bpmn:userTask>
+          </bpmn:process>
+        </bpmn:definitions>
+        """;
+    PeaProcessingContext userTaskContext = null;
+    for (final var entry : failingService.readBpmn("mod", "ut.bpmn", bpmn(userTaskXml), true)) {
+      userTaskContext = failingService.prepareBpmn("mod", userTaskContext, "ut.bpmn", entry.getKey(), entry.getValue());
+    }
+    final var finalUserTaskContext = userTaskContext;
+    final var userTaskFailure = Assertions.assertThrows(
+        IllegalStateException.class,
+        () -> failingService.startWorkflowProcessing("mod", finalUserTaskContext));
+    Assertions.assertTrue(
+        userTaskFailure.getMessage().contains("utApprove"),
+        "expected the failing form reference to be named but got: "
+            + userTaskFailure.getMessage());
+
     // a failing UNsubscribe on stop is only logged (graceful shutdown)
     context
         .getSubscriptions()
@@ -403,6 +430,14 @@ public class PeaDeploymentServiceTest {
         final String workflowAggregateId,
         final String propertyName) {
       return null;
+    }
+
+    @Override
+    public boolean workflowTaskHandlerExists(
+        final String workflowModuleId,
+        final String bpmnProcessId,
+        final String taskDefinitionOrActivityId) {
+      return true;
     }
 
     @Override

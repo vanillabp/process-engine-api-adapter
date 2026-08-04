@@ -137,6 +137,14 @@ replaces the mock with a real Process-Engine-API implementation.
   CANCELED` cannot be delivered (the subscription's termination callback carries only the task
   ID, no aggregate reference). The mock tracks open tasks (`deliverTask` opens,
   SYNC completions close) so preflights validate honestly.
+- **User tasks** (story 24): user tasks with a `zeebe:formDefinition` EXTERNAL reference (the
+  reference is the task definition) are subscribed via the Task Subscription API with
+  `TaskType.USER`; a delivered user task is a CREATED notification to an OPTIONAL
+  `@WorkflowTask` method (never completing the task; the task's ID arrives as `@TaskId`).
+  CANCELED cannot be delivered (termination callback carries no aggregate reference - GAPS).
+  `completeUserTask`/`cancelUserTask` run through the `UserTaskCompletionApi` with the same
+  PREFLIGHT_CHECK (phase one) / SYNC (phase two) mapping as service tasks; failing
+  notifications are logged loudly but never break the user task itself.
 
 ## Build
 

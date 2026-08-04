@@ -67,6 +67,14 @@ public class PeaTaskHandlerTest {
     }
 
     @Override
+    public boolean workflowTaskHandlerExists(
+        final String workflowModuleId,
+        final String bpmnProcessId,
+        final String taskDefinitionOrActivityId) {
+      return true;
+    }
+
+    @Override
     public String resolveWorkflowAggregateIdName(
         final String workflowModuleId,
         final String bpmnProcessId) {

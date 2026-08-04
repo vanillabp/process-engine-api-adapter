@@ -31,7 +31,8 @@ public class PeaProcessServiceProducer {
   public List<MigratableProcessService<Object>> peaMigratableProcessServices(
       final MigrationAdapterProperties properties,
       final StartProcessApi startProcessApi,
-      final dev.bpmcrafters.processengineapi.task.ServiceTaskCompletionApi serviceTaskCompletionApi) {
+      final dev.bpmcrafters.processengineapi.task.ServiceTaskCompletionApi serviceTaskCompletionApi,
+      final dev.bpmcrafters.processengineapi.task.UserTaskCompletionApi userTaskCompletionApi) {
 
     // ONE bean of type List with one instance PER configured adapter id of this
     // adapter's type (a CDI producer cannot yield N element beans for N
@@ -46,7 +47,7 @@ public class PeaProcessServiceProducer {
         .map(Map.Entry::getKey)
         .sorted()
         .<MigratableProcessService<Object>>map(
-            adapterId -> new PeaProcessService<>(adapterId, startProcessApi, serviceTaskCompletionApi))
+            adapterId -> new PeaProcessService<>(adapterId, startProcessApi, serviceTaskCompletionApi, userTaskCompletionApi))
         .toList();
 
   }

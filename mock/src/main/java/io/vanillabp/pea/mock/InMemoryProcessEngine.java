@@ -274,7 +274,6 @@ public class InMemoryProcessEngine implements DeploymentApi, StartProcessApi, Co
   public CompletableFuture<ProcessInformation> startProcess(
       final StartProcessCommand cmd) {
 
-    record("StartProcessApi", "startProcess", cmd);
     final var bpmnProcessId = bpmnProcessIdOf(cmd);
     // Only ExecutionMode.SYNC creates an instance: this is phase two of VanillaBP's
     // two-phase start. ExecutionMode.PREFLIGHT_CHECK (phase one) validates only and
@@ -283,6 +282,7 @@ public class InMemoryProcessEngine implements DeploymentApi, StartProcessApi, Co
     // processes - deployed resources are opaque (no BPMN model type, see GAPS.md);
     // tests inject failures via failPreflightFor instead.
     if (cmd.executionMode() == ExecutionMode.PREFLIGHT_CHECK) {
+      record("StartProcessApi", "startProcess", cmd);
       if (failPreflightForProcessIds.contains(bpmnProcessId)) {
         return CompletableFuture.failedFuture(new IllegalStateException(
             "Preflight check failed for BPMN process '%s' (injected by the mock)".formatted(bpmnProcessId)));
@@ -290,9 +290,11 @@ public class InMemoryProcessEngine implements DeploymentApi, StartProcessApi, Co
       return CompletableFuture.completedFuture(new ProcessInformation("mock-no-instance", Map.of()));
     }
     if (cmd.executionMode() != ExecutionMode.SYNC) {
+      record("StartProcessApi", "startProcess", cmd);
       return CompletableFuture.completedFuture(new ProcessInformation("mock-no-instance", Map.of()));
     }
     if (failNextSyncForProcessIds.remove(bpmnProcessId)) {
+      record("StartProcessApi", "startProcess", cmd);
       return CompletableFuture.failedFuture(new IllegalStateException(
           "Starting BPMN process '%s' failed (injected by the mock, once)".formatted(bpmnProcessId)));
     }
@@ -303,6 +305,9 @@ public class InMemoryProcessEngine implements DeploymentApi, StartProcessApi, Co
     final var instanceId = "mock-instance-"
         + instanceCounter.incrementAndGet();
     startedInstances.add(new StartedInstance(instanceId, variables));
+    // record LAST: tests await the SYNC invocation and then assert the started
+    // instance - recording first would open a race window for the asserting thread
+    record("StartProcessApi", "startProcess", cmd);
     return CompletableFuture.completedFuture(new ProcessInformation(instanceId, Map.of()));
 
   }

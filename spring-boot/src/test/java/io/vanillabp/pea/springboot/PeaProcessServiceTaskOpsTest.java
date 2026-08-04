@@ -25,7 +25,7 @@ public class PeaProcessServiceTaskOpsTest {
 
   private final InMemoryProcessEngine engine = new InMemoryProcessEngine();
 
-  private final PeaProcessService<Object> service = new PeaProcessService<>("pea", engine, engine);
+  private final PeaProcessService<Object> service = new PeaProcessService<>("pea", engine, engine, engine);
 
   @Test
   @DisplayName("awarenessOfTask: an open task probes ACTIVE, a gone task UNKNOWN_TO_BPMS")
@@ -56,6 +56,36 @@ public class PeaProcessServiceTaskOpsTest {
     // the preflight checks never completed anything
     assertTrue(engine.getCompletedTasks().isEmpty());
     assertTrue(engine.getErroredTasks().isEmpty());
+
+  }
+
+  @Test
+  @DisplayName("user tasks: awareness probes, phase-one abort and gone-task tolerance of phase two")
+  public void userTaskOperations() {
+
+    engine.getOpenTaskIds().add("utask-1");
+
+    assertEquals(WorkflowAwareness.ACTIVE, service.awarenessOfUserTask("42", "utask-1"));
+    assertEquals(WorkflowAwareness.UNKNOWN_TO_BPMS, service.awarenessOfUserTask("42", "utask-x"));
+
+    assertDoesNotThrow(() -> service.completeUserTaskPhaseOne("mod", "Process", null, new Object(), "utask-1"));
+    assertDoesNotThrow(() -> service
+        .cancelUserTaskPhaseOne("mod", "Process", null, new Object(), "utask-1", "ERR"));
+    final var failure = assertThrows(
+        IllegalStateException.class,
+        () -> service.completeUserTaskPhaseOne("mod", "Process", null, new Object(), "utask-gone"));
+    assertTrue(failure.getMessage().contains("utask-gone"));
+
+    service.completeUserTaskPhaseTwo("mod", "Process", null, "42", "utask-1");
+    assertEquals(1, engine.getCompletedTasks().size());
+
+    engine.getOpenTaskIds().add("utask-2");
+    service.cancelUserTaskPhaseTwo("mod", "Process", null, "42", "utask-2", "APPROVAL_WITHDRAWN");
+    assertEquals("APPROVAL_WITHDRAWN", engine.getErroredTasks().getFirst().errorCode());
+
+    // stale entries are warned no-ops
+    assertDoesNotThrow(() -> service.completeUserTaskPhaseTwo("mod", "Process", null, "42", "utask-1"));
+    assertDoesNotThrow(() -> service.cancelUserTaskPhaseTwo("mod", "Process", null, "42", "utask-2", "X"));
 
   }
 

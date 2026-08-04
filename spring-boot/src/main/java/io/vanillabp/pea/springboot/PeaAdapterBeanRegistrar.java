@@ -42,7 +42,8 @@ public class PeaAdapterBeanRegistrar implements BeanRegistrar {
               PeaProcessService.class,
               spec -> spec.supplier(supplierContext -> new PeaProcessService<>(
                   adapterId, supplierContext.bean(StartProcessApi.class), supplierContext
-                      .bean(dev.bpmcrafters.processengineapi.task.ServiceTaskCompletionApi.class))));
+                      .bean(dev.bpmcrafters.processengineapi.task.ServiceTaskCompletionApi.class), supplierContext
+                          .bean(dev.bpmcrafters.processengineapi.task.UserTaskCompletionApi.class))));
 
           registry.registerBean(
               "Pea_DeploymentService_%s".formatted(adapterId),

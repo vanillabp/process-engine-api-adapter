@@ -125,7 +125,7 @@ public class PeaDeploymentService implements AdapterDeploymentService<PeaBpmnMod
     for (final var process : parsed) {
       result.add(Map.entry(
           process.bpmnProcessId(),
-          new PeaBpmnModel(filename, resource, process.bpmnProcessId(), process.tasks())));
+          new PeaBpmnModel(filename, resource, process.bpmnProcessId(), process.tasks(), process.userTasks())));
     }
     return result;
 
@@ -137,7 +137,8 @@ public class PeaDeploymentService implements AdapterDeploymentService<PeaBpmnMod
    */
   private record ParsedProcess(
                                String bpmnProcessId,
-                               List<BpmnTaskSpec> tasks) {
+                               List<BpmnTaskSpec> tasks,
+                               List<BpmnTaskSpec> userTasks) {
   }
 
   /**
@@ -167,11 +168,14 @@ public class PeaDeploymentService implements AdapterDeploymentService<PeaBpmnMod
     factory.setProperty(XMLInputFactory.SUPPORT_DTD, Boolean.FALSE);
 
     final var serviceLikeTasks = java.util.Set.of("serviceTask", "sendTask", "businessRuleTask", "scriptTask");
+    final var BPMN_NS = "http://www.omg.org/spec/BPMN/20100524/MODEL";
 
     final var processes = new ArrayList<ParsedProcess>();
     ParsedProcess currentProcess = null;
     String currentTaskId = null;
     boolean currentTaskHasDefinition = false;
+    String currentUserTaskId = null;
+    boolean currentUserTaskHasFormReference = false;
 
     XMLStreamReader reader = null;
     try (var in = new ByteArrayInputStream(resource)) {
@@ -184,7 +188,7 @@ public class PeaDeploymentService implements AdapterDeploymentService<PeaBpmnMod
             final var bpmnProcessId = reader.getAttributeValue(null, "id");
             currentProcess = Boolean.parseBoolean(
                 reader.getAttributeValue(null, "isExecutable")) && (bpmnProcessId != null) && !bpmnProcessId.isBlank()
-                    ? new ParsedProcess(bpmnProcessId, new ArrayList<>())
+                    ? new ParsedProcess(bpmnProcessId, new ArrayList<>(), new ArrayList<>())
                     : null;
             if (currentProcess != null) {
               processes.add(currentProcess);
@@ -197,7 +201,24 @@ public class PeaDeploymentService implements AdapterDeploymentService<PeaBpmnMod
                 .tasks()
                 .add(new BpmnTaskSpec(currentTaskId, reader.getAttributeValue(null, "type")));
             currentTaskHasDefinition = true;
-          }
+          } else
+            if ((currentProcess != null) && "userTask".equals(element) && BPMN_NS.equals(reader.getNamespaceURI())) {
+              // namespace check: the marker extension <zeebe:userTask/> shares the
+              // local name with the BPMN element
+              currentUserTaskId = reader.getAttributeValue(null, "id");
+              currentUserTaskHasFormReference = false;
+            } else if ((currentUserTaskId != null) && "formDefinition".equals(element)) {
+              // user tasks (story 24): the zeebe:formDefinition external reference
+              // IS the task definition (Camunda-8-style convention); the handler is
+              // OPTIONAL (notification only)
+              final var externalReference = reader.getAttributeValue(null, "externalReference");
+              if ((externalReference != null) && !externalReference.isBlank()) {
+                currentProcess
+                    .userTasks()
+                    .add(BpmnTaskSpec.userTask(currentUserTaskId, externalReference));
+                currentUserTaskHasFormReference = true;
+              }
+            }
         } else if (event == XMLStreamConstants.END_ELEMENT) {
           final var element = reader.getLocalName();
           if (serviceLikeTasks.contains(element) && (currentTaskId != null)) {
@@ -208,9 +229,21 @@ public class PeaDeploymentService implements AdapterDeploymentService<PeaBpmnMod
                   .add(new BpmnTaskSpec(currentTaskId, null));
             }
             currentTaskId = null;
-          } else if ("process".equals(element)) {
-            currentProcess = null;
-          }
+          } else
+            if ("userTask".equals(element) && (currentUserTaskId != null) && BPMN_NS.equals(reader.getNamespaceURI())) {
+              if (!currentUserTaskHasFormReference && (currentProcess != null)) {
+                // a user task without an external form reference cannot be wired -
+                // fine, it is processed through forms/task lists only (no spec)
+                log.debug(
+                    "User task '{}' of BPMN file '{}' has no external form reference - VanillaBP "
+                        + "notifications are not available for it",
+                    currentUserTaskId,
+                    filename);
+              }
+              currentUserTaskId = null;
+            } else if ("process".equals(element)) {
+              currentProcess = null;
+            }
         }
       }
       return processes;
@@ -255,7 +288,9 @@ public class PeaDeploymentService implements AdapterDeploymentService<PeaBpmnMod
 
     // validate the BPMN's tasks against the registered @WorkflowTask methods;
     // throwing here honors the deployment-failure policy
-    workflowTaskInvoker.validateTaskWiring(workflowModuleId, bpmnProcessId, model.tasks());
+    final var specs = new ArrayList<BpmnTaskSpec>(model.tasks());
+    specs.addAll(model.userTasks());
+    workflowTaskInvoker.validateTaskWiring(workflowModuleId, bpmnProcessId, specs);
 
     log.info(
         "Process-Engine-API adapter '{}': wired {} task(s) of BPMN process '{}' (file '{}', workflow module '{}')",
@@ -348,6 +383,45 @@ public class PeaDeploymentService implements AdapterDeploymentService<PeaBpmnMod
             .forEach(task -> processesByTaskDefinition
                 .computeIfAbsent(task.taskDefinition(), key -> new ArrayList<>())
                 .add(model.bpmnProcessId())));
+
+    // user-task notifications (story 24): one USER-type subscription per distinct
+    // external form reference; the handler is a notification-only variant
+    final var processesByUserTaskReference = new LinkedHashMap<String, List<String>>();
+    bpmsProcessingContext
+        .getModels()
+        .forEach(model -> model
+            .userTasks()
+            .forEach(userTask -> processesByUserTaskReference
+                .computeIfAbsent(userTask.taskDefinition(), key -> new ArrayList<>())
+                .add(model.bpmnProcessId())));
+    processesByUserTaskReference.forEach((
+        externalFormReference,
+        bpmnProcessIds) -> {
+      final var handler = new io.vanillabp.pea.wiring.PeaUserTaskHandler(
+          adapterId, workflowModuleId, externalFormReference, List.copyOf(bpmnProcessIds), workflowTaskInvoker);
+      try {
+        final var subscription = taskSubscriptionApi
+            .subscribeForTask(new SubscribeForTaskCmd(
+                Map.of(), TaskType.USER, externalFormReference, java.util.Set
+                    .of(), handler, (java.util.function.Consumer<String>) taskId -> log.debug(
+                        "Process-Engine-API adapter '{}': user task '{}' terminated", adapterId, taskId)))
+            .get();
+        bpmsProcessingContext.getSubscriptions().add(subscription);
+      } catch (final InterruptedException e) {
+        Thread.currentThread().interrupt();
+        throw new IllegalStateException(
+            "Interrupted while subscribing for user tasks '%s'".formatted(externalFormReference), e);
+      } catch (final ExecutionException e) {
+        throw new IllegalStateException(
+            "Could not subscribe for user tasks '%s' of workflow module '%s' (adapter '%s')!"
+                .formatted(externalFormReference, workflowModuleId, adapterId), e.getCause());
+      }
+      log.info(
+          "Process-Engine-API adapter '{}': subscribed for user tasks '{}' of workflow module '{}'",
+          adapterId,
+          externalFormReference,
+          workflowModuleId);
+    });
 
     processesByTaskDefinition.forEach((
         taskDefinition,

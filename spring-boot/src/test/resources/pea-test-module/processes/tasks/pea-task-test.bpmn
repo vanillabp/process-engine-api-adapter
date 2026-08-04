@@ -36,9 +36,18 @@
       <bpmn:incoming>f4</bpmn:incoming>
       <bpmn:outgoing>f5</bpmn:outgoing>
     </bpmn:serviceTask>
-    <bpmn:sequenceFlow id="f5" sourceRef="t_async" targetRef="end" />
-    <bpmn:endEvent id="end">
+    <bpmn:sequenceFlow id="f5" sourceRef="t_async" targetRef="t_user" />
+    <bpmn:userTask id="t_user">
+      <bpmn:extensionElements>
+        <zeebe:userTask />
+        <zeebe:formDefinition externalReference="peaApprove" />
+      </bpmn:extensionElements>
       <bpmn:incoming>f5</bpmn:incoming>
+      <bpmn:outgoing>f6</bpmn:outgoing>
+    </bpmn:userTask>
+    <bpmn:sequenceFlow id="f6" sourceRef="t_user" targetRef="end" />
+    <bpmn:endEvent id="end">
+      <bpmn:incoming>f6</bpmn:incoming>
     </bpmn:endEvent>
   </bpmn:process>
 </bpmn:definitions>

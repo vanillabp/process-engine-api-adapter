@@ -26,6 +26,20 @@ public record PeaBpmnModel(
                            String filename,
                            byte[] resource,
                            String bpmnProcessId,
-                           java.util.List<io.vanillabp.integration.adapter.spi.workflowtask.BpmnTaskSpec> tasks) {
+                           java.util.List<io.vanillabp.integration.adapter.spi.workflowtask.BpmnTaskSpec> tasks,
+                           java.util.List<io.vanillabp.integration.adapter.spi.workflowtask.BpmnTaskSpec> userTasks) {
+
+  /**
+   * Convenience constructor without user tasks (story 24 added them).
+   */
+  public PeaBpmnModel(
+      final String filename,
+      final byte[] resource,
+      final String bpmnProcessId,
+      final java.util.List<io.vanillabp.integration.adapter.spi.workflowtask.BpmnTaskSpec> tasks) {
+
+    this(filename, resource, bpmnProcessId, tasks, java.util.List.of());
+
+  }
 
 }
