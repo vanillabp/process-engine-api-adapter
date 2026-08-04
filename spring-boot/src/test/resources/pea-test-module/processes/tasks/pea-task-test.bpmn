@@ -50,4 +50,31 @@
       <bpmn:incoming>f6</bpmn:incoming>
     </bpmn:endEvent>
   </bpmn:process>
+  <bpmn:message id="Msg_PeaPayment" name="PeaPaymentReceived" />
+  <bpmn:message id="Msg_PeaOrder" name="PeaOrderPlaced" />
+  <bpmn:process id="PeaMessageProcess" isExecutable="true">
+    <bpmn:startEvent id="PMP_start">
+      <bpmn:outgoing>PMP_f1</bpmn:outgoing>
+    </bpmn:startEvent>
+    <bpmn:sequenceFlow id="PMP_f1" sourceRef="PMP_start" targetRef="PMP_wait" />
+    <bpmn:intermediateCatchEvent id="PMP_wait">
+      <bpmn:incoming>PMP_f1</bpmn:incoming>
+      <bpmn:outgoing>PMP_f2</bpmn:outgoing>
+      <bpmn:messageEventDefinition id="PMP_msgDef" messageRef="Msg_PeaPayment" />
+    </bpmn:intermediateCatchEvent>
+    <bpmn:sequenceFlow id="PMP_f2" sourceRef="PMP_wait" targetRef="PMP_end" />
+    <bpmn:endEvent id="PMP_end">
+      <bpmn:incoming>PMP_f2</bpmn:incoming>
+    </bpmn:endEvent>
+  </bpmn:process>
+  <bpmn:process id="PeaMessageStartProcess" isExecutable="true">
+    <bpmn:startEvent id="PMS_start">
+      <bpmn:outgoing>PMS_f1</bpmn:outgoing>
+      <bpmn:messageEventDefinition id="PMS_msgDef" messageRef="Msg_PeaOrder" />
+    </bpmn:startEvent>
+    <bpmn:sequenceFlow id="PMS_f1" sourceRef="PMS_start" targetRef="PMS_end" />
+    <bpmn:endEvent id="PMS_end">
+      <bpmn:incoming>PMS_f1</bpmn:incoming>
+    </bpmn:endEvent>
+  </bpmn:process>
 </bpmn:definitions>

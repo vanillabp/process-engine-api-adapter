@@ -180,7 +180,11 @@ public class TaskProcessingIntegrationTest {
   @Service
   @WorkflowService(
       workflowAggregateClass = PeaTaskAggregate.class,
-      bpmnProcess = @BpmnProcess(bpmnProcessId = PROCESS))
+      bpmnProcess = @BpmnProcess(bpmnProcessId = PROCESS),
+      secondaryBpmnProcesses = {
+          @BpmnProcess(bpmnProcessId = "PeaMessageProcess"), @BpmnProcess(
+              bpmnProcessId = "PeaMessageStartProcess")
+      })
   public static class PeaTaskWorkflowService {
 
     private final ProcessService<PeaTaskAggregate> processService;
@@ -243,6 +247,31 @@ public class TaskProcessingIntegrationTest {
         final String taskId) {
 
       return processService.completeUserTask(aggregate, taskId);
+
+    }
+
+    public PeaTaskAggregate correlate(
+        final PeaTaskAggregate aggregate,
+        final String messageName) {
+
+      return processService.correlateMessage(aggregate, messageName);
+
+    }
+
+    public PeaTaskAggregate correlate(
+        final PeaTaskAggregate aggregate,
+        final String messageName,
+        final String correlationId) {
+
+      return processService.correlateMessage(aggregate, messageName, correlationId);
+
+    }
+
+    public PeaTaskAggregate startByMessage(
+        final PeaTaskAggregate aggregate,
+        final String messageName) {
+
+      return processService.startWorkflowByMessage(aggregate, messageName);
 
     }
 
@@ -598,6 +627,81 @@ public class TaskProcessingIntegrationTest {
         () -> transactionTemplate.executeWithoutResult(status -> taskWorkflowService
             .completeUserTask(stored("4733"), "utask-unknown")));
     assertTrue(exception.getMessage().contains("utask-unknown"));
+
+  }
+
+  @Test
+  @DisplayName("correlateMessage dispatches AFTER the commit only (correlation key = aggregate id)")
+  public void correlateMessageDispatchesAfterCommit() throws Exception {
+
+    seed("4741");
+
+    transactionTemplate.executeWithoutResult(status -> {
+      taskWorkflowService.correlate(stored("4741"), "PeaPaymentReceived");
+      // inside the transaction NOTHING was correlated yet (no preflight is even
+      // possible - the command classes are final, GAPS entry 11)
+      assertTrue(engine.getCorrelatedMessages().isEmpty());
+    });
+
+    awaitUntil(
+        () -> engine
+            .getCorrelatedMessages()
+            .contains(new InMemoryProcessEngine.CorrelatedMessage("PeaPaymentReceived", "4741")),
+        "the correlation to be dispatched after the commit");
+
+  }
+
+  @Test
+  @DisplayName("A correlation id becomes the correlation key; a rollback yields no correlation")
+  public void correlationIdAndRollback() throws Exception {
+
+    seed("4742");
+
+    transactionTemplate.executeWithoutResult(status -> taskWorkflowService
+        .correlate(stored("4742"), "PeaItemShipped", "item-7"));
+    awaitUntil(
+        () -> engine
+            .getCorrelatedMessages()
+            .contains(new InMemoryProcessEngine.CorrelatedMessage("PeaItemShipped", "item-7")),
+        "the correlation-id correlation to be dispatched");
+
+    final var before = engine.getCorrelatedMessages().size();
+    org.junit.jupiter.api.Assertions.assertThrows(
+        RuntimeException.class,
+        () -> transactionTemplate.executeWithoutResult(status -> {
+          taskWorkflowService.correlate(stored("4742"), "PeaNeverSent");
+          throw new RuntimeException("test rollback");
+        }));
+    Thread.sleep(1500);
+    assertEquals(before, engine.getCorrelatedMessages().size(), "a rollback must not correlate");
+
+  }
+
+  @Test
+  @DisplayName("startWorkflowByMessage starts via StartProcessByMessageCmd with ONLY the aggregate-id variable")
+  public void startWorkflowByMessagePublishesOnlyTechnicalPayload() throws Exception {
+
+    final var aggregate = new PeaTaskAggregate();
+    aggregate.id = "4743";
+    TaskProcessingConfiguration.AGGREGATES.put("4743", aggregate);
+
+    transactionTemplate.executeWithoutResult(status -> taskWorkflowService
+        .startByMessage(stored("4743"), "PeaOrderPlaced"));
+
+    awaitUntil(
+        () -> engine
+            .getStartedInstances()
+            .stream()
+            .anyMatch(instance -> "4743".equals(instance.variables().get("id"))),
+        "the start-by-message to be dispatched after the commit");
+    final var instance = engine
+        .getStartedInstances()
+        .stream()
+        .filter(candidate -> "4743".equals(candidate.variables().get("id")))
+        .findFirst()
+        .orElseThrow();
+    // PAYLOAD DOCTRINE: only the technical aggregate-ID variable travels
+    assertEquals(Map.of("id", "4743"), instance.variables());
 
   }
 

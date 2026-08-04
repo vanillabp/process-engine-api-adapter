@@ -25,7 +25,7 @@ public class PeaProcessServiceTaskOpsTest {
 
   private final InMemoryProcessEngine engine = new InMemoryProcessEngine();
 
-  private final PeaProcessService<Object> service = new PeaProcessService<>("pea", engine, engine, engine);
+  private final PeaProcessService<Object> service = new PeaProcessService<>("pea", engine, engine, engine, engine);
 
   @Test
   @DisplayName("awarenessOfTask: an open task probes ACTIVE, a gone task UNKNOWN_TO_BPMS")

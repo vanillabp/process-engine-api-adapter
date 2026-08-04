@@ -50,16 +50,20 @@ public class PeaProcessService<A> implements MigratableProcessService<A> {
 
   private final dev.bpmcrafters.processengineapi.task.UserTaskCompletionApi userTaskCompletionApi;
 
+  private final dev.bpmcrafters.processengineapi.correlation.CorrelationApi correlationApi;
+
   public PeaProcessService(
       final String adapterId,
       final StartProcessApi startProcessApi,
       final dev.bpmcrafters.processengineapi.task.ServiceTaskCompletionApi serviceTaskCompletionApi,
-      final dev.bpmcrafters.processengineapi.task.UserTaskCompletionApi userTaskCompletionApi) {
+      final dev.bpmcrafters.processengineapi.task.UserTaskCompletionApi userTaskCompletionApi,
+      final dev.bpmcrafters.processengineapi.correlation.CorrelationApi correlationApi) {
 
     this.adapterId = adapterId;
     this.startProcessApi = startProcessApi;
     this.serviceTaskCompletionApi = serviceTaskCompletionApi;
     this.userTaskCompletionApi = userTaskCompletionApi;
+    this.correlationApi = correlationApi;
 
   }
 
@@ -373,7 +377,130 @@ public class PeaProcessService<A> implements MigratableProcessService<A> {
   public WorkflowAwareness awarenessOfWorkflow(
       final Object workflowAggregateId) {
 
-    throw new UnsupportedOperationException("awarenessOfWorkflow is implemented in a later story");
+    // the Process-Engine-API offers NO way to probe a workflow's existence: there
+    // is no query API, and CorrelateMessageCmd is FINAL - a PREFLIGHT_CHECK
+    // execution mode cannot be transported (GAPS.md entry 11). The adapter
+    // answers OPTIMISTICALLY - fine for single-BPMS setups; unsafe for multi-BPMS
+    // migration scenarios (warned once).
+    if (noWorkflowAwarenessWarned.compareAndSet(false, true)) {
+      log.warn(
+          "PEA[{}]: the Process-Engine-API cannot probe workflow awareness (no query API, final "
+              + "command classes without execution-mode transport - see GAPS.md); answering "
+              + "OPTIMISTICALLY (ACTIVE). Unsafe for BPMS migration scenarios.",
+          adapterId);
+    }
+    return WorkflowAwareness.ACTIVE;
+
+  }
+
+  private final java.util.concurrent.atomic.AtomicBoolean noWorkflowAwarenessWarned = new java.util.concurrent.atomic.AtomicBoolean();
+
+  @Override
+  public void correlateMessagePhaseOne(
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final AggregatePersistenceAware<A> aggregatePersistence,
+      final A workflowAggregate,
+      final String messageName,
+      final String correlationId) {
+
+    // no phase-one PREFLIGHT_CHECK is possible: CorrelateMessageCmd is FINAL and
+    // cannot carry a non-default execution mode (GAPS.md entry 11) - like
+    // workflow starts, phase one validates nothing against the engine
+
+  }
+
+  @Override
+  public void correlateMessagePhaseTwo(
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final AggregatePersistenceAware<A> aggregatePersistence,
+      final Object workflowAggregateId,
+      final String messageName,
+      final String correlationId) {
+
+    // PAYLOAD DOCTRINE: only the message name and the correlation key travel.
+    // CorrelateMessageCmd is FINAL - the command carries the DEFAULT execution
+    // mode; the intended SYNC semantics cannot be expressed (GAPS.md entry 11).
+    final var correlationKey = correlationId != null
+        ? correlationId
+        : String.valueOf(workflowAggregateId);
+    try {
+      correlationApi
+          .correlateMessage(new dev.bpmcrafters.processengineapi.correlation.CorrelateMessageCmd(
+              messageName, dev.bpmcrafters.processengineapi.correlation.Correlation.Companion
+                  .withKey(correlationKey)))
+          .get();
+      log.info(
+          "PEA[{}]: correlated message '{}' (correlation key '{}') for BPMN process '{}' of "
+              + "workflow module '{}'",
+          adapterId,
+          messageName,
+          correlationKey,
+          bpmnProcessId,
+          workflowModuleId);
+    } catch (final InterruptedException e) {
+      Thread.currentThread().interrupt();
+    } catch (final java.util.concurrent.ExecutionException e) {
+      // stale outbox entry - the subscription disappeared between the
+      // dispatch-time probe and this correlation (at-least-once residual)
+      log.warn(
+          "PEA[{}]: message '{}' (correlation key '{}') could not be correlated anymore - "
+              + "skipping the redelivered phase-two correlation",
+          adapterId,
+          messageName,
+          correlationKey,
+          e.getCause());
+    }
+
+  }
+
+  @Override
+  public void startWorkflowByMessagePhaseOne(
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final AggregatePersistenceAware<A> aggregatePersistence,
+      final A workflowAggregate,
+      final String messageName) {
+
+    // start semantics: nothing to check against the engine (the degenerate
+    // two-phase case); a PREFLIGHT_CHECK cannot be expressed either -
+    // StartProcessByMessageCmd is FINAL (GAPS.md entry 11)
+
+  }
+
+  @Override
+  public void startWorkflowByMessagePhaseTwo(
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final AggregatePersistenceAware<A> aggregatePersistence,
+      final Object workflowAggregateId,
+      final String messageName) {
+
+    // the aggregate-ID variable is the ONLY payload (technical field, not message
+    // content); StartProcessByMessageCmd is FINAL - the DEFAULT execution mode
+    // travels (GAPS.md entry 11); schedule deduplication comes from the outbox
+    // key 'module|process|aggregateId'
+    try {
+      startProcessApi
+          .startProcess(new dev.bpmcrafters.processengineapi.process.StartProcessByMessageCmd(
+              messageName, java.util.Map.<String, Object>of(
+                  aggregatePersistence.getAggregateIdName(), String.valueOf(workflowAggregateId)), java.util.Map.of()))
+          .get();
+      log.info(
+          "PEA[{}]: started workflow by message '{}' for BPMN process '{}' of workflow module "
+              + "'{}' (aggregate '{}')",
+          adapterId,
+          messageName,
+          bpmnProcessId,
+          workflowModuleId,
+          workflowAggregateId);
+    } catch (final InterruptedException e) {
+      Thread.currentThread().interrupt();
+    } catch (final java.util.concurrent.ExecutionException e) {
+      throw new IllegalStateException(
+          "Phase two of starting a workflow by message '%s' failed".formatted(messageName), e.getCause());
+    }
 
   }
 

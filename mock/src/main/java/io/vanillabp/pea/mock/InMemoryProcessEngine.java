@@ -200,6 +200,7 @@ public class InMemoryProcessEngine implements DeploymentApi, StartProcessApi, Co
     failedTasks.clear();
     failNextCompletionForTaskIds.clear();
     openTaskIds.clear();
+    correlatedMessages.clear();
 
   }
 
@@ -214,6 +215,7 @@ public class InMemoryProcessEngine implements DeploymentApi, StartProcessApi, Co
     failedTasks.clear();
     failNextCompletionForTaskIds.clear();
     openTaskIds.clear();
+    correlatedMessages.clear();
     failPreflightForProcessIds.clear();
     failNextSyncForProcessIds.clear();
 
@@ -283,17 +285,21 @@ public class InMemoryProcessEngine implements DeploymentApi, StartProcessApi, Co
     // tests inject failures via failPreflightFor instead.
     if (cmd.executionMode() == ExecutionMode.PREFLIGHT_CHECK) {
       record("StartProcessApi", "startProcess", cmd);
-      if (failPreflightForProcessIds.contains(bpmnProcessId)) {
+      if ((bpmnProcessId != null) && failPreflightForProcessIds.contains(bpmnProcessId)) {
         return CompletableFuture.failedFuture(new IllegalStateException(
             "Preflight check failed for BPMN process '%s' (injected by the mock)".formatted(bpmnProcessId)));
       }
       return CompletableFuture.completedFuture(new ProcessInformation("mock-no-instance", Map.of()));
     }
-    if (cmd.executionMode() != ExecutionMode.SYNC) {
+    if ((cmd
+        .executionMode() != ExecutionMode.SYNC) && !(cmd instanceof dev.bpmcrafters.processengineapi.process.StartProcessByMessageCmd)) {
+      // StartProcessByMessageCmd is FINAL and cannot carry a non-default
+      // execution mode (GAPS.md entry 11) - its DEFAULT-mode command is the
+      // phase-two start and creates an instance like a SYNC one
       record("StartProcessApi", "startProcess", cmd);
       return CompletableFuture.completedFuture(new ProcessInformation("mock-no-instance", Map.of()));
     }
-    if (failNextSyncForProcessIds.remove(bpmnProcessId)) {
+    if ((bpmnProcessId != null) && failNextSyncForProcessIds.remove(bpmnProcessId)) {
       record("StartProcessApi", "startProcess", cmd);
       return CompletableFuture.failedFuture(new IllegalStateException(
           "Starting BPMN process '%s' failed (injected by the mock, once)".formatted(bpmnProcessId)));
@@ -319,7 +325,28 @@ public class InMemoryProcessEngine implements DeploymentApi, StartProcessApi, Co
       final CorrelateMessageCmd cmd) {
 
     record("CorrelationApi", "correlateMessage", cmd);
+    correlatedMessages.add(new CorrelatedMessage(
+        cmd.getMessageName(), cmd.getCorrelation() != null
+            ? cmd.getCorrelation().get().getCorrelationKey()
+            : null));
     return CompletableFuture.completedFuture(Empty.INSTANCE);
+
+  }
+
+  /**
+   * A correlated message - inspectable by tests.
+   *
+   * @param messageName The BPMN message name
+   * @param correlationKey The correlation key (aggregate ID or correlation id)
+   */
+  public record CorrelatedMessage(String messageName, String correlationKey) {
+  }
+
+  private final List<CorrelatedMessage> correlatedMessages = new CopyOnWriteArrayList<>();
+
+  public List<CorrelatedMessage> getCorrelatedMessages() {
+
+    return correlatedMessages;
 
   }
 

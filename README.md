@@ -146,6 +146,14 @@ replaces the mock with a real Process-Engine-API implementation.
   PREFLIGHT_CHECK (phase one) / SYNC (phase two) mapping as service tasks; failing
   notifications are logged loudly but never break the user task itself.
 
+- **Message correlation** (story 23): `correlateMessage` sends a `CorrelateMessageCmd` with
+  `correlationKey = correlationId ?? aggregate ID` after the caller's commit (outbox); no
+  payload travels. `startWorkflowByMessage` sends a `StartProcessByMessageCmd` carrying only
+  the aggregate-ID variable. LIMITATION ([`GAPS.md`](GAPS.md), entry 11): both command classes
+  are FINAL - the execution mode cannot be transported (no PREFLIGHT_CHECK phase one, commands
+  travel with DEFAULT mode) and workflow awareness cannot be probed at all (the adapter answers
+  optimistically with a one-time guiding WARN - unsafe for multi-BPMS migration setups).
+
 ## Build
 
 Prerequisites installed into the local Maven repository first (build order):

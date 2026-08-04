@@ -185,3 +185,28 @@ maps EVERY failure to `UNKNOWN_TO_BPMS`. Acceptable mock-first (the in-memory en
 is never unavailable), but a real PEA implementation underneath needs typed errors -
 or the adapter needs an engine-specific failure classifier - before multi-BPMS
 migration setups are safe. A defined exception taxonomy in the API would solve this.
+
+## 11. `CorrelateMessageCmd`/`StartProcessByMessageCmd` are FINAL - no execution-mode transport
+
+**Needed by VanillaBP:** message correlation and start-by-message follow the two-phase
+pattern like every other engine-advancing operation: phase one should express
+`ExecutionMode.PREFLIGHT_CHECK` (validate/probe without advancing) and phase two
+`ExecutionMode.SYNC`. For service/user-task completions the adapter subclasses the
+command classes to carry the mode (entry 8).
+
+**Offered by the Process-Engine-API:** `CorrelateMessageCmd` and
+`StartProcessByMessageCmd` are FINAL Kotlin data classes whose
+`ExecutionModeAware.executionMode()` default (`DEFAULT`) cannot be overridden, and
+`CorrelationApi.correlateMessage` takes the concrete class (no interface to implement
+instead). `StartProcessApi` takes the `StartProcessCommand` interface, but a custom
+implementation would not be recognized by real PEA implementations which type-check
+on the final command classes.
+
+**Consequence for the adapter:** correlation and start-by-message travel with
+`ExecutionMode.DEFAULT` - the intended SYNC phase-two semantics cannot be signalled,
+NO phase-one preflight is possible, and `awarenessOfWorkflow` cannot be probed at all
+(no query API either): the adapter answers workflow awareness OPTIMISTICALLY
+(`ACTIVE`, warned once) - fine for single-BPMS setups, unsafe for multi-BPMS
+migration scenarios. Opening the command classes (or accepting interfaces) plus a
+workflow-existence query would resolve this. The mock treats a DEFAULT-mode
+`StartProcessByMessageCmd` as the phase-two start (documented in the mock).
