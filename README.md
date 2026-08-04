@@ -127,6 +127,16 @@ replaces the mock with a real Process-Engine-API implementation.
   entry the task definition has to be unique across the module's processes. A completion
   failing AFTER the local commit is tolerated with a WARN - the engine redelivers and the
   idempotent handler converges.
+- **Completing/canceling async tasks** (`ProcessService#completeTask`/`#cancelTask`, story 22):
+  the awareness probe and the phase-one existence check are `ExecutionMode.PREFLIGHT_CHECK`
+  completions (validate only - exactly what the mode is for); the actual completion/cancellation
+  runs after the caller's commit through the outbox as a SYNC `completeTask`/`completeTaskByError`
+  (a gone task is tolerated - at-least-once residual). PEA failures are untyped, so a failing
+  probe cannot be told apart from an unreachable engine and maps to "unknown"
+  ([`GAPS.md`](GAPS.md), entry 10 - relevant for multi-BPMS migration setups). `@TaskEvent
+  CANCELED` cannot be delivered (the subscription's termination callback carries only the task
+  ID, no aggregate reference). The mock tracks open tasks (`deliverTask` opens,
+  SYNC completions close) so preflights validate honestly.
 
 ## Build
 

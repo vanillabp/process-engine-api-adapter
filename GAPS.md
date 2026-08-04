@@ -167,3 +167,21 @@ convention. The extraction strategy should become CONFIGURABLE per adapter insta
 `task-id`, extensible for other namespaces) so the same adapter serves different
 engines. To be implemented in a later story; documented here so the limitation is
 tracked.
+
+## 10. Command failures are untyped - awareness cannot distinguish "unknown" from "unavailable"
+
+**Needed by VanillaBP:** the awareness contract distinguishes `UNKNOWN_TO_BPMS` (a
+successful query found nothing - the next prioritized adapter may be probed) from
+`BPMS_UNAVAILABLE` (infrastructure failure - NEVER fall back, the unavailable engine
+might hold the task). Wrongly mapping an outage to "unknown" could route an operation
+to the wrong BPMS in a migration scenario.
+
+**Offered by the Process-Engine-API:** command futures fail with untyped exceptions -
+there is no error classification (no "not found" vs. "unreachable" distinction, no
+typed exception hierarchy).
+
+**Consequence for the adapter:** the awareness probe (a `PREFLIGHT_CHECK` completion)
+maps EVERY failure to `UNKNOWN_TO_BPMS`. Acceptable mock-first (the in-memory engine
+is never unavailable), but a real PEA implementation underneath needs typed errors -
+or the adapter needs an engine-specific failure classifier - before multi-BPMS
+migration setups are safe. A defined exception taxonomy in the API would solve this.

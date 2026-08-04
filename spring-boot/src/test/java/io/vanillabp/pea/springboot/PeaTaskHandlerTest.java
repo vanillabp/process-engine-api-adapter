@@ -92,6 +92,8 @@ public class PeaTaskHandlerTest {
   @Test
   public void missingMetaEntryFallsBackToTheUniqueProcess() {
 
+    // the mock only completes OPEN tasks (honest preflight/completion since 22)
+    engine.getOpenTaskIds().add("task-1");
     handler(List.of("OnlyProcess"))
         .accept(
             new TaskInformation("task-1", Map.of()),

@@ -183,8 +183,30 @@ public class TaskProcessingIntegrationTest {
       bpmnProcess = @BpmnProcess(bpmnProcessId = PROCESS))
   public static class PeaTaskWorkflowService {
 
+    private final ProcessService<PeaTaskAggregate> processService;
+
     public PeaTaskWorkflowService(
         final ProcessService<PeaTaskAggregate> processService) {
+
+      this.processService = processService;
+
+    }
+
+    public PeaTaskAggregate completeAsyncTask(
+        final PeaTaskAggregate aggregate,
+        final String taskId) {
+
+      return processService.completeTask(aggregate, taskId);
+
+    }
+
+    public PeaTaskAggregate cancelAsyncTask(
+        final PeaTaskAggregate aggregate,
+        final String taskId,
+        final String bpmnErrorCode) {
+
+      return processService.cancelTask(aggregate, taskId, bpmnErrorCode);
+
     }
 
     @WorkflowTask
@@ -337,6 +359,139 @@ public class TaskProcessingIntegrationTest {
     assertTrue(engine.getCompletedTasks().isEmpty());
     assertTrue(engine.getErroredTasks().isEmpty());
     assertTrue(engine.getFailedTasks().isEmpty());
+
+  }
+
+  @Autowired
+  private PeaTaskWorkflowService taskWorkflowService;
+
+  @Autowired
+  private org.springframework.transaction.support.TransactionTemplate transactionTemplate;
+
+  private java.util.List<ExecutionMode> completionModes(
+      final String method,
+      final String taskId) {
+
+    return engine.invocations
+        .stream()
+        .filter(invocation -> method.equals(invocation.method()))
+        .filter(invocation -> {
+          final var command = invocation.command();
+          return (command instanceof dev.bpmcrafters.processengineapi.task.CompleteTaskCmd complete && taskId
+              .equals(complete
+                  .getTaskId())) || (command instanceof dev.bpmcrafters.processengineapi.task.CompleteTaskByErrorCmd byError && taskId
+                      .equals(byError.getTaskId()));
+        })
+        .map(InMemoryProcessEngine.Invocation::executionMode)
+        .toList();
+
+  }
+
+  private void awaitUntil(
+      final java.util.function.Supplier<Boolean> condition,
+      final String description) throws InterruptedException {
+
+    final var deadline = System.currentTimeMillis() + 15000;
+    while (!Boolean.TRUE.equals(condition.get())) {
+      if (System.currentTimeMillis() > deadline) {
+        throw new AssertionError("timed out waiting for: "
+            + description);
+      }
+      Thread.sleep(50);
+    }
+
+  }
+
+  @Test
+  @DisplayName("completeTask runs the PREFLIGHT_CHECK in phase one and the SYNC completion after the commit")
+  public void completeTaskPreflightThenSyncAfterCommit() throws Exception {
+
+    seed("4721");
+    engine.deliverTask("task-c1", "peaAsync", PROCESS, Map.of("id", "4721"));
+    assertTrue(engine.getOpenTaskIds().contains("task-c1"), "the async task stays open");
+
+    transactionTemplate.executeWithoutResult(status -> {
+      final var aggregate = stored("4721");
+      aggregate.appendResult("completing");
+      taskWorkflowService.completeAsyncTask(aggregate, "task-c1");
+      // INSIDE the transaction: probes/preflight ran (PREFLIGHT_CHECK, never
+      // advancing), but NO SYNC completion happened yet
+      assertTrue(
+          completionModes("completeTask", "task-c1")
+              .stream()
+              .allMatch(mode -> mode == ExecutionMode.PREFLIGHT_CHECK),
+          "before the commit only PREFLIGHT_CHECK commands may run");
+    });
+
+    // the SYNC completion is dispatched through the outbox AFTER the commit
+    awaitUntil(
+        () -> completionModes("completeTask", "task-c1").contains(ExecutionMode.SYNC),
+        "the SYNC completion to be dispatched after the commit");
+    awaitUntil(
+        () -> engine
+            .getCompletedTasks()
+            .contains(new InMemoryProcessEngine.CompletedTask("task-c1")),
+        "the task to be completed");
+
+  }
+
+  @Test
+  @DisplayName("A rollback after completeTask yields NO SYNC completion - the task stays open")
+  public void rollbackAfterCompleteTaskYieldsNoSync() throws Exception {
+
+    seed("4722");
+    engine.deliverTask("task-c2", "peaAsync", PROCESS, Map.of("id", "4722"));
+
+    org.junit.jupiter.api.Assertions.assertThrows(
+        RuntimeException.class,
+        () -> transactionTemplate.executeWithoutResult(status -> {
+          taskWorkflowService.completeAsyncTask(stored("4722"), "task-c2");
+          throw new RuntimeException("test rollback");
+        }));
+
+    Thread.sleep(1500);
+    assertTrue(
+        completionModes("completeTask", "task-c2")
+            .stream()
+            .noneMatch(mode -> mode == ExecutionMode.SYNC),
+        "a rolled-back transaction must never yield a SYNC completion");
+    assertTrue(engine.getOpenTaskIds().contains("task-c2"), "the task stays open");
+
+  }
+
+  @Test
+  @DisplayName("cancelTask sends the SYNC completeTaskByError with the error code after the commit")
+  public void cancelTaskSendsByErrorAfterCommit() throws Exception {
+
+    seed("4723");
+    engine.deliverTask("task-c3", "peaAsync", PROCESS, Map.of("id", "4723"));
+
+    transactionTemplate.executeWithoutResult(status -> taskWorkflowService
+        .cancelAsyncTask(stored("4723"), "task-c3", "PAYMENT_FAILED"));
+
+    awaitUntil(
+        () -> engine
+            .getErroredTasks()
+            .stream()
+            .anyMatch(errored -> "task-c3".equals(errored.taskId()) && "PAYMENT_FAILED".equals(errored.errorCode())),
+        "the SYNC cancellation to be dispatched after the commit");
+    assertEquals(
+        List.of(ExecutionMode.SYNC),
+        completionModes("completeTaskByError", "task-c3"));
+
+  }
+
+  @Test
+  @DisplayName("completeTask of an unknown task raises the guiding TaskNotFoundException")
+  public void completeUnknownTaskRaisesGuidingException() {
+
+    seed("4724");
+
+    final var exception = org.junit.jupiter.api.Assertions.assertThrows(
+        io.vanillabp.spi.process.TaskNotFoundException.class,
+        () -> transactionTemplate.executeWithoutResult(status -> taskWorkflowService
+            .completeAsyncTask(stored("4724"), "no-such-task")));
+    assertTrue(exception.getMessage().contains("no-such-task"));
 
   }
 

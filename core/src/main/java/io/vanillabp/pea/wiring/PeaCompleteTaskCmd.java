@@ -13,17 +13,34 @@ import dev.bpmcrafters.processengineapi.task.CompleteTaskCmd;
  */
 public class PeaCompleteTaskCmd extends CompleteTaskCmd {
 
+  private final ExecutionMode executionMode;
+
   public PeaCompleteTaskCmd(
       final String taskId) {
 
+    this(taskId, ExecutionMode.SYNC);
+
+  }
+
+  /**
+   * @param taskId The task to complete
+   * @param executionMode {@link ExecutionMode#SYNC} for the actual completion
+   *        (phase two) or {@link ExecutionMode#PREFLIGHT_CHECK} for the
+   *        non-advancing phase-one existence check / awareness probe
+   */
+  public PeaCompleteTaskCmd(
+      final String taskId,
+      final ExecutionMode executionMode) {
+
     super(taskId);
+    this.executionMode = executionMode;
 
   }
 
   @Override
   public ExecutionMode executionMode() {
 
-    return ExecutionMode.SYNC;
+    return executionMode;
 
   }
 

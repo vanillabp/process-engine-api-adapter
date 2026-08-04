@@ -199,6 +199,7 @@ public class InMemoryProcessEngine implements DeploymentApi, StartProcessApi, Co
     erroredTasks.clear();
     failedTasks.clear();
     failNextCompletionForTaskIds.clear();
+    openTaskIds.clear();
 
   }
 
@@ -212,6 +213,7 @@ public class InMemoryProcessEngine implements DeploymentApi, StartProcessApi, Co
     erroredTasks.clear();
     failedTasks.clear();
     failNextCompletionForTaskIds.clear();
+    openTaskIds.clear();
     failPreflightForProcessIds.clear();
     failNextSyncForProcessIds.clear();
 
@@ -359,6 +361,7 @@ public class InMemoryProcessEngine implements DeploymentApi, StartProcessApi, Co
       final String bpmnProcessId,
       final Map<String, Object> payload) {
 
+    openTaskIds.add(taskId);
     final var subscription = subscriptions
         .stream()
         .filter(candidate -> candidate.taskDescriptionKey().equals(taskDefinition))
@@ -434,6 +437,19 @@ public class InMemoryProcessEngine implements DeploymentApi, StartProcessApi, Co
    */
   private final Set<String> failNextCompletionForTaskIds = ConcurrentHashMap.newKeySet();
 
+  /**
+   * Task IDs delivered via {@link #deliverTask} and not yet completed/canceled -
+   * the basis for honest {@code PREFLIGHT_CHECK} validation of task completions
+   * (unlike deployments, the mock KNOWS which tasks are open).
+   */
+  private final Set<String> openTaskIds = ConcurrentHashMap.newKeySet();
+
+  public Set<String> getOpenTaskIds() {
+
+    return openTaskIds;
+
+  }
+
   public List<CompletedTask> getCompletedTasks() {
 
     return completedTasks;
@@ -464,9 +480,23 @@ public class InMemoryProcessEngine implements DeploymentApi, StartProcessApi, Co
       final CompleteTaskCmd cmd) {
 
     record("TaskCompletionApi", "completeTask", cmd);
+    if (cmd.executionMode() == ExecutionMode.PREFLIGHT_CHECK) {
+      // validate only, never advance: the task has to be OPEN
+      if (!openTaskIds.contains(cmd.getTaskId())) {
+        return CompletableFuture.failedFuture(new IllegalStateException(
+            "Task '%s' is not open (preflight failed)".formatted(cmd.getTaskId())));
+      }
+      return CompletableFuture.completedFuture(Empty.INSTANCE);
+    }
     if (failNextCompletionForTaskIds.remove(cmd.getTaskId())) {
       return CompletableFuture.failedFuture(new IllegalStateException(
           "Completing task '%s' failed (injected by the mock)".formatted(cmd.getTaskId())));
+    }
+    if (!openTaskIds.remove(cmd.getTaskId())) {
+      // the SYNC completion of a gone task fails - the adapter tolerates this as
+      // the at-least-once residual
+      return CompletableFuture.failedFuture(new IllegalStateException(
+          "Task '%s' is not open (already completed or canceled)".formatted(cmd.getTaskId())));
     }
     completedTasks.add(new CompletedTask(cmd.getTaskId()));
     return CompletableFuture.completedFuture(Empty.INSTANCE);
@@ -478,6 +508,17 @@ public class InMemoryProcessEngine implements DeploymentApi, StartProcessApi, Co
       final CompleteTaskByErrorCmd cmd) {
 
     record("TaskCompletionApi", "completeTaskByError", cmd);
+    if (cmd.executionMode() == ExecutionMode.PREFLIGHT_CHECK) {
+      if (!openTaskIds.contains(cmd.getTaskId())) {
+        return CompletableFuture.failedFuture(new IllegalStateException(
+            "Task '%s' is not open (preflight failed)".formatted(cmd.getTaskId())));
+      }
+      return CompletableFuture.completedFuture(Empty.INSTANCE);
+    }
+    if (!openTaskIds.remove(cmd.getTaskId())) {
+      return CompletableFuture.failedFuture(new IllegalStateException(
+          "Task '%s' is not open (already completed or canceled)".formatted(cmd.getTaskId())));
+    }
     erroredTasks.add(new ErroredTask(cmd.getTaskId(), cmd.getErrorCode(), cmd.getErrorMessage()));
     return CompletableFuture.completedFuture(Empty.INSTANCE);
 

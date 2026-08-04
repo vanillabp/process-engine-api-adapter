@@ -39,18 +39,23 @@ import io.vanillabp.pea.PeaAdapter;
  *
  * @param <A> The workflow aggregate type
  */
+@lombok.extern.slf4j.Slf4j
 public class PeaProcessService<A> implements MigratableProcessService<A> {
 
   private final String adapterId;
 
   private final StartProcessApi startProcessApi;
 
+  private final dev.bpmcrafters.processengineapi.task.ServiceTaskCompletionApi serviceTaskCompletionApi;
+
   public PeaProcessService(
       final String adapterId,
-      final StartProcessApi startProcessApi) {
+      final StartProcessApi startProcessApi,
+      final dev.bpmcrafters.processengineapi.task.ServiceTaskCompletionApi serviceTaskCompletionApi) {
 
     this.adapterId = adapterId;
     this.startProcessApi = startProcessApi;
+    this.serviceTaskCompletionApi = serviceTaskCompletionApi;
 
   }
 
@@ -81,7 +86,145 @@ public class PeaProcessService<A> implements MigratableProcessService<A> {
       final Object workflowAggregateId,
       final String taskId) {
 
-    throw new UnsupportedOperationException("awarenessOfTask is implemented in a later story");
+    // the probe is a PREFLIGHT_CHECK completion - exactly what the mode is for
+    // (validate only, optimistic fast-fail, never advances the process). The
+    // Process-Engine-API does not classify failures (no typed exceptions), so a
+    // failing preflight cannot be told apart from an unreachable engine - it maps
+    // to UNKNOWN_TO_BPMS (see GAPS.md; the BPMS_UNAVAILABLE distinction would
+    // need typed errors).
+    try {
+      serviceTaskCompletionApi
+          .completeTask(new io.vanillabp.pea.wiring.PeaCompleteTaskCmd(
+              taskId, dev.bpmcrafters.processengineapi.ExecutionMode.PREFLIGHT_CHECK))
+          .get();
+      return WorkflowAwareness.ACTIVE;
+    } catch (final InterruptedException e) {
+      Thread.currentThread().interrupt();
+      return WorkflowAwareness.BPMS_UNAVAILABLE;
+    } catch (final java.util.concurrent.ExecutionException e) {
+      log.debug(
+          "PEA[{}]: preflight probe of task '{}' failed - reporting UNKNOWN_TO_BPMS",
+          adapterId,
+          taskId,
+          e.getCause());
+      return WorkflowAwareness.UNKNOWN_TO_BPMS;
+    }
+
+  }
+
+  @Override
+  public void completeTaskPhaseOne(
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final AggregatePersistenceAware<A> aggregatePersistence,
+      final A workflowAggregate,
+      final String taskId) {
+
+    // the non-advancing phase-one check: a PREFLIGHT_CHECK completion validates
+    // the task still exists so the local transaction can abort early
+    preflight(new io.vanillabp.pea.wiring.PeaCompleteTaskCmd(
+        taskId, dev.bpmcrafters.processengineapi.ExecutionMode.PREFLIGHT_CHECK), taskId, "completing");
+
+  }
+
+  @Override
+  public void cancelTaskPhaseOne(
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final AggregatePersistenceAware<A> aggregatePersistence,
+      final A workflowAggregate,
+      final String taskId,
+      final String bpmnErrorCode) {
+
+    preflight(new io.vanillabp.pea.wiring.PeaCompleteTaskCmd(
+        taskId, dev.bpmcrafters.processengineapi.ExecutionMode.PREFLIGHT_CHECK), taskId, "canceling");
+
+  }
+
+  private void preflight(
+      final dev.bpmcrafters.processengineapi.task.CompleteTaskCmd command,
+      final String taskId,
+      final String operationDescription) {
+
+    try {
+      serviceTaskCompletionApi
+          .completeTask(command)
+          .get();
+    } catch (final InterruptedException e) {
+      Thread.currentThread().interrupt();
+      throw new IllegalStateException(
+          "Interrupted while %s task '%s'".formatted(operationDescription, taskId), e);
+    } catch (final java.util.concurrent.ExecutionException e) {
+      throw new IllegalStateException(
+          ("The task '%s' is gone (completed or canceled meanwhile) - aborting the transaction "
+              + "%s it! If this task was completed by a concurrent redelivery, retrying the "
+              + "business operation will end in the documented no-op.")
+              .formatted(taskId, operationDescription), e.getCause());
+    }
+
+  }
+
+  @Override
+  public void completeTaskPhaseTwo(
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final AggregatePersistenceAware<A> aggregatePersistence,
+      final Object workflowAggregateId,
+      final String taskId) {
+
+    try {
+      serviceTaskCompletionApi
+          .completeTask(new io.vanillabp.pea.wiring.PeaCompleteTaskCmd(taskId))
+          .get();
+      log.info(
+          "PEA[{}]: completed task '{}' of BPMN process '{}' of workflow module '{}'",
+          adapterId,
+          taskId,
+          bpmnProcessId,
+          workflowModuleId);
+    } catch (final InterruptedException e) {
+      Thread.currentThread().interrupt();
+    } catch (final java.util.concurrent.ExecutionException e) {
+      // stale outbox entry - the at-least-once residual, the entry is consumed
+      log.warn(
+          "PEA[{}]: task '{}' is gone - skipping the redelivered phase-two completion",
+          adapterId,
+          taskId,
+          e.getCause());
+    }
+
+  }
+
+  @Override
+  public void cancelTaskPhaseTwo(
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final AggregatePersistenceAware<A> aggregatePersistence,
+      final Object workflowAggregateId,
+      final String taskId,
+      final String bpmnErrorCode) {
+
+    try {
+      serviceTaskCompletionApi
+          .completeTaskByError(new io.vanillabp.pea.wiring.PeaCompleteTaskByErrorCmd(
+              taskId, bpmnErrorCode, "canceled via ProcessService#cancelTask"))
+          .get();
+      log.info(
+          "PEA[{}]: canceled task '{}' (error code '{}') of BPMN process '{}' of workflow module '{}'",
+          adapterId,
+          taskId,
+          bpmnErrorCode,
+          bpmnProcessId,
+          workflowModuleId);
+    } catch (final InterruptedException e) {
+      Thread.currentThread().interrupt();
+    } catch (final java.util.concurrent.ExecutionException e) {
+      log.warn(
+          "PEA[{}]: task '{}' is gone - skipping the redelivered phase-two cancellation",
+          adapterId,
+          taskId,
+          e.getCause());
+    }
 
   }
 

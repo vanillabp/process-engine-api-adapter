@@ -28,7 +28,7 @@ import lombok.extern.slf4j.Slf4j;
  * {@code ServiceTaskCompletionApi.completeTaskByError} with the error code
  * (aggregate changes committed);</li>
  * <li>COMPLETION_PENDING ({@code @TaskId} methods) - nothing: the task stays open
- * for {@code ProcessService#completeTask} (upcoming story);</li>
+ * for {@code ProcessService#completeTask};</li>
  * <li>any other exception - {@code ServiceTaskCompletionApi.failTask} (the local
  * transaction was already rolled back by the core; retry semantics are the
  * engine's).</li>
