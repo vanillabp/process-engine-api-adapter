@@ -33,7 +33,8 @@ public class PeaProcessServiceProducer {
       final StartProcessApi startProcessApi,
       final dev.bpmcrafters.processengineapi.task.ServiceTaskCompletionApi serviceTaskCompletionApi,
       final dev.bpmcrafters.processengineapi.task.UserTaskCompletionApi userTaskCompletionApi,
-      final dev.bpmcrafters.processengineapi.correlation.CorrelationApi correlationApi) {
+      final dev.bpmcrafters.processengineapi.correlation.CorrelationApi correlationApi,
+      final io.vanillabp.pea.deployment.PeaDeployedProcessesRegistry deployedProcessesRegistry) {
 
     // ONE bean of type List with one instance PER configured adapter id of this
     // adapter's type (a CDI producer cannot yield N element beans for N
@@ -48,7 +49,8 @@ public class PeaProcessServiceProducer {
         .map(Map.Entry::getKey)
         .sorted()
         .<MigratableProcessService<Object>>map(
-            adapterId -> new PeaProcessService<>(adapterId, startProcessApi, serviceTaskCompletionApi, userTaskCompletionApi, correlationApi))
+            adapterId -> new PeaProcessService<>(adapterId, startProcessApi, serviceTaskCompletionApi, userTaskCompletionApi, correlationApi, deployedProcessesRegistry
+                .forAdapter(adapterId)))
         .toList();
 
   }

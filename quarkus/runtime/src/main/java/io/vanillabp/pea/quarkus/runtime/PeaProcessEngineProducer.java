@@ -37,4 +37,20 @@ public class PeaProcessEngineProducer {
 
   }
 
+
+  /**
+   * The per-adapter-id record of what this application version deployed - shared
+   * between the deployment services (which fill it) and the process services
+   * (which serve the viewer API from it).
+   *
+   * @return The registry
+   */
+  @Produces
+  @Singleton
+  public io.vanillabp.pea.deployment.PeaDeployedProcessesRegistry peaDeployedProcessesRegistry() {
+
+    return new io.vanillabp.pea.deployment.PeaDeployedProcessesRegistry();
+
+  }
+
 }

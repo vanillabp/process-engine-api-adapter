@@ -62,6 +62,18 @@ public class PeaDeploymentService implements AdapterDeploymentService<PeaBpmnMod
 
   private final ServiceTaskCompletionApi serviceTaskCompletionApi;
 
+  /**
+   * What this application version deployed - the ONLY source of process
+   * definitions and BPMN XML for the viewer API (the Process-Engine-API has no
+   * repository API, see {@code GAPS.md}). Shared with the adapter id's
+   * {@code PeaProcessService}.
+   */
+  private final PeaDeployedProcesses deployedProcesses;
+
+  /**
+   * Convenience constructor without a shared deployment record (tests) - the
+   * service then records into an instance of its own.
+   */
   public PeaDeploymentService(
       final String adapterId,
       final DeploymentApi deploymentApi,
@@ -69,11 +81,24 @@ public class PeaDeploymentService implements AdapterDeploymentService<PeaBpmnMod
       final TaskSubscriptionApi taskSubscriptionApi,
       final ServiceTaskCompletionApi serviceTaskCompletionApi) {
 
+    this(adapterId, deploymentApi, workflowTaskInvoker, taskSubscriptionApi, serviceTaskCompletionApi, new PeaDeployedProcesses());
+
+  }
+
+  public PeaDeploymentService(
+      final String adapterId,
+      final DeploymentApi deploymentApi,
+      final WorkflowTaskInvoker workflowTaskInvoker,
+      final TaskSubscriptionApi taskSubscriptionApi,
+      final ServiceTaskCompletionApi serviceTaskCompletionApi,
+      final PeaDeployedProcesses deployedProcesses) {
+
     this.adapterId = adapterId;
     this.deploymentApi = deploymentApi;
     this.workflowTaskInvoker = workflowTaskInvoker;
     this.taskSubscriptionApi = taskSubscriptionApi;
     this.serviceTaskCompletionApi = serviceTaskCompletionApi;
+    this.deployedProcesses = deployedProcesses;
 
   }
 
@@ -337,6 +362,12 @@ public class PeaDeploymentService implements AdapterDeploymentService<PeaBpmnMod
       final var deploymentInformation = deploymentApi
           .deploy(command)
           .get();
+      // remember what was deployed: the viewer API is served from these models -
+      // the Process-Engine-API cannot be asked for definitions or BPMN XML
+      bpmsProcessingContext
+          .getModels()
+          .forEach(model -> deployedProcesses
+              .record(workflowModuleId, model, deploymentInformation.getDeploymentKey()));
       log.info(
           "Process-Engine-API adapter '{}': deployed {} BPMN file(s) of workflow module '{}' (deployment '{}')",
           adapterId,

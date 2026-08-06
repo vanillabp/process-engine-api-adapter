@@ -165,6 +165,14 @@ replaces the mock with a real Process-Engine-API implementation.
   are FINAL - the execution mode cannot be transported (no PREFLIGHT_CHECK phase one, commands
   travel with DEFAULT mode) and workflow awareness cannot be probed at all (the adapter answers
   optimistically with a one-time guiding WARN - unsafe for multi-BPMS migration setups).
+- **Viewing workflows** (`ProcessService#getProcessDefinitions`/`#getBpmnXml`/`#getWorkflowHistory`,
+  story 26): served from what THIS application version deployed - the Process-Engine-API has
+  neither a repository nor a query/history API ([`GAPS.md`](GAPS.md), entries 12 and 13). The
+  adapter-native process definition id is `<workflow module>|<bpmn process id>`, the reported
+  version is the deployment key, and the BPMN XML is the deployed resource byte for byte. The
+  history reports the definition with `elementsHistory == null` (the SPI's "not supported by the
+  underlying BPMS"), so there are no secondary history contexts and call activities cannot be
+  drilled into; call-activity definitions are not reported either (no BPMN model type).
 
 ## Build
 

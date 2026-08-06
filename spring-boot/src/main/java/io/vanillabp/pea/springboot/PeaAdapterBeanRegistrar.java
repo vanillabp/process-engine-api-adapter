@@ -32,6 +32,14 @@ public class PeaAdapterBeanRegistrar implements BeanRegistrar {
       final BeanRegistry registry,
       final Environment environment) {
 
+    // ONE registry for all adapter ids: it hands out the per-id record of
+    // deployed processes shared by the deployment and the process service (the
+    // viewer API's only source of definitions and BPMN XML - see GAPS.md)
+    registry.registerBean(
+        "Pea_DeployedProcessesRegistry",
+        io.vanillabp.pea.deployment.PeaDeployedProcessesRegistry.class,
+        spec -> spec.supplier(supplierContext -> new io.vanillabp.pea.deployment.PeaDeployedProcessesRegistry()));
+
     AdapterBeanRegistrarSupport.forEachConfiguredAdapterId(
         environment,
         PeaAdapter.ADAPTER_TYPE,
@@ -44,7 +52,9 @@ public class PeaAdapterBeanRegistrar implements BeanRegistrar {
                   adapterId, supplierContext.bean(StartProcessApi.class), supplierContext
                       .bean(dev.bpmcrafters.processengineapi.task.ServiceTaskCompletionApi.class), supplierContext
                           .bean(dev.bpmcrafters.processengineapi.task.UserTaskCompletionApi.class), supplierContext
-                              .bean(dev.bpmcrafters.processengineapi.correlation.CorrelationApi.class))));
+                              .bean(dev.bpmcrafters.processengineapi.correlation.CorrelationApi.class), supplierContext
+                                  .bean(io.vanillabp.pea.deployment.PeaDeployedProcessesRegistry.class)
+                                  .forAdapter(adapterId))));
 
           registry.registerBean(
               "Pea_DeploymentService_%s".formatted(adapterId),
@@ -54,7 +64,10 @@ public class PeaAdapterBeanRegistrar implements BeanRegistrar {
                       .bean(
                           io.vanillabp.integration.adapter.spi.workflowtask.WorkflowTaskInvoker.class), supplierContext
                               .bean(dev.bpmcrafters.processengineapi.task.TaskSubscriptionApi.class), supplierContext
-                                  .bean(dev.bpmcrafters.processengineapi.task.ServiceTaskCompletionApi.class))));
+                                  .bean(
+                                      dev.bpmcrafters.processengineapi.task.ServiceTaskCompletionApi.class), supplierContext
+                                          .bean(io.vanillabp.pea.deployment.PeaDeployedProcessesRegistry.class)
+                                          .forAdapter(adapterId))));
 
         });
 

@@ -218,3 +218,48 @@ workflow), so the adapter overrides it to an honest `UNKNOWN_TO_BPMS` - recovere
 starts always proceed and duplicate starts remain possible within the documented
 at-least-once residual. A workflow-existence query in the Process-Engine-API would
 enable the mitigation here, too.
+
+## 12. No repository API - deployed processes cannot be read back
+
+**Needed by VanillaBP:** the viewer API (`ProcessService#getProcessDefinitions` and
+`#getBpmnXml`, story 26) answers "which process definitions does this workflow use, and
+what is their BPMN XML" - a BPMN viewer renders the diagram from it.
+
+**Offered by the Process-Engine-API:** nothing. `DeploymentApi.deploy` returns a
+`DeploymentInformation` (deployment key, time, tenant) and that is it: there is no way to
+ask the engine for deployed processes, their versions or their BPMN resources - not even
+for the deployment just made. There is also no process-definition identity at all (the
+deployment key identifies a BUNDLE, not a process version).
+
+**Consequence for the adapter:** the adapter keeps what VanillaBP's deployment pipeline
+read at boot (`PeaDeployedProcesses`, one instance per adapter id, shared by the
+deployment and the process service) and serves the viewer API from it:
+
+- the adapter-native process definition id is composed as `<workflow module>|<bpmn process
+  id>` (the core namespaces it with the adapter id),
+- the reported "version" is the deployment key - the only version-ish information the API
+  offers,
+- a workflow running on a definition deployed by a PREVIOUS application version is served
+  with the currently deployed model.
+
+A lightweight repository API (list deployed processes, fetch a resource by process
+definition id/version) would resolve this.
+
+## 13. No query/history API - workflows have no observable timeline
+
+**Needed by VanillaBP:** `ProcessService#getWorkflowHistory` (story 26) reports when a
+workflow started/ended and which elements were executed (start/end time, canceled, error,
+and for call activities a context to dig into the called instance).
+
+**Offered by the Process-Engine-API:** nothing. Neither running nor ended workflows can be
+queried; task subscriptions are the only observation channel, and they only report tasks
+this very application is subscribed to while they are open.
+
+**Consequence for the adapter:** `getWorkflowHistory` reports the definition plus
+`elementsHistory == null` - the SPI's documented "not supported by the underlying BPMS" -
+and therefore never hands out a `secondaryWorkflowHistoryContext`; call activities cannot
+be drilled into. Call-activity definitions are not reported either (gap 1: no BPMN model
+type, so which sub-process a call activity addresses is not resolvable BPMS-agnostically).
+Together with gap 12 this makes the Process-Engine-API the weakest of the supported BPMS
+for viewing workflows - a query API for process instances and their element instances
+would resolve it.

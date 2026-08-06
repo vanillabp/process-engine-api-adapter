@@ -59,11 +59,112 @@ public class PeaProcessService<A> implements MigratableProcessService<A> {
       final dev.bpmcrafters.processengineapi.task.UserTaskCompletionApi userTaskCompletionApi,
       final dev.bpmcrafters.processengineapi.correlation.CorrelationApi correlationApi) {
 
+    this(adapterId, startProcessApi, serviceTaskCompletionApi, userTaskCompletionApi, correlationApi, new io.vanillabp.pea.deployment.PeaDeployedProcesses());
+
+  }
+
+  public PeaProcessService(
+      final String adapterId,
+      final StartProcessApi startProcessApi,
+      final dev.bpmcrafters.processengineapi.task.ServiceTaskCompletionApi serviceTaskCompletionApi,
+      final dev.bpmcrafters.processengineapi.task.UserTaskCompletionApi userTaskCompletionApi,
+      final dev.bpmcrafters.processengineapi.correlation.CorrelationApi correlationApi,
+      final io.vanillabp.pea.deployment.PeaDeployedProcesses deployedProcesses) {
+
     this.adapterId = adapterId;
     this.startProcessApi = startProcessApi;
     this.serviceTaskCompletionApi = serviceTaskCompletionApi;
     this.userTaskCompletionApi = userTaskCompletionApi;
     this.correlationApi = correlationApi;
+    this.deployedProcesses = deployedProcesses;
+
+  }
+
+  /**
+   * What this application version deployed - the only source of process
+   * definitions and BPMN XML (the Process-Engine-API has no repository API, see
+   * {@code GAPS.md}).
+   */
+  private final io.vanillabp.pea.deployment.PeaDeployedProcesses deployedProcesses;
+
+  /**
+   * The viewer API's process definitions. The Process-Engine-API knows neither
+   * process definitions nor the definition a running instance uses, so the
+   * adapter answers from what it deployed at boot. Call activities are NOT
+   * reported: the Process-Engine-API has no BPMN model type and no notion of
+   * call activities (GAPS.md) - which sub-process a call activity addresses is
+   * BPMS-dialect-specific.
+   */
+  @Override
+  public java.util.List<io.vanillabp.spi.process.ProcessDefinition> getProcessDefinitions(
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final AggregatePersistenceAware<A> aggregatePersistence,
+      final Object workflowAggregateId,
+      final String historyContext) {
+
+    if (historyContext != null) {
+      // secondary history contexts are only ever handed out by getWorkflowHistory,
+      // which this adapter cannot fill - so a context can never be one of ours
+      log.warn(
+          "Process-Engine-API adapter '{}': the history context '{}' is unknown - this adapter "
+              + "reports no element history and therefore no secondary contexts (see GAPS.md)",
+          adapterId,
+          historyContext);
+      return java.util.List.of();
+    }
+
+    final var deployed = deployedProcesses.deployedVersionOf(workflowModuleId, bpmnProcessId);
+    if (deployed == null) {
+      return java.util.List.of();
+    }
+    return java.util.List.of(
+        new io.vanillabp.spi.process.ProcessDefinition(
+            io.vanillabp.pea.deployment.PeaDeployedProcesses.definitionId(workflowModuleId,
+                bpmnProcessId), bpmnProcessId, deployed.deploymentKey(), null));
+
+  }
+
+  @Override
+  public java.io.InputStream getBpmnXml(
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final String processDefinitionId) {
+
+    final var deployed = deployedProcesses.byDefinitionId(processDefinitionId);
+    return deployed == null
+        ? null
+        : new java.io.ByteArrayInputStream(
+            deployed
+                .model()
+                .resource());
+
+  }
+
+  /**
+   * The Process-Engine-API has NO history or query API at all (GAPS.md): neither
+   * start/end times of a workflow nor an element history can be obtained. The
+   * SPI's answer for that is a history without elements - reported for the
+   * definition the workflow was deployed with.
+   */
+  @Override
+  public io.vanillabp.spi.process.WorkflowHistory getWorkflowHistory(
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final AggregatePersistenceAware<A> aggregatePersistence,
+      final Object workflowAggregateId,
+      final String historyContext) {
+
+    if (historyContext != null) {
+      return null;
+    }
+    final var deployed = deployedProcesses.deployedVersionOf(workflowModuleId, bpmnProcessId);
+    if (deployed == null) {
+      return null;
+    }
+    return new io.vanillabp.spi.process.WorkflowHistory(
+        io.vanillabp.pea.deployment.PeaDeployedProcesses.definitionId(workflowModuleId,
+            bpmnProcessId), null, null, null);
 
   }
 
