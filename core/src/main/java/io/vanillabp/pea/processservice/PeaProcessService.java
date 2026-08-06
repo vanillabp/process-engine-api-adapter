@@ -71,6 +71,60 @@ public class PeaProcessService<A> implements MigratableProcessService<A> {
       final dev.bpmcrafters.processengineapi.correlation.CorrelationApi correlationApi,
       final io.vanillabp.pea.deployment.PeaDeployedProcesses deployedProcesses) {
 
+    this(adapterId, startProcessApi, serviceTaskCompletionApi, userTaskCompletionApi, correlationApi, deployedProcesses, null);
+
+  }
+
+  /**
+   * The core's sync model (story 28). The Process-Engine-API is treated as a
+   * REMOTE BPMS - it can only evaluate what VanillaBP puts into the payload - so
+   * the adapter's default is
+   * {@link io.vanillabp.integration.adapter.spi.AggregateSyncMode#FULL}. May be
+   * <code>null</code> (tests): only the technical aggregate-ID variable travels
+   * then.
+   */
+  private final io.vanillabp.integration.adapter.spi.WorkflowAggregateSync aggregateSync;
+
+  /**
+   * The default of this adapter: everything is shared unless the application
+   * excludes it ({@code @NoSyncWithBPMS}).
+   */
+  public static final io.vanillabp.integration.adapter.spi.AggregateSyncMode SYNC_MODE = io.vanillabp.integration.adapter.spi.AggregateSyncMode.FULL;
+
+  /**
+   * The payload sent whenever this adapter talks to the engine on behalf of a
+   * workflow: the aggregate's shared attributes PLUS - always, no matter what the
+   * sync model says - the variable carrying the aggregate's ID (named after the
+   * aggregate's ID property). The Process-Engine-API has no business-key slot:
+   * that variable is how VanillaBP finds the workflow again.
+   */
+  private Map<String, Object> payloadOf(
+      final AggregatePersistenceAware<A> aggregatePersistence,
+      final Object workflowAggregateId,
+      final A workflowAggregate) {
+
+    final var payload = new java.util.LinkedHashMap<String, Object>();
+    final var aggregate = workflowAggregate != null
+        ? workflowAggregate
+        : aggregatePersistence.loadById(workflowAggregateId);
+    if ((aggregateSync != null) && (aggregate != null)) {
+      payload.putAll(aggregateSync.syncedValues(aggregate, SYNC_MODE));
+    }
+    payload.put(aggregatePersistence.getAggregateIdName(), workflowAggregateId);
+    return payload;
+
+  }
+
+  public PeaProcessService(
+      final String adapterId,
+      final StartProcessApi startProcessApi,
+      final dev.bpmcrafters.processengineapi.task.ServiceTaskCompletionApi serviceTaskCompletionApi,
+      final dev.bpmcrafters.processengineapi.task.UserTaskCompletionApi userTaskCompletionApi,
+      final dev.bpmcrafters.processengineapi.correlation.CorrelationApi correlationApi,
+      final io.vanillabp.pea.deployment.PeaDeployedProcesses deployedProcesses,
+      final io.vanillabp.integration.adapter.spi.WorkflowAggregateSync aggregateSync) {
+
+    this.aggregateSync = aggregateSync;
     this.adapterId = adapterId;
     this.startProcessApi = startProcessApi;
     this.serviceTaskCompletionApi = serviceTaskCompletionApi;
@@ -640,8 +694,8 @@ public class PeaProcessService<A> implements MigratableProcessService<A> {
     await(
         startProcessApi.startProcess(
             new PeaStartProcessCommand(
-                bpmnProcessId, Map
-                    .of(aggregatePersistence.getAggregateIdName(), aggregateId), ExecutionMode.PREFLIGHT_CHECK)),
+                bpmnProcessId, payloadOf(
+                    aggregatePersistence, aggregateId, workflowAggregate), ExecutionMode.PREFLIGHT_CHECK)),
         "Preflight check (phase one)",
         bpmnProcessId,
         workflowModuleId);
@@ -665,8 +719,8 @@ public class PeaProcessService<A> implements MigratableProcessService<A> {
     await(
         startProcessApi.startProcess(
             new PeaStartProcessCommand(
-                bpmnProcessId, Map
-                    .of(aggregatePersistence.getAggregateIdName(), workflowAggregateId), ExecutionMode.SYNC)),
+                bpmnProcessId, payloadOf(
+                    aggregatePersistence, workflowAggregateId, null), ExecutionMode.SYNC)),
         "Starting the workflow (phase two)",
         bpmnProcessId,
         workflowModuleId);

@@ -54,7 +54,8 @@ public class PeaAdapterBeanRegistrar implements BeanRegistrar {
                           .bean(dev.bpmcrafters.processengineapi.task.UserTaskCompletionApi.class), supplierContext
                               .bean(dev.bpmcrafters.processengineapi.correlation.CorrelationApi.class), supplierContext
                                   .bean(io.vanillabp.pea.deployment.PeaDeployedProcessesRegistry.class)
-                                  .forAdapter(adapterId))));
+                                  .forAdapter(adapterId), supplierContext
+                                      .bean(io.vanillabp.integration.adapter.spi.WorkflowAggregateSync.class))));
 
           registry.registerBean(
               "Pea_DeploymentService_%s".formatted(adapterId),
