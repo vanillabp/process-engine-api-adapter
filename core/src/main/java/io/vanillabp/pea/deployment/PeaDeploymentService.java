@@ -102,6 +102,36 @@ public class PeaDeploymentService implements AdapterDeploymentService<PeaBpmnMod
 
   }
 
+  /**
+   * Two <code>process-engine-api</code> adapter ids cannot address different
+   * engines (story 34): the Process-Engine-API is provided by the APPLICATION as a
+   * set of CDI/Spring beans - there is no per-adapter-id connection configuration,
+   * so every configured id of this type ends up talking to the very same engine
+   * beans. Configuring two of them is therefore a defect, not a migration setup
+   * (see {@code GAPS.md}, entry 14).
+   */
+  @Override
+  public void validateDistinctAdapterInstances(
+      final List<String> adapterIdsOfThisType) {
+
+    if ((adapterIdsOfThisType == null) || (adapterIdsOfThisType.size() < 2)) {
+      return;
+    }
+    throw new IllegalStateException(
+        """
+            The adapter ids '%s' are all of type '%s', but this adapter cannot address more than \
+            ONE engine: the Process-Engine-API implementation is provided by the application as \
+            beans (StartProcessApi, DeploymentApi, ...) and carries no per-adapter-id connection \
+            configuration - all these ids would talk to the same engine, and the BPMS election \
+            would ask it twice. Configure a single '%s' adapter id (a migration between two \
+            engines behind the Process-Engine-API is not expressible - see the adapter's GAPS.md)."""
+            .formatted(
+                String.join("', '", adapterIdsOfThisType),
+                PeaAdapter.ADAPTER_TYPE,
+                PeaAdapter.ADAPTER_TYPE));
+
+  }
+
   @Override
   public String getAdapterId() {
 

@@ -263,3 +263,22 @@ type, so which sub-process a call activity addresses is not resolvable BPMS-agno
 Together with gap 12 this makes the Process-Engine-API the weakest of the supported BPMS
 for viewing workflows - a query API for process instances and their element instances
 would resolve it.
+
+## 14. One engine per application - two adapter ids of this type are not expressible
+
+**Needed by VanillaBP:** VanillaBP's migration feature configures several adapter ids of
+ONE BPMS type side by side (e.g. two Camunda 8 clusters) - new workflows start in the
+first-priority one while existing workflows are located in the others. Story 34 asks
+every adapter to validate that its configured ids actually address DIFFERENT systems.
+
+**Offered by the Process-Engine-API:** nothing to distinguish them by. The engine is
+handed to the adapter as a set of application-provided beans (`StartProcessApi`,
+`DeploymentApi`, `TaskSubscriptionApi`, ...) and there is no per-instance connection
+configuration - not even a notion of "which engine is this". Two configured
+`process-engine-api` adapter ids therefore end up talking to the very same engine.
+
+**Consequence for the adapter:** `validateDistinctAdapterInstances` fails the boot as
+soon as more than one adapter id of type `process-engine-api` is configured, naming the
+reason. A migration between two engines behind the Process-Engine-API cannot be
+expressed today; qualifying the API beans per adapter instance (or a connection
+configuration owned by the API) would resolve it.

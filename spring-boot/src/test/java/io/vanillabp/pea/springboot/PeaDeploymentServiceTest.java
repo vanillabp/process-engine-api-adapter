@@ -449,4 +449,25 @@ public class PeaDeploymentServiceTest {
 
   }
 
+
+  @org.junit.jupiter.api.Test
+  @org.junit.jupiter.api.DisplayName("Two adapter ids of this type cannot address different engines - the boot fails guiding")
+  public void twoAdapterIdsOfThisTypeAreRejected() {
+
+    // story 34: the Process-Engine-API is provided by the application as beans and
+    // carries no per-adapter-id connection configuration (GAPS.md, entry 14)
+    final var exception = Assertions.assertThrows(
+        IllegalStateException.class,
+        () -> service.validateDistinctAdapterInstances(java.util.List.of("pea-old", "pea-new")));
+
+    Assertions.assertTrue(exception.getMessage().contains("pea-old"), exception::getMessage);
+    Assertions.assertTrue(exception.getMessage().contains("pea-new"), exception::getMessage);
+    Assertions.assertTrue(exception.getMessage().contains("process-engine-api"), exception::getMessage);
+
+    // a single id is the normal case and never complains
+    Assertions.assertDoesNotThrow(() -> service.validateDistinctAdapterInstances(java.util.List.of("pea")));
+    Assertions.assertDoesNotThrow(() -> service.validateDistinctAdapterInstances(null));
+
+  }
+
 }
