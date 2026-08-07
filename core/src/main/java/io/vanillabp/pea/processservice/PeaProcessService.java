@@ -104,6 +104,11 @@ public class PeaProcessService<A> implements MigratableProcessService<A> {
       final A workflowAggregate) {
 
     final var payload = new java.util.LinkedHashMap<String, Object>();
+    if (aggregatePersistence == null) {
+      // no persistence at hand (e.g. a test driving the SPI directly): neither the
+      // shared attributes nor the technical ID variable can be determined
+      return payload;
+    }
     final var aggregate = workflowAggregate != null
         ? workflowAggregate
         : aggregatePersistence.loadById(workflowAggregateId);
@@ -337,7 +342,10 @@ public class PeaProcessService<A> implements MigratableProcessService<A> {
 
     try {
       serviceTaskCompletionApi
-          .completeTask(new io.vanillabp.pea.wiring.PeaCompleteTaskCmd(taskId))
+          // story 28b: the aggregate changed before the task was completed - the
+          // engine only sees what the adapter sends
+          .completeTask(new io.vanillabp.pea.wiring.PeaCompleteTaskCmd(
+              taskId, payloadOf(aggregatePersistence, workflowAggregateId, null)))
           .get();
       log.info(
           "PEA[{}]: completed task '{}' of BPMN process '{}' of workflow module '{}'",
@@ -369,8 +377,11 @@ public class PeaProcessService<A> implements MigratableProcessService<A> {
 
     try {
       serviceTaskCompletionApi
+          // story 28b: the error boundary's outgoing path may branch on the
+          // aggregate, which the caller changed before canceling the task
           .completeTaskByError(new io.vanillabp.pea.wiring.PeaCompleteTaskByErrorCmd(
-              taskId, bpmnErrorCode, "canceled via ProcessService#cancelTask"))
+              taskId, bpmnErrorCode, "canceled via ProcessService#cancelTask", payloadOf(
+                  aggregatePersistence, workflowAggregateId, null)))
           .get();
       log.info(
           "PEA[{}]: canceled task '{}' (error code '{}') of BPMN process '{}' of workflow module '{}'",
@@ -475,7 +486,8 @@ public class PeaProcessService<A> implements MigratableProcessService<A> {
 
     try {
       userTaskCompletionApi
-          .completeTask(new io.vanillabp.pea.wiring.PeaCompleteTaskCmd(taskId))
+          .completeTask(new io.vanillabp.pea.wiring.PeaCompleteTaskCmd(
+              taskId, payloadOf(aggregatePersistence, workflowAggregateId, null)))
           .get();
       log.info(
           "PEA[{}]: completed user task '{}' of BPMN process '{}' of workflow module '{}'",
@@ -592,7 +604,9 @@ public class PeaProcessService<A> implements MigratableProcessService<A> {
       final String messageName,
       final String correlationId) {
 
-    // PAYLOAD DOCTRINE: only the message name and the correlation key travel.
+    // PAYLOAD DOCTRINE: no message CONTENT travels - what does travel is the
+    // aggregate state shared with the engine (story 28/28b), because the engine
+    // can only evaluate expressions against the payload it was given.
     // CorrelateMessageCmd is FINAL - the command carries the DEFAULT execution
     // mode; the intended SYNC semantics cannot be expressed (GAPS.md entry 11).
     final var correlationKey = correlationId != null
@@ -601,8 +615,11 @@ public class PeaProcessService<A> implements MigratableProcessService<A> {
     try {
       correlationApi
           .correlateMessage(new dev.bpmcrafters.processengineapi.correlation.CorrelateMessageCmd(
-              messageName, dev.bpmcrafters.processengineapi.correlation.Correlation.Companion
-                  .withKey(correlationKey)))
+              messageName, payloadOf(
+                  aggregatePersistence,
+                  workflowAggregateId,
+                  null), dev.bpmcrafters.processengineapi.correlation.Correlation.Companion
+                      .withKey(correlationKey)))
           .get();
       log.info(
           "PEA[{}]: correlated message '{}' (correlation key '{}') for BPMN process '{}' of "
@@ -650,15 +667,15 @@ public class PeaProcessService<A> implements MigratableProcessService<A> {
       final Object workflowAggregateId,
       final String messageName) {
 
-    // the aggregate-ID variable is the ONLY payload (technical field, not message
-    // content); StartProcessByMessageCmd is FINAL - the DEFAULT execution mode
-    // travels (GAPS.md entry 11); schedule deduplication comes from the outbox
-    // key 'module|process|aggregateId'
+    // no message CONTENT travels - what travels is the aggregate state shared with
+    // the engine (story 28) plus the technical aggregate-ID variable;
+    // StartProcessByMessageCmd is FINAL - the DEFAULT execution mode travels
+    // (GAPS.md entry 11); schedule deduplication comes from the outbox key
+    // 'module|process|aggregateId'
     try {
       startProcessApi
           .startProcess(new dev.bpmcrafters.processengineapi.process.StartProcessByMessageCmd(
-              messageName, java.util.Map.<String, Object>of(
-                  aggregatePersistence.getAggregateIdName(), String.valueOf(workflowAggregateId)), java.util.Map.of()))
+              messageName, payloadOf(aggregatePersistence, workflowAggregateId, null), java.util.Map.of()))
           .get();
       log.info(
           "PEA[{}]: started workflow by message '{}' for BPMN process '{}' of workflow module "

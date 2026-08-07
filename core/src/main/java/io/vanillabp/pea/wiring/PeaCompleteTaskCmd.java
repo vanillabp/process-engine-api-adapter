@@ -23,6 +23,23 @@ public class PeaCompleteTaskCmd extends CompleteTaskCmd {
   }
 
   /**
+   * The completion carrying the aggregate state shared with the engine (story
+   * 28b) - a gateway right behind the completed task has to see the values the
+   * {@code @WorkflowTask} method produced.
+   *
+   * @param taskId The task to complete
+   * @param payload The shared values plus the aggregate-ID variable
+   */
+  public PeaCompleteTaskCmd(
+      final String taskId,
+      final java.util.Map<String, Object> payload) {
+
+    super(taskId, payload);
+    this.executionMode = ExecutionMode.SYNC;
+
+  }
+
+  /**
    * @param taskId The task to complete
    * @param executionMode {@link ExecutionMode#SYNC} for the actual completion
    *        (phase two) or {@link ExecutionMode#PREFLIGHT_CHECK} for the

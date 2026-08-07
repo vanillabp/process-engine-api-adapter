@@ -21,6 +21,26 @@ public class PeaCompleteTaskByErrorCmd extends CompleteTaskByErrorCmd {
   }
 
   /**
+   * The BPMN error carrying the aggregate state shared with the engine (story
+   * 28b) - the error boundary's outgoing path may branch on it.
+   *
+   * @param taskId The task to cancel
+   * @param errorCode The BPMN error code
+   * @param errorMessage The BPMN error message
+   * @param payload The shared values plus the aggregate-ID variable
+   */
+  public PeaCompleteTaskByErrorCmd(
+      final String taskId,
+      final String errorCode,
+      final String errorMessage,
+      final java.util.Map<String, Object> payload) {
+
+    super(taskId, errorCode, errorMessage, payload);
+    this.executionMode = ExecutionMode.SYNC;
+
+  }
+
+  /**
    * @param taskId The task to cancel
    * @param errorCode The BPMN error code
    * @param errorMessage The BPMN error message

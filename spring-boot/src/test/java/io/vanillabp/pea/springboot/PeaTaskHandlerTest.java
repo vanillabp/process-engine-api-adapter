@@ -74,6 +74,23 @@ public class PeaTaskHandlerTest {
       return true;
     }
 
+
+    /**
+     * Story 28b: what the completion payload carries beside the ID variable.
+     */
+    java.util.Map<String, Object> syncedValues = java.util.Map.of();
+
+    @Override
+    public java.util.Map<String, Object> syncedWorkflowAggregateValues(
+        final String workflowModuleId,
+        final String bpmnProcessId,
+        final String workflowAggregateId,
+        final io.vanillabp.integration.adapter.spi.AggregateSyncMode adapterDefault) {
+
+      return syncedValues;
+
+    }
+
     @Override
     public String resolveWorkflowAggregateIdName(
         final String workflowModuleId,

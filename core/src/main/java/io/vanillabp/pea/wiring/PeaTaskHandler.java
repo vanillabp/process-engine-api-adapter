@@ -84,12 +84,15 @@ public class PeaTaskHandler implements TaskHandler {
     final var taskId = taskInformation.getTaskId();
 
     final WorkflowTaskOutcome outcome;
+    final String bpmnProcessId;
+    final String aggregateIdName;
+    final Object aggregateId;
     try {
-      final var bpmnProcessId = determineBpmnProcessId(taskInformation);
-      final var aggregateIdName = workflowTaskInvoker.resolveWorkflowAggregateIdName(
+      bpmnProcessId = determineBpmnProcessId(taskInformation);
+      aggregateIdName = workflowTaskInvoker.resolveWorkflowAggregateIdName(
           workflowModuleId,
           bpmnProcessId);
-      final var aggregateId = payload.get(aggregateIdName);
+      aggregateId = payload.get(aggregateIdName);
       if (aggregateId == null) {
         throw new IllegalStateException(
             """
@@ -121,17 +124,18 @@ public class PeaTaskHandler implements TaskHandler {
       return;
     }
 
+    final var completionPayload = payloadOf(bpmnProcessId, aggregateIdName, aggregateId);
     switch (outcome.kind()) {
       case COMPLETED -> completion(
           () -> serviceTaskCompletionApi
-              .completeTask(new PeaCompleteTaskCmd(taskId))
+              .completeTask(new PeaCompleteTaskCmd(taskId, completionPayload))
               .get(),
           taskId,
           "complete");
       case BPMN_ERROR -> completion(
           () -> serviceTaskCompletionApi
               .completeTaskByError(new PeaCompleteTaskByErrorCmd(
-                  taskId, outcome.errorCode(), String.valueOf(outcome.errorName())))
+                  taskId, outcome.errorCode(), String.valueOf(outcome.errorName()), completionPayload))
               .get(),
           taskId,
           "complete-by-error");
@@ -142,6 +146,38 @@ public class PeaTaskHandler implements TaskHandler {
           taskId,
           taskDefinition);
     }
+
+  }
+
+  /**
+   * The payload a completion command carries (story 28b): the values the workflow
+   * aggregate shares with the engine - the {@code @WorkflowTask} method just
+   * changed it and a gateway right behind this task has to see the NEW values -
+   * plus, always, the variable holding the aggregate's ID (the
+   * Process-Engine-API has no business-key slot).
+   * <p>
+   * The core loads the aggregate in its OWN transaction (the task's one is
+   * committed at this point) and never throws: a failed read yields the ID
+   * variable only, so the task is still completed.
+   *
+   * @param bpmnProcessId The BPMN process ID
+   * @param aggregateIdName The name of the aggregate's ID property
+   * @param aggregateId The aggregate's ID as it arrived in the delivered payload
+   * @return The payload (never <code>null</code>)
+   */
+  private Map<String, Object> payloadOf(
+      final String bpmnProcessId,
+      final String aggregateIdName,
+      final Object aggregateId) {
+
+    final var completionPayload = new java.util.LinkedHashMap<String, Object>(
+        workflowTaskInvoker.syncedWorkflowAggregateValues(
+            workflowModuleId,
+            bpmnProcessId,
+            String.valueOf(aggregateId),
+            io.vanillabp.pea.processservice.PeaProcessService.SYNC_MODE));
+    completionPayload.put(aggregateIdName, aggregateId);
+    return completionPayload;
 
   }
 

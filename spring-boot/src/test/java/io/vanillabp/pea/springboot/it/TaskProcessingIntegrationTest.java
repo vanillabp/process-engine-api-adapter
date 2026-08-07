@@ -78,6 +78,27 @@ public class TaskProcessingIntegrationTest {
 
     String taskId;
 
+    /**
+     * Never sent to the engine - which (story 28b) also derives the class' mode
+     * "share everything else" (opt-out).
+     */
+    @io.vanillabp.spi.service.NoSyncWithBPMS
+    String secret;
+
+    // the sync model reads JavaBean properties: only what has a getter can be
+    // shared with the engine at all
+    public String getId() {
+      return id;
+    }
+
+    public String getResults() {
+      return results;
+    }
+
+    public String getSecret() {
+      return secret;
+    }
+
     void appendResult(
         final String result) {
 
@@ -107,6 +128,7 @@ public class TaskProcessingIntegrationTest {
       copy.id = aggregate.id;
       copy.results = aggregate.results;
       copy.taskId = aggregate.taskId;
+      copy.secret = aggregate.secret;
       return copy;
 
     }
@@ -221,6 +243,7 @@ public class TaskProcessingIntegrationTest {
       if ((aggregate.results == null) || !aggregate.results.contains("happy")) {
         aggregate.appendResult("happy");
       }
+      aggregate.secret = "s3cr3t";
 
     }
 
@@ -372,6 +395,39 @@ public class TaskProcessingIntegrationTest {
         .findFirst()
         .orElseThrow();
     assertEquals(ExecutionMode.SYNC, completionMode);
+
+  }
+
+  @Test
+  @DisplayName("The completion carries the shared aggregate attributes plus the ID variable (story 28b)")
+  public void completionCarriesTheAggregateState() {
+
+    seed("4715");
+    engine.deliverTask("task-sync", "peaHappy", PROCESS, Map.of("id", "4715"));
+
+    // the @WorkflowTask method changed the aggregate BEFORE the task was completed:
+    // a gateway right behind this task can only branch on it if the completion
+    // carried it
+    final var payload = engine.getCompletionPayload("task-sync");
+    assertEquals("4715", payload.get("id"), "the technical aggregate-ID variable always travels");
+    assertEquals("happy", payload.get("results"), "the shared attributes travel");
+    assertTrue(
+        !payload.containsKey("secret"),
+        "a @NoSyncWithBPMS attribute must never travel but the payload was: "
+            + payload);
+
+  }
+
+  @Test
+  @DisplayName("A BPMN error carries the aggregate state, too (the boundary path may branch on it)")
+  public void bpmnErrorCarriesTheAggregateState() {
+
+    seed("4716");
+    engine.deliverTask("task-sync-error", "peaError", PROCESS, Map.of("id", "4716"));
+
+    final var payload = engine.getCompletionPayload("task-sync-error");
+    assertEquals("4716", payload.get("id"));
+    assertEquals("error-raised", payload.get("results"));
 
   }
 
@@ -678,8 +734,8 @@ public class TaskProcessingIntegrationTest {
   }
 
   @Test
-  @DisplayName("startWorkflowByMessage starts via StartProcessByMessageCmd with ONLY the aggregate-id variable")
-  public void startWorkflowByMessagePublishesOnlyTechnicalPayload() throws Exception {
+  @DisplayName("startWorkflowByMessage starts via StartProcessByMessageCmd carrying the aggregate state, never message content")
+  public void startWorkflowByMessagePublishesTheAggregateState() throws Exception {
 
     final var aggregate = new PeaTaskAggregate();
     aggregate.id = "4743";
@@ -700,8 +756,15 @@ public class TaskProcessingIntegrationTest {
         .filter(candidate -> "4743".equals(candidate.variables().get("id")))
         .findFirst()
         .orElseThrow();
-    // PAYLOAD DOCTRINE: only the technical aggregate-ID variable travels
-    assertEquals(Map.of("id", "4743"), instance.variables());
+    // PAYLOAD DOCTRINE: no message CONTENT travels - what travels is the technical
+    // aggregate-ID variable plus the aggregate state shared with the engine
+    // (story 28b; 'results' is still null on a freshly started workflow, and the
+    // @NoSyncWithBPMS attribute is absent as always)
+    final var variables = new java.util.HashMap<>(instance.variables());
+    assertEquals("4743", variables.remove("id"));
+    assertTrue(variables.containsKey("results") && (variables.get("results") == null));
+    variables.remove("results");
+    assertEquals(Map.of(), variables, "nothing else travels");
 
   }
 

@@ -196,6 +196,7 @@ public class InMemoryProcessEngine implements DeploymentApi, StartProcessApi, Co
 
     invocations.clear();
     completedTasks.clear();
+    completionPayloads.clear();
     erroredTasks.clear();
     failedTasks.clear();
     failNextCompletionForTaskIds.clear();
@@ -211,6 +212,7 @@ public class InMemoryProcessEngine implements DeploymentApi, StartProcessApi, Co
     startedInstances.clear();
     subscriptions.clear();
     completedTasks.clear();
+    completionPayloads.clear();
     erroredTasks.clear();
     failedTasks.clear();
     failNextCompletionForTaskIds.clear();
@@ -458,6 +460,25 @@ public class InMemoryProcessEngine implements DeploymentApi, StartProcessApi, Co
 
   private final List<CompletedTask> completedTasks = new CopyOnWriteArrayList<>();
 
+  /**
+   * The payload a completion command carried, per task ID (story 28b): the values
+   * the workflow aggregate shares with the engine plus the aggregate-ID variable.
+   * Kept beside {@link #completedTasks} so tests asserting the completion itself
+   * stay unaffected.
+   */
+  private final java.util.Map<String, Map<String, Object>> completionPayloads = new ConcurrentHashMap<>();
+
+  /**
+   * @param taskId The completed (or by-error completed) task
+   * @return The payload the completion carried - empty if none or unknown task
+   */
+  public Map<String, Object> getCompletionPayload(
+      final String taskId) {
+
+    return completionPayloads.getOrDefault(taskId, Map.of());
+
+  }
+
   private final List<ErroredTask> erroredTasks = new CopyOnWriteArrayList<>();
 
   private final List<FailedTask> failedTasks = new CopyOnWriteArrayList<>();
@@ -531,6 +552,7 @@ public class InMemoryProcessEngine implements DeploymentApi, StartProcessApi, Co
           "Task '%s' is not open (already completed or canceled)".formatted(cmd.getTaskId())));
     }
     completedTasks.add(new CompletedTask(cmd.getTaskId()));
+    completionPayloads.put(cmd.getTaskId(), Map.copyOf(cmd.get()));
     return CompletableFuture.completedFuture(Empty.INSTANCE);
 
   }
@@ -552,6 +574,7 @@ public class InMemoryProcessEngine implements DeploymentApi, StartProcessApi, Co
           "Task '%s' is not open (already completed or canceled)".formatted(cmd.getTaskId())));
     }
     erroredTasks.add(new ErroredTask(cmd.getTaskId(), cmd.getErrorCode(), cmd.getErrorMessage()));
+    completionPayloads.put(cmd.getTaskId(), Map.copyOf(cmd.get()));
     return CompletableFuture.completedFuture(Empty.INSTANCE);
 
   }

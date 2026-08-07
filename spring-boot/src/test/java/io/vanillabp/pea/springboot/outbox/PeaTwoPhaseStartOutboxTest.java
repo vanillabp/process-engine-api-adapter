@@ -141,6 +141,37 @@ public class PeaTwoPhaseStartOutboxTest {
   }
 
   @Test
+  @DisplayName("The start payload carries the shared attributes plus the ID variable (story 28/28b)")
+  public void startPayloadCarriesTheSharedAttributes() throws Exception {
+
+    final var attached = transactionTemplate.execute(status -> {
+      final var aggregate = new Aggregate();
+      aggregate.setContent("shared");
+      aggregate.setSecret("s3cr3t");
+      return processService.startWorkflow(aggregate);
+    });
+
+    final var sync = awaitStartWithMode(ExecutionMode.SYNC, 10000);
+    assertNotNull(sync, "phase two (SYNC) must be dispatched after commit");
+
+    // BOTH phases carry the same payload: the preflight validates what phase two
+    // will send
+    for (final var command : java.util.List.of(
+        startsWithMode(ExecutionMode.PREFLIGHT_CHECK).getFirst().command(), sync.command())) {
+      final var payload = assertInstanceOf(PeaStartProcessCommand.class, command).get();
+      assertEquals(attached.getId(), payload.get(AGGREGATE_ID_VARIABLE));
+      assertEquals("shared", payload.get("content"));
+      assertTrue(
+          !payload.containsKey("secret"),
+          "a @NoSyncWithBPMS attribute must never travel but the payload was: "
+              + payload);
+    }
+
+    assertEquals("shared", engine.getStartedInstances().getFirst().variables().get("content"));
+
+  }
+
+  @Test
   @DisplayName("On rollback PREFLIGHT_CHECK was recorded but SYNC is never dispatched")
   public void rollbackRecordsPreflightButNeverSync() throws Exception {
 
