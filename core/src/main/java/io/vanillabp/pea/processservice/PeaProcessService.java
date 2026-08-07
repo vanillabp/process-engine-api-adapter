@@ -92,6 +92,52 @@ public class PeaProcessService<A> implements MigratableProcessService<A> {
   public static final io.vanillabp.integration.adapter.spi.AggregateSyncMode SYNC_MODE = io.vanillabp.integration.adapter.spi.AggregateSyncMode.FULL;
 
   /**
+   * The core's name-clash-avoidance model (story 35): translates process ids, message
+   * names and error codes into what the engine knows. May be <code>null</code>
+   * (tests): identifiers are passed through then.
+   */
+  private io.vanillabp.integration.adapter.spi.NameClashAvoidanceSupport scoping;
+
+  /**
+   * Sets the name-clash-avoidance support (the platform modules inject it after
+   * construction).
+   *
+   * @param scoping The name-clash-avoidance support
+   */
+  public void setScoping(
+      final io.vanillabp.integration.adapter.spi.NameClashAvoidanceSupport scoping) {
+
+    this.scoping = scoping;
+
+  }
+
+  /**
+   * The BPMN process id as the engine knows it.
+   */
+  private String scopedProcessId(
+      final String workflowModuleId,
+      final String bpmnProcessId) {
+
+    return scoping == null
+        ? bpmnProcessId
+        : scoping.scopedProcessId(workflowModuleId, bpmnProcessId, adapterId);
+
+  }
+
+  /**
+   * A message name / error code as the engine knows it.
+   */
+  private String scopedIdentifier(
+      final String workflowModuleId,
+      final String identifier) {
+
+    return scoping == null
+        ? identifier
+        : scoping.scopedIdentifier(workflowModuleId, identifier, adapterId);
+
+  }
+
+  /**
    * The payload sent whenever this adapter talks to the engine on behalf of a
    * workflow: the aggregate's shared attributes PLUS - always, no matter what the
    * sync model says - the variable carrying the aggregate's ID (named after the
@@ -380,8 +426,9 @@ public class PeaProcessService<A> implements MigratableProcessService<A> {
           // story 28b: the error boundary's outgoing path may branch on the
           // aggregate, which the caller changed before canceling the task
           .completeTaskByError(new io.vanillabp.pea.wiring.PeaCompleteTaskByErrorCmd(
-              taskId, bpmnErrorCode, "canceled via ProcessService#cancelTask", payloadOf(
-                  aggregatePersistence, workflowAggregateId, null)))
+              taskId, scopedIdentifier(workflowModuleId,
+                  bpmnErrorCode), "canceled via ProcessService#cancelTask", payloadOf(
+                      aggregatePersistence, workflowAggregateId, null)))
           .get();
       log.info(
           "PEA[{}]: canceled task '{}' (error code '{}') of BPMN process '{}' of workflow module '{}'",
@@ -615,7 +662,7 @@ public class PeaProcessService<A> implements MigratableProcessService<A> {
     try {
       correlationApi
           .correlateMessage(new dev.bpmcrafters.processengineapi.correlation.CorrelateMessageCmd(
-              messageName, payloadOf(
+              scopedIdentifier(workflowModuleId, messageName), payloadOf(
                   aggregatePersistence,
                   workflowAggregateId,
                   null), dev.bpmcrafters.processengineapi.correlation.Correlation.Companion
@@ -675,7 +722,8 @@ public class PeaProcessService<A> implements MigratableProcessService<A> {
     try {
       startProcessApi
           .startProcess(new dev.bpmcrafters.processengineapi.process.StartProcessByMessageCmd(
-              messageName, payloadOf(aggregatePersistence, workflowAggregateId, null), java.util.Map.of()))
+              scopedIdentifier(workflowModuleId, messageName), payloadOf(
+                  aggregatePersistence, workflowAggregateId, null), java.util.Map.of()))
           .get();
       log.info(
           "PEA[{}]: started workflow by message '{}' for BPMN process '{}' of workflow module "
@@ -711,7 +759,7 @@ public class PeaProcessService<A> implements MigratableProcessService<A> {
     await(
         startProcessApi.startProcess(
             new PeaStartProcessCommand(
-                bpmnProcessId, payloadOf(
+                scopedProcessId(workflowModuleId, bpmnProcessId), payloadOf(
                     aggregatePersistence, aggregateId, workflowAggregate), ExecutionMode.PREFLIGHT_CHECK)),
         "Preflight check (phase one)",
         bpmnProcessId,
@@ -736,7 +784,7 @@ public class PeaProcessService<A> implements MigratableProcessService<A> {
     await(
         startProcessApi.startProcess(
             new PeaStartProcessCommand(
-                bpmnProcessId, payloadOf(
+                scopedProcessId(workflowModuleId, bpmnProcessId), payloadOf(
                     aggregatePersistence, workflowAggregateId, null), ExecutionMode.SYNC)),
         "Starting the workflow (phase two)",
         bpmnProcessId,

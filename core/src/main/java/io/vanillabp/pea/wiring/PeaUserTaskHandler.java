@@ -25,6 +25,12 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 public class PeaUserTaskHandler implements TaskHandler {
 
+  /**
+   * Story 35: translates the scoped task definition of this subscription back into
+   * the plain one. May be <code>null</code>.
+   */
+  private final io.vanillabp.integration.adapter.spi.NameClashAvoidanceSupport scoping;
+
   private final String adapterId;
 
   private final String workflowModuleId;
@@ -42,11 +48,28 @@ public class PeaUserTaskHandler implements TaskHandler {
       final List<String> bpmnProcessIds,
       final WorkflowTaskInvoker workflowTaskInvoker) {
 
+    this(adapterId, workflowModuleId, externalFormReference, bpmnProcessIds, workflowTaskInvoker, null);
+
+  }
+
+  /**
+   * Story 35: translates the identifiers the engine knows back into the plain ones.
+   */
+  public PeaUserTaskHandler(
+      final String adapterId,
+      final String workflowModuleId,
+      final String externalFormReference,
+      final List<String> bpmnProcessIds,
+      final WorkflowTaskInvoker workflowTaskInvoker,
+      final io.vanillabp.integration.adapter.spi.NameClashAvoidanceSupport scoping) {
+
     this.adapterId = adapterId;
     this.workflowModuleId = workflowModuleId;
     this.externalFormReference = externalFormReference;
     this.bpmnProcessIds = bpmnProcessIds;
     this.workflowTaskInvoker = workflowTaskInvoker;
+
+    this.scoping = scoping;
 
   }
 

@@ -59,6 +59,12 @@ public class PeaTaskHandler implements TaskHandler {
 
   private final ServiceTaskCompletionApi serviceTaskCompletionApi;
 
+  /**
+   * Translates the identifiers the engine knows back into the plain ones (story 35)
+   * - a no-op unless the module uses prefixes. May be <code>null</code>.
+   */
+  private final io.vanillabp.integration.adapter.spi.NameClashAvoidanceSupport scoping;
+
   public PeaTaskHandler(
       final String adapterId,
       final String workflowModuleId,
@@ -67,12 +73,39 @@ public class PeaTaskHandler implements TaskHandler {
       final WorkflowTaskInvoker workflowTaskInvoker,
       final ServiceTaskCompletionApi serviceTaskCompletionApi) {
 
+    this(adapterId, workflowModuleId, taskDefinition, bpmnProcessIds, workflowTaskInvoker, serviceTaskCompletionApi, null);
+
+  }
+
+  public PeaTaskHandler(
+      final String adapterId,
+      final String workflowModuleId,
+      final String taskDefinition,
+      final List<String> bpmnProcessIds,
+      final WorkflowTaskInvoker workflowTaskInvoker,
+      final ServiceTaskCompletionApi serviceTaskCompletionApi,
+      final io.vanillabp.integration.adapter.spi.NameClashAvoidanceSupport scoping) {
+
     this.adapterId = adapterId;
     this.workflowModuleId = workflowModuleId;
     this.taskDefinition = taskDefinition;
     this.bpmnProcessIds = bpmnProcessIds;
     this.workflowTaskInvoker = workflowTaskInvoker;
     this.serviceTaskCompletionApi = serviceTaskCompletionApi;
+    this.scoping = scoping;
+
+  }
+
+  /**
+   * The PLAIN task definition of this subscription (the subscription key is the
+   * scoped one under {@code use-prefix}).
+   */
+  private String plainTaskDefinition(
+      final String bpmnProcessId) {
+
+    return scoping == null
+        ? taskDefinition
+        : scoping.plainTaskDefinition(workflowModuleId, bpmnProcessId, taskDefinition, adapterId);
 
   }
 
@@ -104,7 +137,8 @@ public class PeaTaskHandler implements TaskHandler {
       outcome = workflowTaskInvoker.invokeWorkflowTask(
           workflowModuleId,
           bpmnProcessId,
-          new PeaTaskInvocationContext(taskDefinition, String.valueOf(aggregateId), taskId, payload));
+          new PeaTaskInvocationContext(
+              plainTaskDefinition(bpmnProcessId), String.valueOf(aggregateId), taskId, payload));
     } catch (final Exception e) {
       // the core rolled the local transaction back - fail the task so the
       // underlying engine applies its retry semantics

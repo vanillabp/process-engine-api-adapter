@@ -482,4 +482,112 @@ public class PeaDeploymentServiceTest {
 
   }
 
+
+  /**
+   * Story 35: this BPMS has no isolation mechanism of its own, so the DEFAULT mode
+   * {@code by-adapter} cannot be served - and {@code use-prefix} rewrites the raw
+   * BPMN (the API has no model type).
+   */
+  @org.junit.jupiter.api.Nested
+  class NameClashAvoidance {
+
+    private static final String XML = """
+        <?xml version="1.0" encoding="UTF-8"?>
+        <bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"         xmlns:zeebe="http://camunda.org/schema/zeebe/1.0">
+          <bpmn:message id="Msg" name="PaymentReceived"/>
+          <bpmn:error id="Err" errorCode="PAYMENT_FAILED"/>
+          <bpmn:process id="RiskAssessment" isExecutable="true">
+            <bpmn:serviceTask id="Task">
+              <bpmn:extensionElements>
+                <zeebe:taskDefinition type="scoreApplicant"/>
+              </bpmn:extensionElements>
+            </bpmn:serviceTask>
+          </bpmn:process>
+        </bpmn:definitions>
+        """;
+
+    private io.vanillabp.integration.adapter.migration.scoping.NameClashAvoidanceService scopingWith(
+        final io.vanillabp.integration.adapter.spi.NameClashAvoidance mode) {
+
+      final var adapter = io.vanillabp.integration.adapter.migration.config.AdapterConfigProperties
+          .ofType("process-engine-api");
+      adapter.setNameClashAvoidance(mode);
+      final var properties = io.vanillabp.integration.adapter.migration.config.MigrationAdapterProperties
+          .builder()
+          .adapters(java.util.Map.of("pea", adapter))
+          .prioritizedAdapters(java.util.List.of("pea"))
+          .workflowModules(
+              java.util.Map.of(
+                  "loan-approval",
+                  new io.vanillabp.integration.adapter.migration.config.WorkflowModuleAdapterProperties()))
+          .build();
+      properties.validateAndLink();
+      return new io.vanillabp.integration.adapter.migration.scoping.NameClashAvoidanceService(properties);
+
+    }
+
+    @Test
+    public void byAdapterIsRejectedWhileDeploying() {
+
+      service.setScoping(scopingWith(io.vanillabp.integration.adapter.spi.NameClashAvoidance.BY_ADAPTER));
+
+      final var context = service.prepareBpmn(
+          "loan-approval", null, "risk.bpmn", "RiskAssessment", new PeaBpmnModel(
+              "risk.bpmn", XML.getBytes(StandardCharsets.UTF_8), "RiskAssessment", java.util.List.of()));
+
+      final var exception = Assertions.assertThrows(
+          IllegalStateException.class,
+          () -> service.deployResources("loan-approval", context));
+      Assertions.assertTrue(
+          exception.getMessage().contains("no isolation mechanism of its own"), exception::getMessage);
+      Assertions.assertTrue(exception.getMessage().contains("'loan-approval'"), exception::getMessage);
+      Assertions.assertTrue(exception.getMessage().contains("use-prefix"), exception::getMessage);
+      Assertions.assertTrue(exception.getMessage().contains("none"), exception::getMessage);
+
+    }
+
+    @Test
+    public void usePrefixRewritesTheDeployedBpmn() {
+
+      service.setScoping(scopingWith(io.vanillabp.integration.adapter.spi.NameClashAvoidance.USE_PREFIX));
+
+      final var context = service.prepareBpmn(
+          "loan-approval", null, "risk.bpmn", "RiskAssessment", new PeaBpmnModel(
+              "risk.bpmn", XML.getBytes(StandardCharsets.UTF_8), "RiskAssessment", java.util.List.of()));
+
+      // the record keeps the PLAIN identifiers - they key the core's registries ...
+      Assertions.assertEquals("RiskAssessment", context.getModels().getFirst().bpmnProcessId());
+      // ... while the deployed BYTES carry the scoped ones
+      final var deployed = new String(
+          context.getModels().getFirst().resource(), StandardCharsets.UTF_8);
+      Assertions.assertTrue(deployed.contains("id=\"loan-approval__RiskAssessment\""), deployed);
+      Assertions.assertTrue(deployed.contains("name=\"loan-approval__PaymentReceived\""), deployed);
+      Assertions.assertTrue(deployed.contains("errorCode=\"loan-approval__PAYMENT_FAILED\""), deployed);
+      Assertions.assertTrue(
+          deployed.contains("type=\"loan-approval__RiskAssessment__scoreApplicant\""), deployed);
+
+      // deploying works (no isolation complaint in this mode)
+      service.deployResources("loan-approval", context);
+      Assertions.assertEquals(1, engine.getDeployments().size());
+
+    }
+
+    @Test
+    public void noneChangesNothing() {
+
+      service.setScoping(scopingWith(io.vanillabp.integration.adapter.spi.NameClashAvoidance.NONE));
+
+      final var context = service.prepareBpmn(
+          "loan-approval", null, "risk.bpmn", "RiskAssessment", new PeaBpmnModel(
+              "risk.bpmn", XML.getBytes(StandardCharsets.UTF_8), "RiskAssessment", java.util.List.of()));
+
+      Assertions.assertEquals(
+          XML,
+          new String(context.getModels().getFirst().resource(), StandardCharsets.UTF_8));
+      service.deployResources("loan-approval", context);
+
+    }
+
+  }
+
 }

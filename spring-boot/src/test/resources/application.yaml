@@ -4,6 +4,7 @@ vanillabp:
   adapters:
     pea:
       type: process-engine-api
+      name-clash-avoidance: none
   workflow-modules:
     pea-test-module:
       adapters:

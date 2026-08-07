@@ -103,6 +103,41 @@ public class PeaDeploymentService implements AdapterDeploymentService<PeaBpmnMod
   }
 
   /**
+   * The core's name-clash-avoidance model (story 35). The Process-Engine-API has no
+   * isolation mechanism of its own, so only {@code none} and {@code use-prefix} can
+   * be served - {@code by-adapter} (the default!) is rejected at startup with a
+   * guiding message. May be <code>null</code> (tests).
+   */
+  private io.vanillabp.integration.adapter.spi.NameClashAvoidanceSupport scoping;
+
+  /**
+   * Sets the name-clash-avoidance support (the platform modules construct this
+   * service and inject it afterwards).
+   *
+   * @param scoping The name-clash-avoidance support
+   */
+  public void setScoping(
+      final io.vanillabp.integration.adapter.spi.NameClashAvoidanceSupport scoping) {
+
+    this.scoping = scoping;
+
+  }
+
+  /**
+   * A task definition as the engine knows it (prefixed under {@code use-prefix}).
+   */
+  private String scopedTaskDefinition(
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final String taskDefinition) {
+
+    return scoping == null
+        ? taskDefinition
+        : scoping.scopedTaskDefinition(workflowModuleId, bpmnProcessId, taskDefinition, adapterId);
+
+  }
+
+  /**
    * Two <code>process-engine-api</code> adapter ids cannot address different
    * engines (story 34): the Process-Engine-API is provided by the APPLICATION as a
    * set of CDI/Spring beans - there is no per-adapter-id connection configuration,
@@ -328,7 +363,16 @@ public class PeaDeploymentService implements AdapterDeploymentService<PeaBpmnMod
     final var context = existingContext == null
         ? new PeaProcessingContext(workflowModuleId)
         : existingContext;
-    context.getModels().add(model);
+    // story 35: the deployed BYTES carry the scoped identifiers, while the model's
+    // own bpmnProcessId/tasks stay PLAIN - they key the core's registries
+    final var scopedResource = PeaScoping.apply(
+        model.resource(), workflowModuleId, model.bpmnProcessId(), adapterId, scoping);
+    context
+        .getModels()
+        .add(scopedResource == model.resource()
+            ? model
+            : new PeaBpmnModel(
+                model.filename(), scopedResource, model.bpmnProcessId(), model.tasks(), model.userTasks()));
     return context;
 
   }
@@ -361,6 +405,13 @@ public class PeaDeploymentService implements AdapterDeploymentService<PeaBpmnMod
   public void deployResources(
       final String workflowModuleId,
       final PeaProcessingContext bpmsProcessingContext) throws IllegalStateException {
+
+    // story 35: the Process-Engine-API has no isolation mechanism of its own, so the
+    // DEFAULT mode 'by-adapter' cannot be served - fail with a guiding message
+    // instead of silently deploying every workflow module into one scope
+    if (scoping != null) {
+      scoping.validateNativeIsolationSupported(adapterId, workflowModuleId, "the Process-Engine-API");
+    }
 
     if ((bpmsProcessingContext == null) || bpmsProcessingContext.getModels().isEmpty()) {
       log.info(
@@ -442,7 +493,9 @@ public class PeaDeploymentService implements AdapterDeploymentService<PeaBpmnMod
             .stream()
             .filter(task -> task.taskDefinition() != null)
             .forEach(task -> processesByTaskDefinition
-                .computeIfAbsent(task.taskDefinition(), key -> new ArrayList<>())
+                .computeIfAbsent(
+                    scopedTaskDefinition(workflowModuleId, model.bpmnProcessId(), task.taskDefinition()),
+                    key -> new ArrayList<>())
                 .add(model.bpmnProcessId())));
 
     // user-task notifications (story 24): one USER-type subscription per distinct
@@ -453,13 +506,16 @@ public class PeaDeploymentService implements AdapterDeploymentService<PeaBpmnMod
         .forEach(model -> model
             .userTasks()
             .forEach(userTask -> processesByUserTaskReference
-                .computeIfAbsent(userTask.taskDefinition(), key -> new ArrayList<>())
+                .computeIfAbsent(
+                    scopedTaskDefinition(workflowModuleId, model.bpmnProcessId(), userTask.taskDefinition()),
+                    key -> new ArrayList<>())
                 .add(model.bpmnProcessId())));
     processesByUserTaskReference.forEach((
         externalFormReference,
         bpmnProcessIds) -> {
       final var handler = new io.vanillabp.pea.wiring.PeaUserTaskHandler(
-          adapterId, workflowModuleId, externalFormReference, List.copyOf(bpmnProcessIds), workflowTaskInvoker);
+          adapterId, workflowModuleId, externalFormReference, List
+              .copyOf(bpmnProcessIds), workflowTaskInvoker, scoping);
       try {
         final var subscription = taskSubscriptionApi
             .subscribeForTask(new SubscribeForTaskCmd(
@@ -489,7 +545,7 @@ public class PeaDeploymentService implements AdapterDeploymentService<PeaBpmnMod
         bpmnProcessIds) -> {
       final var handler = new PeaTaskHandler(
           adapterId, workflowModuleId, taskDefinition, List
-              .copyOf(bpmnProcessIds), workflowTaskInvoker, serviceTaskCompletionApi);
+              .copyOf(bpmnProcessIds), workflowTaskInvoker, serviceTaskCompletionApi, scoping);
       try {
         final var subscription = taskSubscriptionApi
             .subscribeForTask(new SubscribeForTaskCmd(

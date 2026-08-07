@@ -44,7 +44,8 @@ public class PeaDeploymentServiceProducer {
       final io.vanillabp.integration.adapter.migration.workflowtask.WorkflowTaskRegistry workflowTaskRegistry,
       final dev.bpmcrafters.processengineapi.task.TaskSubscriptionApi taskSubscriptionApi,
       final dev.bpmcrafters.processengineapi.task.ServiceTaskCompletionApi serviceTaskCompletionApi,
-      final io.vanillabp.pea.deployment.PeaDeployedProcessesRegistry deployedProcessesRegistry) {
+      final io.vanillabp.pea.deployment.PeaDeployedProcessesRegistry deployedProcessesRegistry,
+      final io.vanillabp.integration.adapter.spi.NameClashAvoidanceSupport scoping) {
 
     return (List) properties
         .adapterTypes()
@@ -53,9 +54,13 @@ public class PeaDeploymentServiceProducer {
         .filter(adapter -> PeaAdapter.ADAPTER_TYPE.equals(adapter.getValue()))
         .map(Map.Entry::getKey)
         .sorted()
-        .map(adapterId -> new PeaDeploymentService(
-            adapterId, deploymentApi, workflowTaskRegistry, taskSubscriptionApi, serviceTaskCompletionApi, deployedProcessesRegistry
-                .forAdapter(adapterId)))
+        .map(adapterId -> {
+          final var deploymentService = new PeaDeploymentService(
+              adapterId, deploymentApi, workflowTaskRegistry, taskSubscriptionApi, serviceTaskCompletionApi, deployedProcessesRegistry
+                  .forAdapter(adapterId));
+          deploymentService.setScoping(scoping);
+          return deploymentService;
+        })
         .toList();
 
   }

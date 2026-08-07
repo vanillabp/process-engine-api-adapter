@@ -35,7 +35,8 @@ public class PeaProcessServiceProducer {
       final dev.bpmcrafters.processengineapi.task.UserTaskCompletionApi userTaskCompletionApi,
       final dev.bpmcrafters.processengineapi.correlation.CorrelationApi correlationApi,
       final io.vanillabp.pea.deployment.PeaDeployedProcessesRegistry deployedProcessesRegistry,
-      final io.vanillabp.integration.adapter.spi.WorkflowAggregateSync aggregateSync) {
+      final io.vanillabp.integration.adapter.spi.WorkflowAggregateSync aggregateSync,
+      final io.vanillabp.integration.adapter.spi.NameClashAvoidanceSupport scoping) {
 
     // ONE bean of type List with one instance PER configured adapter id of this
     // adapter's type (a CDI producer cannot yield N element beans for N
@@ -50,8 +51,13 @@ public class PeaProcessServiceProducer {
         .map(Map.Entry::getKey)
         .sorted()
         .<MigratableProcessService<Object>>map(
-            adapterId -> new PeaProcessService<>(adapterId, startProcessApi, serviceTaskCompletionApi, userTaskCompletionApi, correlationApi, deployedProcessesRegistry
-                .forAdapter(adapterId), aggregateSync))
+            adapterId -> {
+              final var processService = new PeaProcessService<>(
+                  adapterId, startProcessApi, serviceTaskCompletionApi, userTaskCompletionApi, correlationApi, deployedProcessesRegistry
+                      .forAdapter(adapterId), aggregateSync);
+              processService.setScoping(scoping);
+              return processService;
+            })
         .toList();
 
   }

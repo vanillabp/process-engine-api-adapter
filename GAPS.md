@@ -282,3 +282,24 @@ soon as more than one adapter id of type `process-engine-api` is configured, nam
 reason. A migration between two engines behind the Process-Engine-API cannot be
 expressed today; qualifying the API beans per adapter instance (or a connection
 configuration owned by the API) would resolve it.
+
+## 15. No isolation mechanism - workflow modules cannot be kept apart by the engine
+
+**Needed by VanillaBP:** a workflow module is a visibility scope. Its BPMN process ids,
+message names, error codes and task definitions must not clash with those of another
+module of the same application, so the default name-clash-avoidance mode `BY_ADAPTER`
+asks the adapter to use whatever isolation its BPMS offers (Camunda 7 and Camunda 8 use a
+tenant named after the workflow module).
+
+**Offered by the Process-Engine-API:** nothing. There are no tenants, no namespaces and no
+per-deployment scope; `DeploymentApi` takes the resources and nothing else, and a task
+subscription matches a task type globally. Whether the engine behind the API has tenants
+(Camunda 7 has) is invisible through it.
+
+**Consequence for the adapter:** `BY_ADAPTER` is rejected while deploying a workflow
+module - the boot fails naming the module and the two alternatives (`use-prefix`, `none`).
+It is deliberately not silently downgraded to `none`: that would deploy every module into
+one scope and let a clash surface as the wrong process being started. `use-prefix` works
+without engine support, but the adapter has to rewrite the raw BPMN XML by element name
+(gap 1: no BPMN model type), which only covers the dialects it knows the element names of.
+A tenant or deployment-scope concept in the API would resolve it.

@@ -48,27 +48,38 @@ public class PeaAdapterBeanRegistrar implements BeanRegistrar {
           registry.registerBean(
               "Pea_ProcessService_%s".formatted(adapterId),
               PeaProcessService.class,
-              spec -> spec.supplier(supplierContext -> new PeaProcessService<>(
-                  adapterId, supplierContext.bean(StartProcessApi.class), supplierContext
-                      .bean(dev.bpmcrafters.processengineapi.task.ServiceTaskCompletionApi.class), supplierContext
-                          .bean(dev.bpmcrafters.processengineapi.task.UserTaskCompletionApi.class), supplierContext
-                              .bean(dev.bpmcrafters.processengineapi.correlation.CorrelationApi.class), supplierContext
-                                  .bean(io.vanillabp.pea.deployment.PeaDeployedProcessesRegistry.class)
-                                  .forAdapter(adapterId), supplierContext
-                                      .bean(io.vanillabp.integration.adapter.spi.WorkflowAggregateSync.class))));
+              spec -> spec.supplier(supplierContext -> {
+                final var processService = new PeaProcessService<>(
+                    adapterId, supplierContext.bean(StartProcessApi.class), supplierContext
+                        .bean(dev.bpmcrafters.processengineapi.task.ServiceTaskCompletionApi.class), supplierContext
+                            .bean(dev.bpmcrafters.processengineapi.task.UserTaskCompletionApi.class), supplierContext
+                                .bean(
+                                    dev.bpmcrafters.processengineapi.correlation.CorrelationApi.class), supplierContext
+                                        .bean(io.vanillabp.pea.deployment.PeaDeployedProcessesRegistry.class)
+                                        .forAdapter(adapterId), supplierContext
+                                            .bean(io.vanillabp.integration.adapter.spi.WorkflowAggregateSync.class));
+                processService.setScoping(
+                    supplierContext.bean(io.vanillabp.integration.adapter.spi.NameClashAvoidanceSupport.class));
+                return processService;
+              }));
 
           registry.registerBean(
               "Pea_DeploymentService_%s".formatted(adapterId),
               PeaDeploymentService.class,
-              spec -> spec.supplier(supplierContext -> new PeaDeploymentService(
-                  adapterId, supplierContext.bean(DeploymentApi.class), supplierContext
-                      .bean(
-                          io.vanillabp.integration.adapter.spi.workflowtask.WorkflowTaskInvoker.class), supplierContext
-                              .bean(dev.bpmcrafters.processengineapi.task.TaskSubscriptionApi.class), supplierContext
-                                  .bean(
-                                      dev.bpmcrafters.processengineapi.task.ServiceTaskCompletionApi.class), supplierContext
-                                          .bean(io.vanillabp.pea.deployment.PeaDeployedProcessesRegistry.class)
-                                          .forAdapter(adapterId))));
+              spec -> spec.supplier(supplierContext -> {
+                final var deploymentService = new PeaDeploymentService(
+                    adapterId, supplierContext.bean(DeploymentApi.class), supplierContext
+                        .bean(
+                            io.vanillabp.integration.adapter.spi.workflowtask.WorkflowTaskInvoker.class), supplierContext
+                                .bean(dev.bpmcrafters.processengineapi.task.TaskSubscriptionApi.class), supplierContext
+                                    .bean(
+                                        dev.bpmcrafters.processengineapi.task.ServiceTaskCompletionApi.class), supplierContext
+                                            .bean(io.vanillabp.pea.deployment.PeaDeployedProcessesRegistry.class)
+                                            .forAdapter(adapterId));
+                deploymentService.setScoping(
+                    supplierContext.bean(io.vanillabp.integration.adapter.spi.NameClashAvoidanceSupport.class));
+                return deploymentService;
+              }));
 
         });
 

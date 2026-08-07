@@ -51,7 +51,7 @@ import io.vanillabp.spi.service.WorkflowTask;
 @SpringBootTest(
     classes = TaskProcessingIntegrationTest.TaskProcessingApplication.class,
     properties = {
-        "vanillabp.adapters.pea.type=process-engine-api", "vanillabp.prioritized-adapters=pea", "vanillabp.workflow-modules.pea-test-module.adapters.pea.resources-location=classpath*:pea-test-module/processes/tasks"
+        "vanillabp.adapters.pea.type=process-engine-api", "vanillabp.adapters.pea.name-clash-avoidance=none", "vanillabp.prioritized-adapters=pea", "vanillabp.workflow-modules.pea-test-module.adapters.pea.resources-location=classpath*:pea-test-module/processes/tasks"
     })
 @ExtendWith(SuppressOutputExtension.class)
 public class TaskProcessingIntegrationTest {
