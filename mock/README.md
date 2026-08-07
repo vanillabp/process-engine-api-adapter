@@ -60,8 +60,9 @@ an empty set). `ExecutionModeAware.executionMode()`, `RestrictionAware.areSuppor
 and `RestrictionAware.ensureSupported(...)` are Java `default` methods on the
 Process-Engine-API interfaces and need no implementation.
 
-Not yet implemented (added when the corresponding feature story needs them):
-`correlation.SignalApi`, `task.UserTaskModificationApi`, `decision.EvaluateDecisionApi`.
+Deliberately not implemented, because VanillaBP does not call them:
+`correlation.SignalApi`, `task.UserTaskModificationApi`, `decision.EvaluateDecisionApi` —
+add them here as soon as an adapter feature needs them.
 
 ## Failure injection
 

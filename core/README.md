@@ -1,7 +1,8 @@
 # core — Process-Engine-API adapter (platform-neutral)
 
-Contributor documentation. The `core` module holds the **platform-neutral** parts of the
-adapter: the VanillaBP adapter-SPI implementations and (later) the client logic against
+Contributor documentation (user-facing documentation lives in
+[this adapter's wiki](https://github.com/vanillabp/process-engine-api-adapter/wiki)). The `core` module holds the
+**platform-neutral** parts of the adapter: the VanillaBP adapter-SPI implementations and the client logic against
 the bpm-crafters Process-Engine-API. It contains no Spring or Quarkus code and — by
 design — **does not depend on the `mock/` module**. The Process-Engine-API implementation
 is injected from the outside (the mock in tests/early apps, a real implementation later).
@@ -43,8 +44,9 @@ parse/read failures are wrapped in `BpmnParseException`.
 ## Deploying (`prepareBpmn` → `deployResources`)
 
 `prepareBpmn` accumulates the models of a workflow module into the `PeaProcessingContext`
-(creating it on the first call — the core passes `null` initially). `wireBpmn` only logs for
-now (task wiring is a later story). `deployResources` builds one `DeployBundleCommand` per
+(creating it on the first call — the core passes `null` initially). `wireBpmn` validates the
+task wiring against the core's `WorkflowTaskInvoker` and collects the task definitions to
+subscribe for. `deployResources` builds one `DeployBundleCommand` per
 workflow module containing a `NamedResource` per **file** (models of the same file are
 deployed once) and calls the injected `DeploymentApi.deploy(...)` synchronously. Because
 module-as-tenant isolation is not expressible, the bundle is deployed to the default tenant
@@ -101,7 +103,8 @@ Cross-cutting: command interfaces implement `ExecutionModeAware.executionMode()`
 `PREFLIGHT_CHECK`; see issue #281). Several APIs also extend `MetaInfoAware`
 (`meta(...)`) and `RestrictionAware` (`getSupportedRestrictions()`).
 
-The skeleton wires the subset needed for VanillaBP's process-service operations into
-`PeaProcessService` (start process, correlate message, task subscription, service- and
-user-task completion). Deployment goes through `PeaDeploymentService`. The full set is
-implemented feature by feature.
+`PeaProcessService` uses the subset VanillaBP's operations need (start process, correlate
+message, task subscription, service- and user-task completion); deployment goes through
+`PeaDeploymentService`. APIs VanillaBP has no use for yet (signals, user-task
+modification, decision evaluation) are simply not called — the gaps the API leaves for
+the features VanillaBP DOES implement are collected in [`../GAPS.md`](../GAPS.md).

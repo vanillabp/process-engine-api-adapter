@@ -22,8 +22,10 @@ documented in the [VanillaBP Wiki](https://github.com/vanillabp/adapter-platform
 > end-to-end through `ProcessService#startWorkflow` with the JPA outbox against the
 > mock), **task processing** (`@WorkflowTask` via task subscriptions),
 > **completing/canceling asynchronous and user tasks**, **message correlation**
-> (start-by-message included) and the **BPMS-election awareness probes**. The
-> viewer/history API and `@SyncWithBPMS` are later stories.
+> (start-by-message included), the **BPMS-election awareness probes**, the
+> **viewer/history API** (answered from what this application version deployed — the API
+> has neither a repository nor a history API) and the **aggregate sync** (shared
+> attributes travel as the payload of every command).
 
 ## Why an adapter against the Process-Engine-API?
 
