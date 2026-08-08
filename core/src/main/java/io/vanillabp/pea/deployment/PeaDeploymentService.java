@@ -23,6 +23,7 @@ import dev.bpmcrafters.processengineapi.task.TaskSubscriptionApi;
 import dev.bpmcrafters.processengineapi.task.TaskType;
 import dev.bpmcrafters.processengineapi.task.UnsubscribeFromTaskCmd;
 import io.vanillabp.integration.adapter.spi.AdapterDeploymentService;
+import io.vanillabp.integration.adapter.spi.AdapterPlatformVersion;
 import io.vanillabp.integration.adapter.spi.BpmnParseException;
 import io.vanillabp.integration.adapter.spi.workflowtask.BpmnTaskSpec;
 import io.vanillabp.integration.adapter.spi.workflowtask.WorkflowTaskInvoker;
@@ -92,6 +93,8 @@ public class PeaDeploymentService implements AdapterDeploymentService<PeaBpmnMod
       final TaskSubscriptionApi taskSubscriptionApi,
       final ServiceTaskCompletionApi serviceTaskCompletionApi,
       final PeaDeployedProcesses deployedProcesses) {
+
+    AdapterPlatformVersion.requireCompatiblePlatform(PeaAdapter.ADAPTER_TYPE, PeaDeploymentService.class);
 
     this.adapterId = adapterId;
     this.deploymentApi = deploymentApi;

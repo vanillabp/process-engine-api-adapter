@@ -26,4 +26,14 @@
       <artifactId>lombok</artifactId>
     </dependency>
   </dependencies>
+
+  <build>
+    <resources>
+      <!-- 'adapter-process-engine-api.properties' carries the versions into the JAR -->
+      <resource>
+        <filtering>true</filtering>
+        <directory>src/main/resources</directory>
+      </resource>
+    </resources>
+  </build>
 </project>
