@@ -55,6 +55,10 @@ public class PeaCompleteTaskCmd extends CompleteTaskCmd {
   }
 
   @Override
+  // javac warns that the overridden method is a bridge: 'executionMode()' is a default
+  // method of the Kotlin interface 'ExecutionModeAware', materialized as a bridge in the
+  // superclass. The warning is unavoidable - @SuppressWarnings does not cover it - and the
+  // API offers no constructor parameter to set the mode instead.
   public ExecutionMode executionMode() {
 
     return executionMode;

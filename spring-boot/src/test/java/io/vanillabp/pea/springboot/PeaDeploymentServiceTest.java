@@ -5,8 +5,10 @@ import java.nio.charset.StandardCharsets;
 
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 
 import io.vanillabp.integration.adapter.spi.BpmnParseException;
+import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 import io.vanillabp.pea.PeaBpmnModel;
 import io.vanillabp.pea.PeaProcessingContext;
 import io.vanillabp.pea.deployment.PeaDeploymentService;
@@ -17,6 +19,7 @@ import io.vanillabp.pea.mock.InMemoryProcessEngine;
  * {@code readBpmn} (executable-process id extraction) and {@code deployResources} deploying
  * the module's resources through the (mock) Process-Engine-API {@code DeploymentApi}.
  */
+@ExtendWith(SuppressOutputExtension.class)
 public class PeaDeploymentServiceTest {
 
   private final InMemoryProcessEngine engine = new InMemoryProcessEngine();

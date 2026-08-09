@@ -6,8 +6,10 @@ import java.nio.charset.StandardCharsets;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 
 import io.vanillabp.integration.spi.AggregatePersistenceAware;
+import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 import io.vanillabp.pea.deployment.PeaDeployedProcesses;
 import io.vanillabp.pea.deployment.PeaDeploymentService;
 import io.vanillabp.pea.mock.InMemoryProcessEngine;
@@ -26,6 +28,7 @@ import io.vanillabp.pea.processservice.PeaProcessService;
  * BPMS").</li>
  * </ul>
  */
+@ExtendWith(SuppressOutputExtension.class)
 public class PeaViewerApiTest {
 
   private static final String BPMN = """
