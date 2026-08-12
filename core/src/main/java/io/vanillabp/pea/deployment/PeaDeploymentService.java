@@ -394,6 +394,8 @@ public class PeaDeploymentService implements AdapterDeploymentService<PeaBpmnMod
     specs.addAll(model.userTasks());
     workflowTaskInvoker.validateTaskWiring(workflowModuleId, bpmnProcessId, specs);
 
+    failOnBpmsInitiatedStartEvents(workflowModuleId, filename, bpmnProcessId, model);
+
     log.info(
         "Process-Engine-API adapter '{}': wired {} task(s) of BPMN process '{}' (file '{}', workflow module '{}')",
         adapterId,
@@ -401,6 +403,42 @@ public class PeaDeploymentService implements AdapterDeploymentService<PeaBpmnMod
         bpmnProcessId,
         filename,
         workflowModuleId);
+
+  }
+
+  /**
+   * Fails the deployment of a process the ENGINE would start on its own (a timer,
+   * signal or conditional start event). The Process-Engine-API has no way to tell an
+   * application that its engine started a process (see {@code GAPS.md}), so such a
+   * workflow would run without a workflow aggregate: no task could be routed, no
+   * expression resolved. Failing the deployment is the honest answer - and it honors
+   * the deployment-failure policy, so a non-first-priority adapter can degrade it to
+   * a warning.
+   *
+   * @param workflowModuleId The workflow module ID
+   * @param filename The BPMN file
+   * @param bpmnProcessId The BPMN process ID
+   * @param model The model, carrying the raw BPMN
+   */
+  private void failOnBpmsInitiatedStartEvents(
+      final String workflowModuleId,
+      final String filename,
+      final String bpmnProcessId,
+      final PeaBpmnModel model) {
+
+    final var startEvents = PeaStartEvents.bpmsInitiatedStartEventsOf(model.resource(), bpmnProcessId);
+    if (startEvents.isEmpty()) {
+      return;
+    }
+    throw new IllegalStateException(
+        """
+            BPMN process '%s' (file '%s', workflow module '%s') is started by the engine itself (%s), \
+            which the Process-Engine-API adapter cannot serve: the API does not report such a start, \
+            so VanillaBP could never build the workflow aggregate the workflow needs. Start the \
+            workflow from your application (ProcessService#startWorkflow, or a message start event \
+            and ProcessService#startWorkflowByMessage), or run this workflow module on a BPMS whose \
+            adapter supports it."""
+            .formatted(bpmnProcessId, filename, workflowModuleId, String.join(", ", startEvents)));
 
   }
 

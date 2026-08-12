@@ -303,3 +303,25 @@ one scope and let a clash surface as the wrong process being started. `use-prefi
 without engine support, but the adapter has to rewrite the raw BPMN XML by element name
 (gap 1: no BPMN model type), which only covers the dialects it knows the element names of.
 A tenant or deployment-scope concept in the API would resolve it.
+
+## 16. The API never reports a process the engine started on its own
+
+**Needed by VanillaBP:** a workflow may be started by the BPMS instead of by the
+application - a timer, signal or conditional start event. VanillaBP then has to build the
+workflow aggregate before anything of the process runs, because everything downstream is
+addressed by it: tasks are routed by the aggregate's ID, expressions read its attributes.
+Camunda 7 offers a process-start execution listener for that, Camunda 8 an execution
+listener on the start event.
+
+**Offered by the Process-Engine-API:** nothing. `TaskSubscriptionApi` delivers TASKS, the
+`ProcessApi` starts processes on the application's behalf, and there is no subscription,
+event or callback saying "the engine just started this process". A start the application
+did not ask for is therefore invisible to it.
+
+**Consequence for the adapter:** `wireBpmn` rejects a process carrying such a start event
+with a guiding message naming the element and the alternatives (start the workflow from
+the application, or run the module on a BPMS whose adapter can serve it). The rejection
+runs through the deployment-failure policy, so a non-first-priority adapter degrades it to
+a warning. Deploying it silently would produce workflows without an aggregate: the first
+task delivery would fail with "no aggregate", one failure per instance and no way back. A
+"process started" notification (or a subscription for it) would resolve it.
