@@ -34,6 +34,7 @@ public class PeaProcessServiceProducer {
       final dev.bpmcrafters.processengineapi.task.ServiceTaskCompletionApi serviceTaskCompletionApi,
       final dev.bpmcrafters.processengineapi.task.UserTaskCompletionApi userTaskCompletionApi,
       final dev.bpmcrafters.processengineapi.correlation.CorrelationApi correlationApi,
+      @jakarta.enterprise.inject.Any final jakarta.enterprise.inject.Instance<dev.bpmcrafters.processengineapi.correlation.SignalApi> signalApi,
       final io.vanillabp.pea.deployment.PeaDeployedProcessesRegistry deployedProcessesRegistry,
       final io.vanillabp.integration.adapter.spi.WorkflowAggregateSync aggregateSync,
       final io.vanillabp.integration.adapter.spi.NameClashAvoidanceSupport scoping) {
@@ -56,6 +57,13 @@ public class PeaProcessServiceProducer {
                   adapterId, startProcessApi, serviceTaskCompletionApi, userTaskCompletionApi, correlationApi, deployedProcessesRegistry
                       .forAdapter(adapterId), aggregateSync);
               processService.setScoping(scoping);
+              // optional: an engine implementation without a SignalApi leaves
+              // signals unsupported, which the process service says when asked
+              processService
+                  .setSignalApi(
+                      signalApi.isResolvable()
+                          ? signalApi.get()
+                          : null);
               return processService;
             })
         .toList();
