@@ -661,6 +661,51 @@ public class PeaProcessService<A> implements MigratableProcessService<A> {
   }
 
   /**
+   * Pushing a changed workflow-aggregate is not supported (GAPS.md entry 18): the
+   * Process-Engine-API can update the payload of a TASK, never the payload of a
+   * running process instance. Phase one already refuses, so an application learns it
+   * where it made the call instead of somewhere behind a commit.
+   */
+  @Override
+  public void aggregateChangedPhaseOne(
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final io.vanillabp.integration.spi.AggregatePersistenceAware<A> aggregatePersistence,
+      final A workflowAggregate,
+      final String taskId) {
+
+    throw aggregateChangedNotSupported(workflowModuleId, bpmnProcessId);
+
+  }
+
+  @Override
+  public void aggregateChangedPhaseTwo(
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final io.vanillabp.integration.spi.AggregatePersistenceAware<A> aggregatePersistence,
+      final Object workflowAggregateId,
+      final String taskId) {
+
+    throw aggregateChangedNotSupported(workflowModuleId, bpmnProcessId);
+
+  }
+
+  private UnsupportedOperationException aggregateChangedNotSupported(
+      final String workflowModuleId,
+      final String bpmnProcessId) {
+
+    return new UnsupportedOperationException(
+        ("The Process-Engine-API adapter '%s' cannot push a changed workflow-aggregate of BPMN "
+            + "process '%s' (workflow module '%s') to the engine: the API updates the payload of a "
+            + "TASK, not of a running process instance (see GAPS.md entry 18). What the engine sees "
+            + "changes when VanillaBP completes a task of the workflow - model a task the workflow "
+            + "waits at, or run this workflow module on a BPMS whose adapter can update a running "
+            + "instance.")
+            .formatted(adapterId, bpmnProcessId, workflowModuleId));
+
+  }
+
+  /**
    * The Process-Engine-API is treated as a REMOTE BPMS: nothing may happen before
    * the caller's transaction committed, so the broadcast waits for phase two.
    */

@@ -343,3 +343,22 @@ the method will never be called. Deliberately not a deployment failure: unlike a
 event the engine fires on its own - where the workflow could not run at all - the workflow
 runs perfectly well here and only the notification is missing, so failing the boot would be
 out of proportion. A "process instance ended" subscription in the API would resolve it.
+
+## 18. The payload of a running process instance cannot be updated
+
+**Needed by VanillaBP:** an application may tell the BPMS that the workflow aggregate
+changed (`aggregateChanged`, story 44) - so the engine sees the current state before it
+evaluates anything else. Camunda 7 writes the shared values at the workflow's or a task's
+scope, Camunda 8 sends `SetVariables` for the process instance respectively the element
+instance.
+
+**Offered by the Process-Engine-API:** payload modification for TASKS only.
+`UserTaskModificationApi` takes a `ChangePayloadModifyTaskCmd` (update, delete, clear) that
+addresses a task id; `CorrelateMessageCmd` carries a payload into a waiting message
+subscription. There is no command, and no API, whose subject is a running process instance.
+
+**Consequence for the adapter:** both phases of `aggregateChanged` throw with a guiding
+message naming the alternatives (complete a task of the workflow, which does push the
+shared values, or run the workflow module on a BPMS whose adapter can). Phase ONE already
+refuses, so the application sees the failure at its call instead of in an outbox dispatch
+after the commit. A payload-modification command for process instances would resolve it.
