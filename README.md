@@ -177,6 +177,26 @@ replaces the mock with a real Process-Engine-API implementation.
   are FINAL - the execution mode cannot be transported (no PREFLIGHT_CHECK phase one, commands
   travel with DEFAULT mode) and workflow awareness cannot be probed at all (the adapter answers
   optimistically with a one-time guiding WARN - unsafe for multi-BPMS migration setups).
+- **Aggregate sync** (stories 28 and 44): the API is a remote BPMS, so everything is shared
+  unless `@NoSyncWithBPMS` excludes it, and the shared attributes travel as the payload of
+  every command sent on behalf of a workflow (start, task completion incl.
+  `completeTaskByError`, async-task and user-task completion, correlation). The aggregate is
+  read AFTER the handler's local transaction committed, in an own transaction; a failing read
+  still completes the task, with the aggregate-ID value only and a warning naming the
+  workflow. `aggregateChanged` is not expressible at all: the API modifies the payload of
+  TASKS only, so both phases throw with a guiding message ([`GAPS.md`](GAPS.md), entry 18) -
+  phase ONE already, so the application sees it at its call instead of in an outbox dispatch.
+- **Starts the engine performs itself, and the end of a workflow** ([`GAPS.md`](GAPS.md),
+  entries 16 and 17): nothing in the API reports either. A process carrying a timer, signal
+  or conditional start event is rejected during `wireBpmn` (through the deployment-failure
+  policy, so a non-first-priority adapter degrades it to a warning), because deploying it
+  would produce workflows without an aggregate. A `@WorkflowEnded` method only WARNs, since
+  the workflow runs perfectly well and just the notification is missing.
+- **Versions of a process** ([`GAPS.md`](GAPS.md), entry 19): the API knows no version of a
+  deployed process definition, so the adapter registers no version catalog and reports only
+  the version TAG from the task meta (key `processDefinitionVersionTag`, named by the API's
+  `CommonRestrictions`) where the engine supplies it. An exact tag therefore works, while a
+  range over tags and any specification made of numbers matches nothing and is reported once.
 - **Viewing workflows** (`ProcessService#getProcessDefinitions`/`#getBpmnXml`/`#getWorkflowHistory`,
   story 26): served from what THIS application version deployed - the Process-Engine-API has
   neither a repository nor a query/history API ([`GAPS.md`](GAPS.md), entries 12 and 13). The
