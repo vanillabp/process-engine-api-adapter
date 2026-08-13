@@ -325,3 +325,21 @@ runs through the deployment-failure policy, so a non-first-priority adapter degr
 a warning. Deploying it silently would produce workflows without an aggregate: the first
 task delivery would fail with "no aggregate", one failure per instance and no way back. A
 "process started" notification (or a subscription for it) would resolve it.
+
+## 17. No notification when a process instance ends
+
+**Needed by VanillaBP:** an application may ask to be told that a workflow ended
+(`@WorkflowEnded`) instead of modelling a service task in front of every end event.
+Camunda 7 serves that with an execution listener at the process scope, Camunda 8 with an
+`end` execution listener on the process element.
+
+**Offered by the Process-Engine-API:** nothing. `TaskSubscriptionApi` subscribes to TASKS,
+`ProcessInformation` is what a start returns, and there is no event, callback or
+subscription reporting that an instance ended. Whether the engine behind the API knows it
+(Camunda 7 does) is invisible through the API.
+
+**Consequence for the adapter:** `wireBpmn` WARNs, naming the BPMN process and saying that
+the method will never be called. Deliberately not a deployment failure: unlike a start
+event the engine fires on its own - where the workflow could not run at all - the workflow
+runs perfectly well here and only the notification is missing, so failing the boot would be
+out of proportion. A "process instance ended" subscription in the API would resolve it.

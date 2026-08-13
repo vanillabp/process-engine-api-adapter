@@ -59,6 +59,7 @@ public class PeaDeploymentServiceProducer {
               adapterId, deploymentApi, workflowTaskRegistry, taskSubscriptionApi, serviceTaskCompletionApi, deployedProcessesRegistry
                   .forAdapter(adapterId));
           deploymentService.setScoping(scoping);
+          deploymentService.setWorkflowEndedInvoker(workflowTaskRegistry);
           return deploymentService;
         })
         .toList();

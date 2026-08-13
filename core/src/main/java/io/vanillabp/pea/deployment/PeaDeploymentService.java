@@ -59,6 +59,24 @@ public class PeaDeploymentService implements AdapterDeploymentService<PeaBpmnMod
    */
   private final WorkflowTaskInvoker workflowTaskInvoker;
 
+  /**
+   * The core's entry point for workflows which ended (story 43) - used ONLY to warn
+   * about methods this adapter cannot serve. May be <code>null</code> (tests).
+   */
+  private io.vanillabp.integration.adapter.spi.workflowend.WorkflowEndedInvoker workflowEndedInvoker;
+
+  /**
+   * Hands over the core's entry point for workflows which ended.
+   *
+   * @param workflowEndedInvoker The core's invoker
+   */
+  public void setWorkflowEndedInvoker(
+      final io.vanillabp.integration.adapter.spi.workflowend.WorkflowEndedInvoker workflowEndedInvoker) {
+
+    this.workflowEndedInvoker = workflowEndedInvoker;
+
+  }
+
   private final TaskSubscriptionApi taskSubscriptionApi;
 
   private final ServiceTaskCompletionApi serviceTaskCompletionApi;
@@ -395,6 +413,7 @@ public class PeaDeploymentService implements AdapterDeploymentService<PeaBpmnMod
     workflowTaskInvoker.validateTaskWiring(workflowModuleId, bpmnProcessId, specs);
 
     failOnBpmsInitiatedStartEvents(workflowModuleId, filename, bpmnProcessId, model);
+    warnAboutUnservedWorkflowEndedHandlers(workflowModuleId, bpmnProcessId);
 
     log.info(
         "Process-Engine-API adapter '{}': wired {} task(s) of BPMN process '{}' (file '{}', workflow module '{}')",
@@ -439,6 +458,43 @@ public class PeaDeploymentService implements AdapterDeploymentService<PeaBpmnMod
             and ProcessService#startWorkflowByMessage), or run this workflow module on a BPMS whose \
             adapter supports it."""
             .formatted(bpmnProcessId, filename, workflowModuleId, String.join(", ", startEvents)));
+
+  }
+
+  /**
+   * Warns about a <code>&#64;WorkflowEnded</code> method this adapter cannot serve.
+   * The Process-Engine-API delivers TASKS; it has no event, subscription or callback
+   * saying that a process instance ended (see {@code GAPS.md}), so the notification
+   * never arrives.
+   * <p>
+   * Unlike a start event the engine fires on its own, this does NOT fail the
+   * deployment: the workflow itself runs perfectly well, only the notification is
+   * missing - failing the boot over it would be out of proportion. The warning names
+   * what does not happen so nobody waits for it.
+   *
+   * @param workflowModuleId The workflow module ID
+   * @param bpmnProcessId The BPMN process ID
+   */
+  private void warnAboutUnservedWorkflowEndedHandlers(
+      final String workflowModuleId,
+      final String bpmnProcessId) {
+
+    if ((workflowEndedInvoker == null) || !workflowEndedInvoker
+        .workflowEndedHandlerExists(workflowModuleId, bpmnProcessId)) {
+      return;
+    }
+    log
+        .warn(
+            """
+                A @WorkflowEnded method serves BPMN process '{}' of workflow module '{}', but the \
+                Process-Engine-API adapter '{}' cannot report the end of a workflow: the API delivers \
+                tasks and has no notification about a process instance which ended. The workflow runs \
+                normally, the method is never called. Model an explicit task in front of the end \
+                event if the application has to act there, or run this workflow module on a BPMS \
+                whose adapter supports the notification.""",
+            bpmnProcessId,
+            workflowModuleId,
+            adapterId);
 
   }
 

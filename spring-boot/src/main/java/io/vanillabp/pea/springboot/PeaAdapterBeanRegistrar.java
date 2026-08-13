@@ -84,6 +84,11 @@ public class PeaAdapterBeanRegistrar implements BeanRegistrar {
                                             .forAdapter(adapterId));
                 deploymentService.setScoping(
                     supplierContext.bean(io.vanillabp.integration.adapter.spi.NameClashAvoidanceSupport.class));
+                deploymentService.setWorkflowEndedInvoker(
+                    supplierContext
+                        .beanProvider(
+                            io.vanillabp.integration.adapter.spi.workflowend.WorkflowEndedInvoker.class)
+                        .getIfAvailable());
                 return deploymentService;
               }));
 
