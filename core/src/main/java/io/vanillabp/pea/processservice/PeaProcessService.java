@@ -607,6 +607,7 @@ public class PeaProcessService<A> implements MigratableProcessService<A> {
 
   @Override
   public WorkflowAwareness awarenessOfWorkflow(
+      final io.vanillabp.integration.spi.AggregatePersistenceAware<A> aggregatePersistence,
       final Object workflowAggregateId) {
 
     // the Process-Engine-API offers NO way to probe a workflow's existence: there
@@ -629,7 +630,7 @@ public class PeaProcessService<A> implements MigratableProcessService<A> {
 
   /**
    * The START re-dispatch mitigation probe (story 25) - STRICTER contract than
-   * {@link #awarenessOfWorkflow(Object)}: the answer must NEVER be optimistic.
+   * {@link #awarenessOfWorkflow(io.vanillabp.integration.spi.AggregatePersistenceAware, Object)}: the answer must NEVER be optimistic.
    * The Process-Engine-API cannot probe a workflow's existence at all (GAPS.md
    * entry 11), so the honest answer is
    * {@link WorkflowAwareness#UNKNOWN_TO_BPMS}: the recovered start proceeds and
@@ -639,6 +640,7 @@ public class PeaProcessService<A> implements MigratableProcessService<A> {
    */
   @Override
   public WorkflowAwareness awarenessOfWorkflowForRedispatch(
+      final io.vanillabp.integration.spi.AggregatePersistenceAware<A> aggregatePersistence,
       final Object workflowAggregateId) {
 
     return WorkflowAwareness.UNKNOWN_TO_BPMS;

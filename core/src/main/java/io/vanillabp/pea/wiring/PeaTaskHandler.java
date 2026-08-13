@@ -148,7 +148,7 @@ public class PeaTaskHandler implements TaskHandler {
           workflowModuleId,
           bpmnProcessId,
           new PeaTaskInvocationContext(
-              plainTaskDefinition(bpmnProcessId), String
+              adapterId, plainTaskDefinition(bpmnProcessId), String
                   .valueOf(aggregateId), taskId, payload, taskInformation.getMeta().get(META_VERSION_TAG)));
     } catch (final Exception e) {
       // the core rolled the local transaction back - fail the task so the
@@ -305,18 +305,32 @@ public class PeaTaskHandler implements TaskHandler {
      */
     private final String processVersion;
 
+    /**
+     * The adapter delivering this task (story 54).
+     */
+    private final String adapterId;
+
     PeaTaskInvocationContext(
+        final String adapterId,
         final String taskDefinition,
         final String workflowAggregateId,
         final String taskId,
         final Map<String, ?> payload,
         final String processVersion) {
 
+      this.adapterId = adapterId;
       this.taskDefinition = taskDefinition;
       this.workflowAggregateId = workflowAggregateId;
       this.taskId = taskId;
       this.payload = payload;
       this.processVersion = processVersion;
+
+    }
+
+    @Override
+    public String getAdapterId() {
+
+      return adapterId;
 
     }
 

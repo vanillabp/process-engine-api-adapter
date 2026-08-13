@@ -106,7 +106,7 @@ public class PeaUserTaskHandler implements TaskHandler {
           workflowModuleId,
           bpmnProcessId,
           new PeaUserTaskInvocationContext(
-              externalFormReference, String
+              adapterId, externalFormReference, String
                   .valueOf(aggregateId), taskId, payload, taskInformation
                       .getMeta()
                       .get(PeaTaskHandler.META_VERSION_TAG)));
@@ -178,18 +178,32 @@ public class PeaUserTaskHandler implements TaskHandler {
      */
     private final String processVersion;
 
+    /**
+     * The adapter delivering this notification (story 54).
+     */
+    private final String adapterId;
+
     PeaUserTaskInvocationContext(
+        final String adapterId,
         final String externalFormReference,
         final String workflowAggregateId,
         final String taskId,
         final Map<String, ?> payload,
         final String processVersion) {
 
+      this.adapterId = adapterId;
       this.processVersion = processVersion;
       this.externalFormReference = externalFormReference;
       this.workflowAggregateId = workflowAggregateId;
       this.taskId = taskId;
       this.payload = payload;
+
+    }
+
+    @Override
+    public String getAdapterId() {
+
+      return adapterId;
 
     }
 
