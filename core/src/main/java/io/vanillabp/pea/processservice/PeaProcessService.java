@@ -52,6 +52,24 @@ public class PeaProcessService<A> implements MigratableProcessService<A> {
 
   private final dev.bpmcrafters.processengineapi.correlation.CorrelationApi correlationApi;
 
+  /**
+   * The engine's signal API (story 42). Optional: an engine implementation without
+   * it leaves signals unsupported, which {@link #sendSignalPhaseTwo} says.
+   */
+  private dev.bpmcrafters.processengineapi.correlation.SignalApi signalApi;
+
+  /**
+   * Hands over the engine's signal API.
+   *
+   * @param signalApi The signal API or <code>null</code>
+   */
+  public void setSignalApi(
+      final dev.bpmcrafters.processengineapi.correlation.SignalApi signalApi) {
+
+    this.signalApi = signalApi;
+
+  }
+
   public PeaProcessService(
       final String adapterId,
       final StartProcessApi startProcessApi,
@@ -639,6 +657,99 @@ public class PeaProcessService<A> implements MigratableProcessService<A> {
     // no phase-one PREFLIGHT_CHECK is possible: CorrelateMessageCmd is FINAL and
     // cannot carry a non-default execution mode (GAPS.md entry 11) - like
     // workflow starts, phase one validates nothing against the engine
+
+  }
+
+  /**
+   * Pushing a changed workflow-aggregate is not supported (GAPS.md entry 18): the
+   * Process-Engine-API can update the payload of a TASK, never the payload of a
+   * running process instance. Phase one already refuses, so an application learns it
+   * where it made the call instead of somewhere behind a commit.
+   */
+  @Override
+  public void aggregateChangedPhaseOne(
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final io.vanillabp.integration.spi.AggregatePersistenceAware<A> aggregatePersistence,
+      final A workflowAggregate,
+      final String taskId) {
+
+    throw aggregateChangedNotSupported(workflowModuleId, bpmnProcessId);
+
+  }
+
+  @Override
+  public void aggregateChangedPhaseTwo(
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final io.vanillabp.integration.spi.AggregatePersistenceAware<A> aggregatePersistence,
+      final Object workflowAggregateId,
+      final String taskId) {
+
+    throw aggregateChangedNotSupported(workflowModuleId, bpmnProcessId);
+
+  }
+
+  private UnsupportedOperationException aggregateChangedNotSupported(
+      final String workflowModuleId,
+      final String bpmnProcessId) {
+
+    return new UnsupportedOperationException(
+        ("The Process-Engine-API adapter '%s' cannot push a changed workflow-aggregate of BPMN "
+            + "process '%s' (workflow module '%s') to the engine: the API updates the payload of a "
+            + "TASK, not of a running process instance (see GAPS.md entry 18). What the engine sees "
+            + "changes when VanillaBP completes a task of the workflow - model a task the workflow "
+            + "waits at, or run this workflow module on a BPMS whose adapter can update a running "
+            + "instance.")
+            .formatted(adapterId, bpmnProcessId, workflowModuleId));
+
+  }
+
+  /**
+   * The Process-Engine-API is treated as a REMOTE BPMS: nothing may happen before
+   * the caller's transaction committed, so the broadcast waits for phase two.
+   */
+  @Override
+  public void sendSignalPhaseOne(
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final String signalName) {
+
+  }
+
+  @Override
+  public void sendSignalPhaseTwo(
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final String signalName) {
+
+    if (signalApi == null) {
+      throw new UnsupportedOperationException(
+          ("The Process-Engine-API adapter '%s' was built without a SignalApi, so the signal '%s' of "
+              + "workflow module '%s' cannot be broadcast! Provide a SignalApi implementation of your "
+              + "engine to the adapter.")
+              .formatted(adapterId, signalName, workflowModuleId));
+    }
+
+    // no payload travels with a signal: unlike a message it is not addressed to a
+    // workflow, so there is no aggregate whose state could be meant
+    try {
+      signalApi
+          .sendSignal(new dev.bpmcrafters.processengineapi.correlation.SendSignalCmd(
+              scopedIdentifier(workflowModuleId, signalName), java.util.Map.of()))
+          .get();
+      log.info(
+          "PEA[{}]: broadcast signal '{}' of workflow module '{}'",
+          adapterId,
+          signalName,
+          workflowModuleId);
+    } catch (final InterruptedException e) {
+      Thread.currentThread().interrupt();
+    } catch (final java.util.concurrent.ExecutionException e) {
+      throw new IllegalStateException(
+          "PEA[%s]: broadcasting signal '%s' of workflow module '%s' failed"
+              .formatted(adapterId, signalName, workflowModuleId), e.getCause());
+    }
 
   }
 

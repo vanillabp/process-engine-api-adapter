@@ -106,7 +106,10 @@ public class PeaUserTaskHandler implements TaskHandler {
           workflowModuleId,
           bpmnProcessId,
           new PeaUserTaskInvocationContext(
-              externalFormReference, String.valueOf(aggregateId), taskId, payload));
+              externalFormReference, String
+                  .valueOf(aggregateId), taskId, payload, taskInformation
+                      .getMeta()
+                      .get(PeaTaskHandler.META_VERSION_TAG)));
       if (outcome.kind() == WorkflowTaskOutcome.Kind.BPMN_ERROR) {
         throw new IllegalStateException(
             ("The @WorkflowTask method notified about user task '%s' (BPMN process '%s' of "
@@ -169,16 +172,31 @@ public class PeaUserTaskHandler implements TaskHandler {
 
     private final Map<String, ?> payload;
 
+    /**
+     * The version tag of the deployed process definition or <code>null</code> - the
+     * Process-Engine-API knows no version number (story 48, GAPS.md).
+     */
+    private final String processVersion;
+
     PeaUserTaskInvocationContext(
         final String externalFormReference,
         final String workflowAggregateId,
         final String taskId,
-        final Map<String, ?> payload) {
+        final Map<String, ?> payload,
+        final String processVersion) {
 
+      this.processVersion = processVersion;
       this.externalFormReference = externalFormReference;
       this.workflowAggregateId = workflowAggregateId;
       this.taskId = taskId;
       this.payload = payload;
+
+    }
+
+    @Override
+    public String getProcessVersion() {
+
+      return processVersion;
 
     }
 

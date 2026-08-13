@@ -55,7 +55,7 @@ import dev.bpmcrafters.processengineapi.task.UserTaskCompletionApi;
  * A single instance implements all Process-Engine-API interfaces the adapter needs, so the
  * platform modules can inject the same bean wherever any of these interfaces is required.
  */
-public class InMemoryProcessEngine implements DeploymentApi, StartProcessApi, CorrelationApi, TaskSubscriptionApi, ServiceTaskCompletionApi, UserTaskCompletionApi {
+public class InMemoryProcessEngine implements DeploymentApi, StartProcessApi, CorrelationApi, dev.bpmcrafters.processengineapi.correlation.SignalApi, TaskSubscriptionApi, ServiceTaskCompletionApi, UserTaskCompletionApi {
 
   /**
    * A single recorded API invocation.
@@ -334,6 +334,31 @@ public class InMemoryProcessEngine implements DeploymentApi, StartProcessApi, Co
     return CompletableFuture.completedFuture(Empty.INSTANCE);
 
   }
+
+  // --- SignalApi ---
+
+  @Override
+  public CompletableFuture<Empty> sendSignal(
+      final dev.bpmcrafters.processengineapi.correlation.SendSignalCmd cmd) {
+
+    record("SignalApi", "sendSignal", cmd);
+    broadcastSignals.add(cmd.getSignalName());
+    return CompletableFuture.completedFuture(Empty.INSTANCE);
+
+  }
+
+  /**
+   * The signals broadcast so far - inspectable by tests.
+   *
+   * @return The signal names, in the order they were broadcast
+   */
+  public java.util.List<String> getBroadcastSignals() {
+
+    return java.util.List.copyOf(broadcastSignals);
+
+  }
+
+  private final java.util.List<String> broadcastSignals = new java.util.concurrent.CopyOnWriteArrayList<>();
 
   /**
    * A correlated message - inspectable by tests.

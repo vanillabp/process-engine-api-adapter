@@ -74,6 +74,14 @@ public class PeaUserTaskHandlerTest {
     }
 
     @Override
+    public boolean workflowAggregateHasProperty(
+        final String workflowModuleId,
+        final String bpmnProcessId,
+        final String propertyName) {
+      return false;
+    }
+
+    @Override
     public Object resolveWorkflowAggregateProperty(
         final String workflowModuleId,
         final String bpmnProcessId,

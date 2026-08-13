@@ -303,3 +303,85 @@ one scope and let a clash surface as the wrong process being started. `use-prefi
 without engine support, but the adapter has to rewrite the raw BPMN XML by element name
 (gap 1: no BPMN model type), which only covers the dialects it knows the element names of.
 A tenant or deployment-scope concept in the API would resolve it.
+
+## 16. The API never reports a process the engine started on its own
+
+**Needed by VanillaBP:** a workflow may be started by the BPMS instead of by the
+application - a timer, signal or conditional start event. VanillaBP then has to build the
+workflow aggregate before anything of the process runs, because everything downstream is
+addressed by it: tasks are routed by the aggregate's ID, expressions read its attributes.
+Camunda 7 offers a process-start execution listener for that, Camunda 8 an execution
+listener on the start event.
+
+**Offered by the Process-Engine-API:** nothing. `TaskSubscriptionApi` delivers TASKS, the
+`ProcessApi` starts processes on the application's behalf, and there is no subscription,
+event or callback saying "the engine just started this process". A start the application
+did not ask for is therefore invisible to it.
+
+**Consequence for the adapter:** `wireBpmn` rejects a process carrying such a start event
+with a guiding message naming the element and the alternatives (start the workflow from
+the application, or run the module on a BPMS whose adapter can serve it). The rejection
+runs through the deployment-failure policy, so a non-first-priority adapter degrades it to
+a warning. Deploying it silently would produce workflows without an aggregate: the first
+task delivery would fail with "no aggregate", one failure per instance and no way back. A
+"process started" notification (or a subscription for it) would resolve it.
+
+## 17. No notification when a process instance ends
+
+**Needed by VanillaBP:** an application may ask to be told that a workflow ended
+(`@WorkflowEnded`) instead of modelling a service task in front of every end event.
+Camunda 7 serves that with an execution listener at the process scope, Camunda 8 with an
+`end` execution listener on the process element.
+
+**Offered by the Process-Engine-API:** nothing. `TaskSubscriptionApi` subscribes to TASKS,
+`ProcessInformation` is what a start returns, and there is no event, callback or
+subscription reporting that an instance ended. Whether the engine behind the API knows it
+(Camunda 7 does) is invisible through the API.
+
+**Consequence for the adapter:** `wireBpmn` WARNs, naming the BPMN process and saying that
+the method will never be called. Deliberately not a deployment failure: unlike a start
+event the engine fires on its own - where the workflow could not run at all - the workflow
+runs perfectly well here and only the notification is missing, so failing the boot would be
+out of proportion. A "process instance ended" subscription in the API would resolve it.
+
+## 18. The payload of a running process instance cannot be updated
+
+**Needed by VanillaBP:** an application may tell the BPMS that the workflow aggregate
+changed (`aggregateChanged`, story 44) - so the engine sees the current state before it
+evaluates anything else. Camunda 7 writes the shared values at the workflow's or a task's
+scope, Camunda 8 sends `SetVariables` for the process instance respectively the element
+instance.
+
+**Offered by the Process-Engine-API:** payload modification for TASKS only.
+`UserTaskModificationApi` takes a `ChangePayloadModifyTaskCmd` (update, delete, clear) that
+addresses a task id; `CorrelateMessageCmd` carries a payload into a waiting message
+subscription. There is no command, and no API, whose subject is a running process instance.
+
+**Consequence for the adapter:** both phases of `aggregateChanged` throw with a guiding
+message naming the alternatives (complete a task of the workflow, which does push the
+shared values, or run the workflow module on a BPMS whose adapter can). Phase ONE already
+refuses, so the application sees the failure at its call instead of in an outbox dispatch
+after the commit. A payload-modification command for process instances would resolve it.
+
+## 19. No version of the deployed process definition
+
+**Needed by VanillaBP:** an application may serve several versions of a deployed process
+with different methods (`@WorkflowTask(version = ...)`, and likewise
+`@WorkflowStartedByBpms` and `@WorkflowEnded`, story 48). That needs two things from the
+BPMS: the version a delivered task belongs to, and - where the specification names a
+version TAG - which versions carry which tag.
+
+**Offered by the Process-Engine-API:** neither, as a contract. `TaskInformation` carries a
+free-form `meta` map, and the API names the key `processDefinitionVersionTag`
+(`CommonRestrictions`) - but nothing obliges an engine implementation to fill it, and there
+is no numeric version and no deployment order anywhere. `DeploymentInformation` reports a
+deployment key and time, not the versions the deployment produced, and no API answers "the
+versions of this process".
+
+**Consequence for the adapter:** the version tag from the task's meta map is reported where
+the engine supplies it, so `version = "release-2024"` works there; the adapter registers no
+version catalog, so a RANGE over tags (`>release-2024`, `v1.0..v2.0`) and any specification
+made of numbers matches nothing and is reported once with a guiding message. Applications
+which do not use the attribute are unaffected: a method without `version` keeps serving
+every version. A `processDefinitionVersion` in the task meta plus a "versions of this
+process" query would resolve it.

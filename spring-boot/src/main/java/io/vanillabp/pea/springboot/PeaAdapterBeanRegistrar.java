@@ -60,6 +60,12 @@ public class PeaAdapterBeanRegistrar implements BeanRegistrar {
                                             .bean(io.vanillabp.integration.adapter.spi.WorkflowAggregateSync.class));
                 processService.setScoping(
                     supplierContext.bean(io.vanillabp.integration.adapter.spi.NameClashAvoidanceSupport.class));
+                // optional: an engine implementation without a SignalApi leaves
+                // signals unsupported, which the process service says when asked
+                processService.setSignalApi(
+                    supplierContext
+                        .beanProvider(dev.bpmcrafters.processengineapi.correlation.SignalApi.class)
+                        .getIfAvailable());
                 return processService;
               }));
 
@@ -78,6 +84,11 @@ public class PeaAdapterBeanRegistrar implements BeanRegistrar {
                                             .forAdapter(adapterId));
                 deploymentService.setScoping(
                     supplierContext.bean(io.vanillabp.integration.adapter.spi.NameClashAvoidanceSupport.class));
+                deploymentService.setWorkflowEndedInvoker(
+                    supplierContext
+                        .beanProvider(
+                            io.vanillabp.integration.adapter.spi.workflowend.WorkflowEndedInvoker.class)
+                        .getIfAvailable());
                 return deploymentService;
               }));
 
