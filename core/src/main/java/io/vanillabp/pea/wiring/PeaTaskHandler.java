@@ -47,6 +47,16 @@ public class PeaTaskHandler implements TaskHandler {
    */
   public static final String META_BPMN_PROCESS_ID = "bpmnProcessId";
 
+  /**
+   * The {@link TaskInformation} meta key carrying the version tag of the deployed
+   * process definition, named by the Process-Engine-API
+   * ({@code CommonRestrictions.PROCESS_DEFINITION_VERSION_TAG}). The API has no
+   * numeric version, so this tag is all VanillaBP can match
+   * <code>&#64;WorkflowTask(version = ...)</code> against here - and only where the
+   * underlying engine supplies it (see GAPS.md).
+   */
+  public static final String META_VERSION_TAG = "processDefinitionVersionTag";
+
   private final String adapterId;
 
   private final String workflowModuleId;
@@ -138,7 +148,8 @@ public class PeaTaskHandler implements TaskHandler {
           workflowModuleId,
           bpmnProcessId,
           new PeaTaskInvocationContext(
-              plainTaskDefinition(bpmnProcessId), String.valueOf(aggregateId), taskId, payload));
+              plainTaskDefinition(bpmnProcessId), String
+                  .valueOf(aggregateId), taskId, payload, taskInformation.getMeta().get(META_VERSION_TAG)));
     } catch (final Exception e) {
       // the core rolled the local transaction back - fail the task so the
       // underlying engine applies its retry semantics
@@ -288,16 +299,31 @@ public class PeaTaskHandler implements TaskHandler {
 
     private final Map<String, ?> payload;
 
+    /**
+     * The version tag of the deployed process definition or <code>null</code> - the
+     * Process-Engine-API knows no version number (story 48, GAPS.md).
+     */
+    private final String processVersion;
+
     PeaTaskInvocationContext(
         final String taskDefinition,
         final String workflowAggregateId,
         final String taskId,
-        final Map<String, ?> payload) {
+        final Map<String, ?> payload,
+        final String processVersion) {
 
       this.taskDefinition = taskDefinition;
       this.workflowAggregateId = workflowAggregateId;
       this.taskId = taskId;
       this.payload = payload;
+      this.processVersion = processVersion;
+
+    }
+
+    @Override
+    public String getProcessVersion() {
+
+      return processVersion;
 
     }
 

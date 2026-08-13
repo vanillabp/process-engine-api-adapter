@@ -362,3 +362,26 @@ message naming the alternatives (complete a task of the workflow, which does pus
 shared values, or run the workflow module on a BPMS whose adapter can). Phase ONE already
 refuses, so the application sees the failure at its call instead of in an outbox dispatch
 after the commit. A payload-modification command for process instances would resolve it.
+
+## 19. No version of the deployed process definition
+
+**Needed by VanillaBP:** an application may serve several versions of a deployed process
+with different methods (`@WorkflowTask(version = ...)`, and likewise
+`@WorkflowStartedByBpms` and `@WorkflowEnded`, story 48). That needs two things from the
+BPMS: the version a delivered task belongs to, and - where the specification names a
+version TAG - which versions carry which tag.
+
+**Offered by the Process-Engine-API:** neither, as a contract. `TaskInformation` carries a
+free-form `meta` map, and the API names the key `processDefinitionVersionTag`
+(`CommonRestrictions`) - but nothing obliges an engine implementation to fill it, and there
+is no numeric version and no deployment order anywhere. `DeploymentInformation` reports a
+deployment key and time, not the versions the deployment produced, and no API answers "the
+versions of this process".
+
+**Consequence for the adapter:** the version tag from the task's meta map is reported where
+the engine supplies it, so `version = "release-2024"` works there; the adapter registers no
+version catalog, so a RANGE over tags (`>release-2024`, `v1.0..v2.0`) and any specification
+made of numbers matches nothing and is reported once with a guiding message. Applications
+which do not use the attribute are unaffected: a method without `version` keeps serving
+every version. A `processDefinitionVersion` in the task meta plus a "versions of this
+process" query would resolve it.

@@ -44,6 +44,8 @@ public class PeaTaskHandlerTest {
         final String workflowModuleId) {
     }
 
+    String invokedProcessVersion;
+
     @Override
     public WorkflowTaskOutcome invokeWorkflowTask(
         final String workflowModuleId,
@@ -51,6 +53,7 @@ public class PeaTaskHandlerTest {
         final TaskInvocationContext context) {
 
       invokedBpmnProcessId = bpmnProcessId;
+      invokedProcessVersion = context.getProcessVersion();
       return WorkflowTaskOutcome.completed();
 
     }
@@ -153,6 +156,31 @@ public class PeaTaskHandlerTest {
         reason.contains(PeaTaskHandler.META_BPMN_PROCESS_ID) && reason.contains("ProcessA"),
         "expected a guiding failure naming the meta key and the candidate processes but got: "
             + reason);
+
+  }
+
+  @Test
+  public void theVersionTagOfTheTaskMetaIsReported() {
+
+    // story 48 / GAPS 19: the Process-Engine-API knows no version NUMBER, so the
+    // version tag from the task's meta map is all a version specification can be
+    // matched against - and only where the engine behind the API supplies it
+    engine.getOpenTaskIds().add("task-4");
+    handler(List.of("OnlyProcess"))
+        .accept(
+            new TaskInformation("task-4", Map.of(PeaTaskHandler.META_VERSION_TAG, "release-2024")),
+            Map.of("id", "4711"));
+
+    assertEquals("release-2024", invoker.invokedProcessVersion);
+
+    // without the meta entry no version is reported, which matches every method
+    engine.getOpenTaskIds().add("task-5");
+    handler(List.of("OnlyProcess"))
+        .accept(
+            new TaskInformation("task-5", Map.of()),
+            Map.of("id", "4711"));
+
+    assertEquals(null, invoker.invokedProcessVersion);
 
   }
 

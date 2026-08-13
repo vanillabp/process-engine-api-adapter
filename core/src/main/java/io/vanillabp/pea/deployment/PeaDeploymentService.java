@@ -566,6 +566,11 @@ public class PeaDeploymentService implements AdapterDeploymentService<PeaBpmnMod
     // any wired process are a defect (per-module check, honors the policy)
     workflowTaskInvoker.validateNoUnwiredWorkflowTaskMethods(workflowModuleId);
 
+    // story 48: this adapter registers no version catalog (the API cannot be asked
+    // which versions of a process exist - GAPS.md 19), so this call only reports the
+    // version tags the application names and nobody can resolve
+    workflowTaskInvoker.resolveProcessVersions(workflowModuleId);
+
   }
 
   @Override
