@@ -383,5 +383,7 @@ the engine supplies it, so `version = "release-2024"` works there; the adapter r
 version catalog, so a RANGE over tags (`>release-2024`, `v1.0..v2.0`) and any specification
 made of numbers matches nothing and is reported once with a guiding message. Applications
 which do not use the attribute are unaffected: a method without `version` keeps serving
-every version. A `processDefinitionVersion` in the task meta plus a "versions of this
-process" query would resolve it.
+every version, and where the engine supplies no tag it is the only kind of method a
+delivery reaches at all - a task whose every method names versions fails the delivery
+with a message saying so. A `processDefinitionVersion` in the task meta plus a "versions
+of this process" query would resolve it.
