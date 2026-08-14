@@ -243,6 +243,15 @@ public class PeaUserTaskHandler implements TaskHandler {
     }
 
     @Override
+    public String getDeliveryId() {
+
+      // the user task's ID as the engine reports it - the same on a redelivery of the
+      // notification, different for the next user task (story 51)
+      return taskId;
+
+    }
+
+    @Override
     public Object getTaskParameter(
         final String name) {
 

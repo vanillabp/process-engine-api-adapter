@@ -314,6 +314,17 @@ public class PeaProcessService<A> implements MigratableProcessService<A> {
   }
 
   @Override
+  public boolean deliversTasksAtLeastOnce() {
+
+    // subscriptions report a task as completed AFTER the local transaction was
+    // committed, so an engine which did not learn the result delivers the task again
+    // (story 51). The identity across such a redelivery is the TASK ID the engine
+    // reports, which every invocation context carries.
+    return true;
+
+  }
+
+  @Override
   public WorkflowAwareness awarenessOfTask(
       final Object workflowAggregateId,
       final String taskId) {

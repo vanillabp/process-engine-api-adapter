@@ -363,6 +363,17 @@ public class PeaTaskHandler implements TaskHandler {
     }
 
     @Override
+    public String getDeliveryId() {
+
+      // the engine's task ID identifies this piece of work: a task redelivered
+      // because the engine never learned the result arrives under the same ID, a new
+      // activation of the element under a different one - the identity the core
+      // remembers a processed delivery by (story 51)
+      return taskId;
+
+    }
+
+    @Override
     public Object getTaskParameter(
         final String name) {
 
