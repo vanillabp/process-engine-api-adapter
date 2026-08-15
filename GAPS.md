@@ -387,3 +387,26 @@ every version, and where the engine supplies no tag it is the only kind of metho
 delivery reaches at all - a task whose every method names versions fails the delivery
 with a message saying so. A `processDefinitionVersion` in the task meta plus a "versions
 of this process" query would resolve it.
+
+## 20. No way to check the older versions the engine still holds
+
+**Needed by VanillaBP:** a BPMS keeps every version of a process it was ever given, and
+workflows keep running on them, while the application brings only its newest model. Story
+57 therefore asks each BPMS at startup which versions it still holds, reads the models of
+the older ones and reports the task definitions no `@WorkflowTask` method serves any more -
+before those workflows run into an incident. It also asks how many workflows still run on a
+version, which decides whether a finding is a warning or a defect, and which tells an
+application fading a version out (`outfaded-versions`) what it leaves behind.
+
+**Offered by the Process-Engine-API:** nothing of it. There is no version notion at all
+(see gap 19), and `DeploymentInformation` names a deployment, not the processes or models
+it produced, so neither "which versions exist" nor "what does version X look like" can be
+asked. Counting the workflows of a version needs the version first, so it falls with the
+same gap.
+
+**Consequence for the adapter:** the adapter reports no deployed version, which switches
+the whole check off for it - the core skips a BPMS which counts no versions rather than
+guessing. Outfading is equally without effect here, since there is no version to name. An
+application on this adapter learns about a dropped task definition the way it did before:
+when a workflow reaches it. A `processDefinitionVersion` per task plus a query for the
+deployed versions and their models would close gap 19 and this one together.
