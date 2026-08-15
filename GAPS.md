@@ -410,3 +410,24 @@ guessing. Outfading is equally without effect here, since there is no version to
 application on this adapter learns about a dropped task definition the way it did before:
 when a workflow reaches it. A `processDefinitionVersion` per task plus a query for the
 deployed versions and their models would close gap 19 and this one together.
+
+## 21. Models cannot be read, so concurrent tokens cannot be reported
+
+**Needed by VanillaBP:** as soon as a BPMN process can hold more than one token, two
+branches write the same workflow aggregate, and without a version attribute one of the two
+writes is lost silently (story 59). VanillaBP therefore asks each adapter, while it wires a
+process, which elements can put a second token into a running workflow - a non-interrupting
+boundary event, a forking parallel or inclusive gateway, a parallel multi-instance activity,
+a non-interrupting event subprocess. The core turns that into one guiding WARN per process
+where the aggregate has no version attribute.
+
+**Offered by the Process-Engine-API:** nothing to read a model with (see gap 1 and gap 12).
+The adapter never holds a BPMN model, neither the one being deployed nor the one the engine
+runs, so there is nothing to search for those elements.
+
+**Consequence for the adapter:** it reports nothing, which switches the hint off for
+applications on this adapter - the core stays silent rather than guessing from an absent
+answer. Everything else of story 59 works here, because it does not depend on the model:
+VanillaBP owns the transaction of a task, recognizes a version conflict in its commit, logs
+the guiding message and passes the exception on to this adapter. What the engine behind the
+Process-Engine-API does with the failed task is its own business, as with every failure.
