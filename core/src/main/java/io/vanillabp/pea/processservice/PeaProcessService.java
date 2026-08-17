@@ -721,12 +721,38 @@ public class PeaProcessService<A> implements MigratableProcessService<A> {
   /**
    * The Process-Engine-API is treated as a REMOTE BPMS: nothing may happen before
    * the caller's transaction committed, so the broadcast waits for phase two.
+   * <p>
+   * What phase one CAN answer is whether this adapter is able to broadcast at all:
+   * without a {@code SignalApi} phase two can only fail, and it would fail behind the
+   * commit, over and over, until the outbox entry is blocked. The application learns
+   * it where it made the call instead.
    */
   @Override
   public void sendSignalPhaseOne(
       final String workflowModuleId,
       final String bpmnProcessId,
       final String signalName) {
+
+    if (signalApi == null) {
+      throw signalNotSupported(workflowModuleId, signalName);
+    }
+
+  }
+
+  /**
+   * @param workflowModuleId The workflow module ID
+   * @param signalName The signal which cannot be broadcast
+   * @return The failure telling an application that this adapter has no SignalApi
+   */
+  private UnsupportedOperationException signalNotSupported(
+      final String workflowModuleId,
+      final String signalName) {
+
+    return new UnsupportedOperationException(
+        ("The Process-Engine-API adapter '%s' was built without a SignalApi, so the signal '%s' of "
+            + "workflow module '%s' cannot be broadcast! Provide a SignalApi implementation of your "
+            + "engine to the adapter.")
+            .formatted(adapterId, signalName, workflowModuleId));
 
   }
 
@@ -737,11 +763,7 @@ public class PeaProcessService<A> implements MigratableProcessService<A> {
       final String signalName) {
 
     if (signalApi == null) {
-      throw new UnsupportedOperationException(
-          ("The Process-Engine-API adapter '%s' was built without a SignalApi, so the signal '%s' of "
-              + "workflow module '%s' cannot be broadcast! Provide a SignalApi implementation of your "
-              + "engine to the adapter.")
-              .formatted(adapterId, signalName, workflowModuleId));
+      throw signalNotSupported(workflowModuleId, signalName);
     }
 
     // no payload travels with a signal: unlike a message it is not addressed to a
