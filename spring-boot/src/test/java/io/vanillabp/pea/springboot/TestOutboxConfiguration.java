@@ -25,4 +25,38 @@ public class TestOutboxConfiguration {
 
   }
 
+  /**
+   * The unit of work of the application (story 70 of the platform): these contexts have no
+   * transactional persistence at all, and a two-phase adapter needs a transaction to write
+   * the aggregate and the outbox entry in. A pass-through runner is enough - nothing is
+   * persisted here, what these tests pin is the wiring.
+   *
+   * @return The runner
+   */
+  @Bean
+  public io.vanillabp.integration.spi.TransactionRunner testTransactionRunner() {
+
+    return new io.vanillabp.integration.spi.TransactionRunner() {
+
+      @Override
+      public <T> T requireNew(
+          final java.util.function.Supplier<T> work) {
+        return work.get();
+      }
+
+      @Override
+      public <T> T inCurrent(
+          final java.util.function.Supplier<T> work) {
+        return work.get();
+      }
+
+      @Override
+      public boolean isRollbackOnly() {
+        return false;
+      }
+
+    };
+
+  }
+
 }
