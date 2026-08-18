@@ -658,6 +658,39 @@ public class PeaProcessService<A> implements MigratableProcessService<A> {
 
   }
 
+  /**
+   * Whether repeating a failed phase-two operation may succeed (story 73).
+   * <p>
+   * The Process-Engine-API declares no typed exceptions: whatever an engine
+   * implementation throws arrives wrapped in an {@link java.util.concurrent.ExecutionException},
+   * and "the engine is unreachable" looks exactly like "the engine refused". So only one
+   * family can be classified, and it is the one this adapter throws itself: where the API
+   * cannot do what VanillaBP asks - a signal without a {@code SignalApi}, pushing a changed
+   * aggregate - every attempt ends the same way, and the outbox entry is blocked at once
+   * instead of being retried until its attempts are used up.
+   * <p>
+   * Everything else stays repeatable, which is the safe default of the SPI.
+   *
+   * @param failure What the phase-two operation threw
+   * @return Whether repeating the operation may succeed
+   */
+  @Override
+  public boolean isPhaseTwoFailureRepeatable(
+      final Throwable failure) {
+
+    var candidate = failure;
+    while (candidate != null) {
+      if (candidate instanceof UnsupportedOperationException) {
+        return false;
+      }
+      candidate = candidate.getCause() == candidate
+          ? null
+          : candidate.getCause();
+    }
+    return true;
+
+  }
+
   @Override
   public void correlateMessagePhaseOne(
       final String workflowModuleId,
