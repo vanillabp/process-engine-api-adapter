@@ -216,10 +216,29 @@ itself: `UnsupportedOperationException`, raised where the API cannot do what Van
 signal without a `SignalApi`, pushing a changed aggregate into a running instance). Those
 entries are blocked at once. Everything else is repeated, which is the safe default.
 
-One thing this adapter does NOT do yet: the phase-two completion of a task swallows every
-failure as "the task is gone" and consumes the outbox entry, so an engine which is merely
-unreachable loses the completion with nothing but a WARN line. The API cannot tell the two
-apart, so the fix is a decision about behaviour rather than a classification - story 86.
+### A failure of phase two is reported, not dropped (story 86)
+
+Until story 86 the phase-two completion of a task caught every failure, wrote a WARN line
+saying the task was gone and consumed the outbox entry. That is right for the case it was
+written for - a repeated completion of a task the engine already finished, the accepted
+at-least-once residual of every remote BPMS - and wrong for every other, because this API
+reports no typed errors: an engine which is unreachable answers exactly like one which
+finished the task meanwhile. The completion was therefore lost whenever the second case was
+real, and the workflow kept waiting at a task the application considered done.
+
+Every phase-two operation of the `ProcessService` now lets the failure through:
+completing and canceling a task, the same for a user task, and correlating a message. The
+outbox repeats them and blocks the entry when the attempts are used up, so:
+
+- an unreachable engine costs retries and ends in a blocked entry naming the cause,
+- a genuinely finished task costs the same retries and ends in a blocked entry as well.
+
+The second case is the price of never losing the first. Its entry is harmless: look at the
+cause, then remove the entry. The message of the failure says so.
+
+The DELIVERY path is unchanged: when the engine hands this adapter a task and the completion
+afterwards fails, the engine redelivers the task, which is the recovery this adapter relies
+on. Nothing is lost there without the outbox.
 
 ## Build
 
