@@ -70,6 +70,26 @@ public class PeaProcessService<A> implements MigratableProcessService<A> {
 
   }
 
+  /**
+   * Runs a phase-one check right before the transaction of the workflow aggregate commits
+   * (story 87, platform-supplied). Optional: without it the checks run when the application
+   * calls, which is what this adapter did before - correct, with a wider window between the
+   * check and the phase-two dispatch.
+   */
+  private io.vanillabp.integration.adapter.spi.PreCommitRegistrar preCommitRegistrar;
+
+  /**
+   * Hands over the platform's pre-commit hook.
+   *
+   * @param preCommitRegistrar The hook or <code>null</code>
+   */
+  public void setPreCommitRegistrar(
+      final io.vanillabp.integration.adapter.spi.PreCommitRegistrar preCommitRegistrar) {
+
+    this.preCommitRegistrar = preCommitRegistrar;
+
+  }
+
   public PeaProcessService(
       final String adapterId,
       final StartProcessApi startProcessApi,
@@ -363,10 +383,13 @@ public class PeaProcessService<A> implements MigratableProcessService<A> {
       final A workflowAggregate,
       final String taskId) {
 
-    // the non-advancing phase-one check: a PREFLIGHT_CHECK completion validates
-    // the task still exists so the local transaction can abort early
-    preflight(new io.vanillabp.pea.wiring.PeaCompleteTaskCmd(
-        taskId, dev.bpmcrafters.processengineapi.ExecutionMode.PREFLIGHT_CHECK), taskId, "completing");
+    // the non-advancing phase-one check: a PREFLIGHT_CHECK completion validates the task
+    // still exists so the local transaction can abort early - run right before the commit
+    // (story 87), which keeps the window to the phase-two dispatch small
+    beforeCommit(
+        aggregatePersistence,
+        () -> preflight(new io.vanillabp.pea.wiring.PeaCompleteTaskCmd(
+            taskId, dev.bpmcrafters.processengineapi.ExecutionMode.PREFLIGHT_CHECK), taskId, "completing"));
 
   }
 
@@ -379,8 +402,31 @@ public class PeaProcessService<A> implements MigratableProcessService<A> {
       final String taskId,
       final String bpmnErrorCode) {
 
-    preflight(new io.vanillabp.pea.wiring.PeaCompleteTaskCmd(
-        taskId, dev.bpmcrafters.processengineapi.ExecutionMode.PREFLIGHT_CHECK), taskId, "canceling");
+    beforeCommit(
+        aggregatePersistence,
+        () -> preflight(new io.vanillabp.pea.wiring.PeaCompleteTaskCmd(
+            taskId, dev.bpmcrafters.processengineapi.ExecutionMode.PREFLIGHT_CHECK), taskId, "canceling"));
+
+  }
+
+  /**
+   * Hands a phase-one check to the platform's pre-commit hook (story 87), so it runs right
+   * before the transaction of the workflow aggregate commits instead of when the application
+   * called - the later the check, the smaller the window in which its answer goes stale
+   * before phase two acts on it. Without a hook the check runs immediately.
+   *
+   * @param aggregatePersistence The persistence of the aggregate whose transaction is meant
+   * @param check The check to run
+   */
+  private void beforeCommit(
+      final AggregatePersistenceAware<A> aggregatePersistence,
+      final Runnable check) {
+
+    if ((preCommitRegistrar == null) || (aggregatePersistence == null)) {
+      check.run();
+      return;
+    }
+    preCommitRegistrar.beforeCommit(aggregatePersistence.getAggregateClass(), check);
 
   }
 
@@ -510,7 +556,7 @@ public class PeaProcessService<A> implements MigratableProcessService<A> {
       final A workflowAggregate,
       final String taskId) {
 
-    preflightUserTask(taskId, "completing user");
+    beforeCommit(aggregatePersistence, () -> preflightUserTask(taskId, "completing user"));
 
   }
 
@@ -523,7 +569,7 @@ public class PeaProcessService<A> implements MigratableProcessService<A> {
       final String taskId,
       final String bpmnErrorCode) {
 
-    preflightUserTask(taskId, "canceling user");
+    beforeCommit(aggregatePersistence, () -> preflightUserTask(taskId, "canceling user"));
 
   }
 
