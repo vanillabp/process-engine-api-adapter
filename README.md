@@ -206,6 +206,25 @@ replaces the mock with a real Process-Engine-API implementation.
   underlying BPMS"), so there are no secondary history contexts and call activities cannot be
   drilled into; call-activity definitions are not reported either (no BPMN model type).
 
+## When a phase-one check runs (story 87)
+
+The phase-one checks of this adapter are `PREFLIGHT_CHECK` completions: they validate that
+the task still exists and never advance the process. They used to run when the application
+called; now the adapter hands them to the platform's pre-commit hook, so they run right before
+the transaction of the workflow aggregate commits. The later the check, the smaller the window
+in which its answer goes stale before phase two acts on it, and a failing check still aborts
+the caller's transaction - that is the whole point of asking in phase one.
+
+The platform resolves the transaction runner of the aggregate first, so the check hooks into
+the unit of work the aggregate is actually stored in - which since story 70 may be one the
+application brought. Where no hook is available the check runs immediately, the behaviour this
+adapter had before.
+
+Correlating a message and broadcasting a signal still have no preflight, and the reason is not
+a missing query: `CorrelateMessageCmd` and `SendSignalCmd` are Kotlin `data class`es, hence
+final, so the `PREFLIGHT_CHECK` execution mode cannot be transported. Task commands are `open`
+classes, which is why the checks above exist at all.
+
 ## Which phase-two failures are repeated (story 73)
 
 The phase-two outbox repeats a failed operation until the entry is blocked. The

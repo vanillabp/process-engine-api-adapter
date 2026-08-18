@@ -60,6 +60,10 @@ public class PeaAdapterBeanRegistrar implements BeanRegistrar {
                                             .bean(io.vanillabp.integration.adapter.spi.WorkflowAggregateSync.class));
                 processService.setScoping(
                     supplierContext.bean(io.vanillabp.integration.adapter.spi.NameClashAvoidanceSupport.class));
+                // story 87: phase-one checks run right before the transaction of the
+                // aggregate commits, in whatever unit of work that is
+                processService.setPreCommitRegistrar(
+                    supplierContext.bean(io.vanillabp.integration.adapter.spi.PreCommitRegistrar.class));
                 // optional: an engine implementation without a SignalApi leaves
                 // signals unsupported, which the process service says when asked
                 processService.setSignalApi(

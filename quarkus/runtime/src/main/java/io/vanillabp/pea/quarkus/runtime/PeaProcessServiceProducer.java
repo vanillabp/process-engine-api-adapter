@@ -37,7 +37,8 @@ public class PeaProcessServiceProducer {
       @jakarta.enterprise.inject.Any final jakarta.enterprise.inject.Instance<dev.bpmcrafters.processengineapi.correlation.SignalApi> signalApi,
       final io.vanillabp.pea.deployment.PeaDeployedProcessesRegistry deployedProcessesRegistry,
       final io.vanillabp.integration.adapter.spi.WorkflowAggregateSync aggregateSync,
-      final io.vanillabp.integration.adapter.spi.NameClashAvoidanceSupport scoping) {
+      final io.vanillabp.integration.adapter.spi.NameClashAvoidanceSupport scoping,
+      final io.vanillabp.integration.adapter.spi.PreCommitRegistrar preCommitRegistrar) {
 
     // ONE bean of type List with one instance PER configured adapter id of this
     // adapter's type (a CDI producer cannot yield N element beans for N
@@ -57,6 +58,9 @@ public class PeaProcessServiceProducer {
                   adapterId, startProcessApi, serviceTaskCompletionApi, userTaskCompletionApi, correlationApi, deployedProcessesRegistry
                       .forAdapter(adapterId), aggregateSync);
               processService.setScoping(scoping);
+              // story 87: phase-one checks run right before the transaction of the
+              // aggregate commits, in whatever unit of work that is
+              processService.setPreCommitRegistrar(preCommitRegistrar);
               // optional: an engine implementation without a SignalApi leaves
               // signals unsupported, which the process service says when asked
               processService
