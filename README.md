@@ -219,7 +219,7 @@ entries are blocked at once. Everything else is repeated, which is the safe defa
 One thing this adapter does NOT do yet: the phase-two completion of a task swallows every
 failure as "the task is gone" and consumes the outbox entry, so an engine which is merely
 unreachable loses the completion with nothing but a WARN line. The API cannot tell the two
-apart, so the fix is a decision about behaviour rather than a classification - story 84.
+apart, so the fix is a decision about behaviour rather than a classification - story 86.
 
 ## Build
 
