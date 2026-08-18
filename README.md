@@ -206,6 +206,21 @@ replaces the mock with a real Process-Engine-API implementation.
   underlying BPMS"), so there are no secondary history contexts and call activities cannot be
   drilled into; call-activity definitions are not reported either (no BPMN model type).
 
+## Which phase-two failures are repeated (story 73)
+
+The phase-two outbox repeats a failed operation until the entry is blocked. The
+Process-Engine-API declares no typed exceptions - whatever an engine implementation throws
+arrives wrapped in an `ExecutionException`, and "the engine is unreachable" looks exactly like
+"the engine refused". So one family is classifiable, and it is the one this adapter throws
+itself: `UnsupportedOperationException`, raised where the API cannot do what VanillaBP asks (a
+signal without a `SignalApi`, pushing a changed aggregate into a running instance). Those
+entries are blocked at once. Everything else is repeated, which is the safe default.
+
+One thing this adapter does NOT do yet: the phase-two completion of a task swallows every
+failure as "the task is gone" and consumes the outbox entry, so an engine which is merely
+unreachable loses the completion with nothing but a WARN line. The API cannot tell the two
+apart, so the fix is a decision about behaviour rather than a classification - story 84.
+
 ## Build
 
 Prerequisites installed into the local Maven repository first (build order):
