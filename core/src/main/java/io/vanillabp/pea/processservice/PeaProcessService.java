@@ -430,13 +430,11 @@ public class PeaProcessService<A> implements MigratableProcessService<A> {
           workflowModuleId);
     } catch (final InterruptedException e) {
       Thread.currentThread().interrupt();
+      throw phaseTwoFailed(
+          "completing task '%s'".formatted(taskId), "task", workflowModuleId, bpmnProcessId, e);
     } catch (final java.util.concurrent.ExecutionException e) {
-      // stale outbox entry - the at-least-once residual, the entry is consumed
-      log.warn(
-          "PEA[{}]: task '{}' is gone - skipping the redelivered phase-two completion",
-          adapterId,
-          taskId,
-          e.getCause());
+      throw phaseTwoFailed(
+          "completing task '%s'".formatted(taskId), "task", workflowModuleId, bpmnProcessId, e.getCause());
     }
 
   }
@@ -468,12 +466,11 @@ public class PeaProcessService<A> implements MigratableProcessService<A> {
           workflowModuleId);
     } catch (final InterruptedException e) {
       Thread.currentThread().interrupt();
+      throw phaseTwoFailed(
+          "canceling task '%s'".formatted(taskId), "task", workflowModuleId, bpmnProcessId, e);
     } catch (final java.util.concurrent.ExecutionException e) {
-      log.warn(
-          "PEA[{}]: task '{}' is gone - skipping the redelivered phase-two cancellation",
-          adapterId,
-          taskId,
-          e.getCause());
+      throw phaseTwoFailed(
+          "canceling task '%s'".formatted(taskId), "task", workflowModuleId, bpmnProcessId, e.getCause());
     }
 
   }
@@ -573,12 +570,11 @@ public class PeaProcessService<A> implements MigratableProcessService<A> {
           workflowModuleId);
     } catch (final InterruptedException e) {
       Thread.currentThread().interrupt();
+      throw phaseTwoFailed(
+          "completing user task '%s'".formatted(taskId), "user task", workflowModuleId, bpmnProcessId, e);
     } catch (final java.util.concurrent.ExecutionException e) {
-      log.warn(
-          "PEA[{}]: user task '{}' is gone - skipping the redelivered phase-two completion",
-          adapterId,
-          taskId,
-          e.getCause());
+      throw phaseTwoFailed(
+          "completing user task '%s'".formatted(taskId), "user task", workflowModuleId, bpmnProcessId, e.getCause());
     }
 
   }
@@ -606,12 +602,11 @@ public class PeaProcessService<A> implements MigratableProcessService<A> {
           workflowModuleId);
     } catch (final InterruptedException e) {
       Thread.currentThread().interrupt();
+      throw phaseTwoFailed(
+          "canceling user task '%s'".formatted(taskId), "user task", workflowModuleId, bpmnProcessId, e);
     } catch (final java.util.concurrent.ExecutionException e) {
-      log.warn(
-          "PEA[{}]: user task '{}' is gone - skipping the redelivered phase-two cancellation",
-          adapterId,
-          taskId,
-          e.getCause());
+      throw phaseTwoFailed(
+          "canceling user task '%s'".formatted(taskId), "user task", workflowModuleId, bpmnProcessId, e.getCause());
     }
 
   }
@@ -655,6 +650,44 @@ public class PeaProcessService<A> implements MigratableProcessService<A> {
       final Object workflowAggregateId) {
 
     return WorkflowAwareness.UNKNOWN_TO_BPMS;
+
+  }
+
+  /**
+   * What a failed phase-two operation throws (story 86).
+   * <p>
+   * The Process-Engine-API declares no typed exceptions, so this adapter cannot tell "the
+   * task is gone" - the accepted at-least-once residual - from "the engine is unreachable".
+   * It used to assume the first and consume the outbox entry with a WARN line, which lost
+   * the operation whenever the second was true. Now every failure reaches the outbox: it
+   * repeats and finally blocks the entry, so a repeated operation on something the engine
+   * already finished costs a retry series and a blocked entry, while an operation is never
+   * silently dropped again.
+   *
+   * @param operationDescription What was attempted
+   * @param subject What it was attempted on, as a noun ("task", "user task", "message")
+   * @param workflowModuleId The workflow module
+   * @param bpmnProcessId The BPMN process
+   * @param cause What the API answered
+   * @return The failure to throw
+   */
+  private IllegalStateException phaseTwoFailed(
+      final String operationDescription,
+      final String subject,
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final Throwable cause) {
+
+    return new IllegalStateException(
+        """
+            Phase two of %s failed for BPMN process '%s' of workflow module '%s' (adapter '%s')! \
+            The Process-Engine-API reports no typed errors, so this adapter cannot tell an engine \
+            which is unreachable from one which finished this %s meanwhile - the operation is \
+            therefore repeated by the outbox and finally blocked, instead of being dropped with a \
+            log line. A blocked entry on a %s the engine finished already is the harmless case: \
+            look at the cause, then remove the entry."""
+            .formatted(
+                operationDescription, bpmnProcessId, workflowModuleId, adapterId, subject, subject), cause);
 
   }
 
@@ -857,16 +890,13 @@ public class PeaProcessService<A> implements MigratableProcessService<A> {
           workflowModuleId);
     } catch (final InterruptedException e) {
       Thread.currentThread().interrupt();
+      throw phaseTwoFailed(
+          "correlating message '%s' (correlation key '%s')".formatted(messageName, correlationKey),
+          "message", workflowModuleId, bpmnProcessId, e);
     } catch (final java.util.concurrent.ExecutionException e) {
-      // stale outbox entry - the subscription disappeared between the
-      // dispatch-time probe and this correlation (at-least-once residual)
-      log.warn(
-          "PEA[{}]: message '{}' (correlation key '{}') could not be correlated anymore - "
-              + "skipping the redelivered phase-two correlation",
-          adapterId,
-          messageName,
-          correlationKey,
-          e.getCause());
+      throw phaseTwoFailed(
+          "correlating message '%s' (correlation key '%s')".formatted(messageName, correlationKey),
+          "message", workflowModuleId, bpmnProcessId, e.getCause());
     }
 
   }
