@@ -1,0 +1,19 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["github>vanillabp/renovate-config"],
+  "timezone": "Europe/Vienna",
+  "packageRules": [
+    {
+      "description": "VanillaBP and the adapters follow the framework, not Renovate: their versions are bumped when a release is cut, and while they are snapshots there is nothing to look up.",
+      "matchPackageNames": ["/^io\\.vanillabp/", "/^org\\.camunda\\.community\\.vanillabp/"],
+      "enabled": false
+    },
+    {
+      "description": "The Process-Engine-API is the contract this adapter is compiled against, and the README names the range it was tested against. A new minor can change that contract, so it comes as a PR to look at and to carry into the README, not as an automerge.",
+      "matchPackageNames": ["dev.bpm-crafters.process-engine-api:*"],
+      "matchUpdateTypes": ["minor", "major"],
+      "automerge": false,
+      "addLabels": ["needs-doc-update"]
+    }
+  ]
+}
