@@ -97,6 +97,21 @@ Parent (all modules are `2.0.0-SNAPSHOT`, groupId `io.vanillabp`):
 </dependency>
 ```
 
+## Supported Process-Engine-API version
+
+This adapter is built against `dev.bpm-crafters.process-engine-api` **1.7** and has no
+release lines, unlike the
+[Camunda 8 adapter](https://github.com/camunda-community-hub/vanillabp-camunda8-adapter#release-lines),
+whose artifacts carry the cluster minor in their version. A line only pays off where the
+engine a user runs is a remote service the adapter has to be compiled against, and where new
+minors keep arriving: with the Process-Engine-API the engine sits behind the API, and which
+engine that is stays the user's choice.
+
+What can change here is the API contract itself. A new minor of it therefore comes as a pull
+request to look at rather than as an automatic upgrade (`renovate.json`), and the version
+above is what has to be carried into this README with it. Which minors this adapter runs
+against is exactly the one named here.
+
 ## Configuration
 
 Configure the adapter as a VanillaBP adapter of type `process-engine-api`:
