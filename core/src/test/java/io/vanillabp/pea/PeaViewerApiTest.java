@@ -1,4 +1,4 @@
-package io.vanillabp.pea.springboot;
+package io.vanillabp.pea;
 
 import java.io.ByteArrayInputStream;
 import java.nio.charset.StandardCharsets;
