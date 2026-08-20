@@ -47,6 +47,11 @@ public class PeaDeploymentServiceProducer {
       final io.vanillabp.pea.deployment.PeaDeployedProcessesRegistry deployedProcessesRegistry,
       final io.vanillabp.integration.adapter.spi.NameClashAvoidanceSupport scoping) {
 
+    final var overlay = org.eclipse.microprofile.config.ConfigProvider
+        .getConfig()
+        .unwrap(io.smallrye.config.SmallRyeConfig.class)
+        .getConfigMapping(VanillaBpPeaProperties.class);
+
     return (List) properties
         .adapterTypes()
         .entrySet()
@@ -59,6 +64,13 @@ public class PeaDeploymentServiceProducer {
               adapterId, deploymentApi, workflowTaskRegistry, taskSubscriptionApi, serviceTaskCompletionApi, deployedProcessesRegistry
                   .forAdapter(adapterId));
           deploymentService.setScoping(scoping);
+          // story 99: what each subscription asks the engine for, resolvable down to
+          // task level
+          deploymentService.setFetchVariablesResolver((
+              workflowModuleId,
+              bpmnProcessId,
+              taskDefinition) -> overlay.fetchVariablesFor(
+                  workflowModuleId, bpmnProcessId, taskDefinition, adapterId));
           deploymentService.setWorkflowEndedInvoker(workflowTaskRegistry);
           return deploymentService;
         })

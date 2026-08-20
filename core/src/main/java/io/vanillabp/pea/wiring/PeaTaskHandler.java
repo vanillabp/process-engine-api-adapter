@@ -75,6 +75,13 @@ public class PeaTaskHandler implements TaskHandler {
    */
   private final io.vanillabp.integration.adapter.spi.NameClashAvoidanceSupport scoping;
 
+  /**
+   * What this subscription asked the engine for (story 99) - the payload of a delivery
+   * carries exactly that, so a <code>&#64;TaskParam</code> naming anything else is
+   * answered with a guiding failure instead of a <code>null</code>.
+   */
+  private final PeaFetchVariables.Selection fetchVariables;
+
   public PeaTaskHandler(
       final String adapterId,
       final String workflowModuleId,
@@ -96,6 +103,20 @@ public class PeaTaskHandler implements TaskHandler {
       final ServiceTaskCompletionApi serviceTaskCompletionApi,
       final io.vanillabp.integration.adapter.spi.NameClashAvoidanceSupport scoping) {
 
+    this(adapterId, workflowModuleId, taskDefinition, bpmnProcessIds, workflowTaskInvoker, serviceTaskCompletionApi, scoping, null);
+
+  }
+
+  public PeaTaskHandler(
+      final String adapterId,
+      final String workflowModuleId,
+      final String taskDefinition,
+      final List<String> bpmnProcessIds,
+      final WorkflowTaskInvoker workflowTaskInvoker,
+      final ServiceTaskCompletionApi serviceTaskCompletionApi,
+      final io.vanillabp.integration.adapter.spi.NameClashAvoidanceSupport scoping,
+      final PeaFetchVariables.Selection fetchVariables) {
+
     this.adapterId = adapterId;
     this.workflowModuleId = workflowModuleId;
     this.taskDefinition = taskDefinition;
@@ -103,6 +124,9 @@ public class PeaTaskHandler implements TaskHandler {
     this.workflowTaskInvoker = workflowTaskInvoker;
     this.serviceTaskCompletionApi = serviceTaskCompletionApi;
     this.scoping = scoping;
+    this.fetchVariables = fetchVariables == null
+        ? PeaFetchVariables.Selection.everything()
+        : fetchVariables;
 
   }
 
@@ -138,18 +162,17 @@ public class PeaTaskHandler implements TaskHandler {
       aggregateId = payload.get(aggregateIdName);
       if (aggregateId == null) {
         throw new IllegalStateException(
-            """
-                Task '%s' (definition '%s') of BPMN process '%s' carries no payload variable '%s' \
-                holding the workflow aggregate's ID! Workflows processed by VanillaBP have to be \
-                started through VanillaBP (the variable is written on start)."""
-                .formatted(taskId, taskDefinition, bpmnProcessId, aggregateIdName));
+            PeaFetchVariables.missingAggregateId(
+                "Task", taskId, taskDefinition, bpmnProcessId, aggregateIdName, adapterId, fetchVariables));
       }
       outcome = workflowTaskInvoker.invokeWorkflowTask(
           workflowModuleId,
           bpmnProcessId,
           new PeaTaskInvocationContext(
               adapterId, plainTaskDefinition(bpmnProcessId), String
-                  .valueOf(aggregateId), taskId, payload, taskInformation.getMeta().get(META_VERSION_TAG)));
+                  .valueOf(aggregateId), taskId, payload, taskInformation
+                      .getMeta()
+                      .get(META_VERSION_TAG), fetchVariables));
     } catch (final Exception e) {
       // the core rolled the local transaction back - fail the task so the
       // underlying engine applies its retry semantics
@@ -310,6 +333,12 @@ public class PeaTaskHandler implements TaskHandler {
      */
     private final String adapterId;
 
+    /**
+     * What the subscription asked for (story 99) - see
+     * {@link #getTaskParameter(String)}.
+     */
+    private final PeaFetchVariables.Selection fetchVariables;
+
     PeaTaskInvocationContext(
         final String adapterId,
         final String taskDefinition,
@@ -318,12 +347,27 @@ public class PeaTaskHandler implements TaskHandler {
         final Map<String, ?> payload,
         final String processVersion) {
 
+      this(adapterId, taskDefinition, workflowAggregateId, taskId, payload, processVersion, PeaFetchVariables.Selection
+          .everything());
+
+    }
+
+    PeaTaskInvocationContext(
+        final String adapterId,
+        final String taskDefinition,
+        final String workflowAggregateId,
+        final String taskId,
+        final Map<String, ?> payload,
+        final String processVersion,
+        final PeaFetchVariables.Selection fetchVariables) {
+
       this.adapterId = adapterId;
       this.taskDefinition = taskDefinition;
       this.workflowAggregateId = workflowAggregateId;
       this.taskId = taskId;
       this.payload = payload;
       this.processVersion = processVersion;
+      this.fetchVariables = fetchVariables;
 
     }
 
@@ -377,6 +421,10 @@ public class PeaTaskHandler implements TaskHandler {
     public Object getTaskParameter(
         final String name) {
 
+      if (!fetchVariables.covers(name)) {
+        throw new IllegalStateException(
+            PeaFetchVariables.unfetchedTaskParameter(name, taskDefinition, adapterId, fetchVariables));
+      }
       return payload.get(name);
 
     }

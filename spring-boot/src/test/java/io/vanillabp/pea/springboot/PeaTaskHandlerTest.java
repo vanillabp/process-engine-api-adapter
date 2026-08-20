@@ -46,6 +46,14 @@ public class PeaTaskHandlerTest {
 
     String invokedProcessVersion;
 
+    /**
+     * A <code>&#64;TaskParam</code> the handler method would read (story 99), or
+     * <code>null</code> for a method reading nothing but its aggregate.
+     */
+    String readParameter;
+
+    Object readParameterValue;
+
     @Override
     public WorkflowTaskOutcome invokeWorkflowTask(
         final String workflowModuleId,
@@ -54,6 +62,9 @@ public class PeaTaskHandlerTest {
 
       invokedBpmnProcessId = bpmnProcessId;
       invokedProcessVersion = context.getProcessVersion();
+      if (readParameter != null) {
+        readParameterValue = context.getTaskParameter(readParameter);
+      }
       return WorkflowTaskOutcome.completed();
 
     }
@@ -122,6 +133,15 @@ public class PeaTaskHandlerTest {
 
     return new PeaTaskHandler(
         "pea", "test-module", "someTask", bpmnProcessIds, invoker, engine);
+
+  }
+
+  private PeaTaskHandler handler(
+      final List<String> bpmnProcessIds,
+      final io.vanillabp.pea.wiring.PeaFetchVariables.Selection fetchVariables) {
+
+    return new PeaTaskHandler(
+        "pea", "test-module", "someTask", bpmnProcessIds, invoker, engine, null, fetchVariables);
 
   }
 
@@ -197,6 +217,44 @@ public class PeaTaskHandlerTest {
     assertTrue(
         reason.contains("'id'"),
         "expected a guiding failure naming the missing payload variable but got: "
+            + reason);
+
+  }
+
+  @Test
+  public void aTaskParameterTheSubscriptionAskedForIsAnswered() {
+
+    // story 99: the subscription named 'region', so the delivery carries it and the
+    // core reads it through the invocation context
+    engine.getOpenTaskIds().add("task-6");
+    invoker.readParameter = "region";
+    handler(
+        List.of("OnlyProcess"),
+        io.vanillabp.pea.wiring.PeaFetchVariables.Selection.of(List.of("id", "region")))
+        .accept(
+            new TaskInformation("task-6", Map.of()),
+            Map.of("id", "4711", "region", "east"));
+
+    assertEquals("east", invoker.readParameterValue);
+
+  }
+
+  @Test
+  public void aTaskParameterOutsideTheSubscriptionFailsGuiding() {
+
+    // a name no @TaskParam declares cannot have reached the subscription, and handing
+    // the method a null would look exactly like a variable which is genuinely absent
+    invoker.readParameter = "bigPayload";
+    handler(List.of("OnlyProcess"), io.vanillabp.pea.wiring.PeaFetchVariables.Selection.of(List.of("id")))
+        .accept(
+            new TaskInformation("task-7", Map.of()),
+            Map.of("id", "4711"));
+
+    assertEquals(1, engine.getFailedTasks().size());
+    final var reason = engine.getFailedTasks().getFirst().reason();
+    assertTrue(
+        reason.contains("bigPayload") && reason.contains("vanillabp.adapters.pea.fetch-variables"),
+        "expected a guiding failure naming the variable and the escape hatch but got: "
             + reason);
 
   }

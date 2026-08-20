@@ -147,6 +147,85 @@ public class PeaDeploymentService implements AdapterDeploymentService<PeaBpmnMod
   /**
    * A task definition as the engine knows it (prefixed under {@code use-prefix}).
    */
+  /**
+   * Resolves whether a subscription asks for the DERIVED payload variables or for all of
+   * them (story 99), supplied by the platform modules. May be <code>null</code> (tests):
+   * the derived set applies.
+   */
+  private io.vanillabp.pea.wiring.PeaFetchVariablesResolver fetchVariablesResolver;
+
+  /**
+   * Sets the <code>fetch-variables</code> resolver (the platform modules construct this
+   * service and inject it afterwards).
+   *
+   * @param fetchVariablesResolver The resolver, or <code>null</code> for the default
+   */
+  public void setFetchVariablesResolver(
+      final io.vanillabp.pea.wiring.PeaFetchVariablesResolver fetchVariablesResolver) {
+
+    this.fetchVariablesResolver = fetchVariablesResolver;
+
+  }
+
+  /**
+   * One BPMN task a subscription serves - what its payload set is derived from.
+   *
+   * @param bpmnProcessId The PLAIN BPMN process id
+   * @param taskDefinition The PLAIN task definition (the external form reference for a
+   *          user task)
+   */
+  record ServedTask(String bpmnProcessId,
+                    String taskDefinition) {
+  }
+
+  /**
+   * What one subscription asks the engine for (story 99): the union of the aggregate-ID
+   * variables and the declared <code>&#64;TaskParam</code> names of everything it serves,
+   * unless a level of the configuration says <code>all</code>.
+   *
+   * @param workflowModuleId The workflow module
+   * @param served The tasks this subscription serves
+   * @return The selection, never <code>null</code>
+   */
+  io.vanillabp.pea.wiring.PeaFetchVariables.Selection fetchVariablesOf(
+      final String workflowModuleId,
+      final List<ServedTask> served) {
+
+    final var variables = new java.util.TreeSet<String>();
+    for (final var task : served) {
+      final var mode = io.vanillabp.pea.wiring.PeaFetchVariablesResolver
+          .resolve(fetchVariablesResolver, workflowModuleId, task.bpmnProcessId(), task.taskDefinition());
+      if (mode == io.vanillabp.pea.wiring.PeaFetchVariables.Mode.ALL) {
+        // one subscription serves a task definition, so the two values cannot both
+        // apply - and asking for more than derived is never wrong, only more expensive
+        return io.vanillabp.pea.wiring.PeaFetchVariables.Selection.everything();
+      }
+      final String aggregateIdName;
+      try {
+        aggregateIdName = workflowTaskInvoker
+            .resolveWorkflowAggregateIdName(workflowModuleId, task.bpmnProcessId());
+      } catch (final RuntimeException e) {
+        log.debug(
+            "Process-Engine-API adapter '{}': the BPMN process '{}' of workflow module '{}' has no "
+                + "known workflow aggregate - its subscriptions ask for all payload variables",
+            adapterId,
+            task.bpmnProcessId(),
+            workflowModuleId,
+            e);
+        return io.vanillabp.pea.wiring.PeaFetchVariables.Selection.everything();
+      }
+      variables.add(aggregateIdName);
+      // what the handlers of this task read with @TaskParam: the core scanned those
+      // names off the methods while wiring, and this adapter has no model to guess from
+      variables
+          .addAll(
+              workflowTaskInvoker
+                  .taskParameterNames(workflowModuleId, task.bpmnProcessId(), task.taskDefinition()));
+    }
+    return io.vanillabp.pea.wiring.PeaFetchVariables.Selection.of(variables);
+
+  }
+
   private String scopedTaskDefinition(
       final String workflowModuleId,
       final String bpmnProcessId,
@@ -587,7 +666,7 @@ public class PeaDeploymentService implements AdapterDeploymentService<PeaBpmnMod
     // a delivered task belongs to travels in TaskInformation.meta (adapter
     // convention key 'bpmnProcessId' - see GAPS.md); if absent, the task
     // definition has to be unique across the module's processes
-    final var processesByTaskDefinition = new LinkedHashMap<String, List<String>>();
+    final var processesByTaskDefinition = new LinkedHashMap<String, List<ServedTask>>();
     bpmsProcessingContext
         .getModels()
         .forEach(model -> model
@@ -598,11 +677,11 @@ public class PeaDeploymentService implements AdapterDeploymentService<PeaBpmnMod
                 .computeIfAbsent(
                     scopedTaskDefinition(workflowModuleId, model.bpmnProcessId(), task.taskDefinition()),
                     key -> new ArrayList<>())
-                .add(model.bpmnProcessId())));
+                .add(new ServedTask(model.bpmnProcessId(), task.taskDefinition()))));
 
     // user-task notifications (story 24): one USER-type subscription per distinct
     // external form reference; the handler is a notification-only variant
-    final var processesByUserTaskReference = new LinkedHashMap<String, List<String>>();
+    final var processesByUserTaskReference = new LinkedHashMap<String, List<ServedTask>>();
     bpmsProcessingContext
         .getModels()
         .forEach(model -> model
@@ -611,18 +690,25 @@ public class PeaDeploymentService implements AdapterDeploymentService<PeaBpmnMod
                 .computeIfAbsent(
                     scopedTaskDefinition(workflowModuleId, model.bpmnProcessId(), userTask.taskDefinition()),
                     key -> new ArrayList<>())
-                .add(model.bpmnProcessId())));
+                .add(new ServedTask(model.bpmnProcessId(), userTask.taskDefinition()))));
     processesByUserTaskReference.forEach((
         externalFormReference,
-        bpmnProcessIds) -> {
+        served) -> {
+      final var bpmnProcessIds = served
+          .stream()
+          .map(ServedTask::bpmnProcessId)
+          .toList();
+      // story 99: a user-task notification carries a payload too, so it is narrowed the
+      // same way as a service task
+      final var fetchVariables = fetchVariablesOf(workflowModuleId, served);
       final var handler = new io.vanillabp.pea.wiring.PeaUserTaskHandler(
           adapterId, workflowModuleId, externalFormReference, List
-              .copyOf(bpmnProcessIds), workflowTaskInvoker, scoping);
+              .copyOf(bpmnProcessIds), workflowTaskInvoker, scoping, fetchVariables);
       try {
         final var subscription = taskSubscriptionApi
             .subscribeForTask(new SubscribeForTaskCmd(
-                Map.of(), TaskType.USER, externalFormReference, java.util.Set
-                    .of(), handler, (java.util.function.Consumer<String>) taskId -> log.debug(
+                Map.of(), TaskType.USER, externalFormReference, fetchVariables
+                    .payloadDescription(), handler, (java.util.function.Consumer<String>) taskId -> log.debug(
                         "Process-Engine-API adapter '{}': user task '{}' terminated", adapterId, taskId)))
             .get();
         bpmsProcessingContext.getSubscriptions().add(subscription);
@@ -636,25 +722,34 @@ public class PeaDeploymentService implements AdapterDeploymentService<PeaBpmnMod
                 .formatted(externalFormReference, workflowModuleId, adapterId), e.getCause());
       }
       log.info(
-          "Process-Engine-API adapter '{}': subscribed for user tasks '{}' of workflow module '{}'",
+          "Process-Engine-API adapter '{}': subscribed for user tasks '{}' of workflow module '{}' "
+              + "(asking for {})",
           adapterId,
           externalFormReference,
-          workflowModuleId);
+          workflowModuleId,
+          fetchVariables.describe());
     });
 
     processesByTaskDefinition.forEach((
         taskDefinition,
-        bpmnProcessIds) -> {
+        served) -> {
+      final var bpmnProcessIds = served
+          .stream()
+          .map(ServedTask::bpmnProcessId)
+          .toList();
+      // story 99: what the delivered payload has to carry - the aggregate's ID and the
+      // variables the handlers read, instead of everything the process instance holds
+      final var fetchVariables = fetchVariablesOf(workflowModuleId, served);
       final var handler = new PeaTaskHandler(
           adapterId, workflowModuleId, taskDefinition, List
-              .copyOf(bpmnProcessIds), workflowTaskInvoker, serviceTaskCompletionApi, scoping);
+              .copyOf(bpmnProcessIds), workflowTaskInvoker, serviceTaskCompletionApi, scoping, fetchVariables);
       try {
         final var subscription = taskSubscriptionApi
             .subscribeForTask(new SubscribeForTaskCmd(
                 Map.of(), // no restrictions
-                TaskType.EXTERNAL, taskDefinition, java.util.Set.of(), // all payload variables
-                handler, (java.util.function.Consumer<String>) taskId -> log.debug(
-                    "Process-Engine-API adapter '{}': task '{}' terminated", adapterId, taskId)))
+                TaskType.EXTERNAL, taskDefinition, fetchVariables
+                    .payloadDescription(), handler, (java.util.function.Consumer<String>) taskId -> log.debug(
+                        "Process-Engine-API adapter '{}': task '{}' terminated", adapterId, taskId)))
             .get();
         bpmsProcessingContext.getSubscriptions().add(subscription);
       } catch (final InterruptedException e) {
@@ -667,10 +762,12 @@ public class PeaDeploymentService implements AdapterDeploymentService<PeaBpmnMod
                 .formatted(taskDefinition, workflowModuleId, adapterId), e.getCause());
       }
       log.info(
-          "Process-Engine-API adapter '{}': subscribed for task definition '{}' of workflow module '{}'",
+          "Process-Engine-API adapter '{}': subscribed for task definition '{}' of workflow module "
+              + "'{}' (asking for {})",
           adapterId,
           taskDefinition,
-          workflowModuleId);
+          workflowModuleId,
+          fetchVariables.describe());
     });
 
   }

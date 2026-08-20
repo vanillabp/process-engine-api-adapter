@@ -41,6 +41,12 @@ public class PeaUserTaskHandler implements TaskHandler {
 
   private final WorkflowTaskInvoker workflowTaskInvoker;
 
+  /**
+   * What this subscription asked the engine for (story 99) - a user-task notification
+   * carries a payload like every other delivery, and it is narrowed the same way.
+   */
+  private final PeaFetchVariables.Selection fetchVariables;
+
   public PeaUserTaskHandler(
       final String adapterId,
       final String workflowModuleId,
@@ -63,13 +69,28 @@ public class PeaUserTaskHandler implements TaskHandler {
       final WorkflowTaskInvoker workflowTaskInvoker,
       final io.vanillabp.integration.adapter.spi.NameClashAvoidanceSupport scoping) {
 
+    this(adapterId, workflowModuleId, externalFormReference, bpmnProcessIds, workflowTaskInvoker, scoping, null);
+
+  }
+
+  public PeaUserTaskHandler(
+      final String adapterId,
+      final String workflowModuleId,
+      final String externalFormReference,
+      final List<String> bpmnProcessIds,
+      final WorkflowTaskInvoker workflowTaskInvoker,
+      final io.vanillabp.integration.adapter.spi.NameClashAvoidanceSupport scoping,
+      final PeaFetchVariables.Selection fetchVariables) {
+
     this.adapterId = adapterId;
     this.workflowModuleId = workflowModuleId;
     this.externalFormReference = externalFormReference;
     this.bpmnProcessIds = bpmnProcessIds;
     this.workflowTaskInvoker = workflowTaskInvoker;
-
     this.scoping = scoping;
+    this.fetchVariables = fetchVariables == null
+        ? PeaFetchVariables.Selection.everything()
+        : fetchVariables;
 
   }
 
@@ -97,10 +118,8 @@ public class PeaUserTaskHandler implements TaskHandler {
       final var aggregateId = payload.get(aggregateIdName);
       if (aggregateId == null) {
         throw new IllegalStateException(
-            ("User task '%s' (form reference '%s') of BPMN process '%s' carries no payload "
-                + "variable '%s' holding the workflow aggregate's ID! Workflows processed by "
-                + "VanillaBP have to be started through VanillaBP.")
-                .formatted(taskId, externalFormReference, bpmnProcessId, aggregateIdName));
+            PeaFetchVariables.missingAggregateId(
+                "User task", taskId, externalFormReference, bpmnProcessId, aggregateIdName, adapterId, fetchVariables));
       }
       final var outcome = workflowTaskInvoker.invokeWorkflowTask(
           workflowModuleId,
@@ -109,7 +128,7 @@ public class PeaUserTaskHandler implements TaskHandler {
               adapterId, externalFormReference, String
                   .valueOf(aggregateId), taskId, payload, taskInformation
                       .getMeta()
-                      .get(PeaTaskHandler.META_VERSION_TAG)));
+                      .get(PeaTaskHandler.META_VERSION_TAG), fetchVariables));
       if (outcome.kind() == WorkflowTaskOutcome.Kind.BPMN_ERROR) {
         throw new IllegalStateException(
             ("The @WorkflowTask method notified about user task '%s' (BPMN process '%s' of "
@@ -183,13 +202,20 @@ public class PeaUserTaskHandler implements TaskHandler {
      */
     private final String adapterId;
 
+    /**
+     * What the subscription asked for (story 99) - see
+     * {@link #getTaskParameter(String)}.
+     */
+    private final PeaFetchVariables.Selection fetchVariables;
+
     PeaUserTaskInvocationContext(
         final String adapterId,
         final String externalFormReference,
         final String workflowAggregateId,
         final String taskId,
         final Map<String, ?> payload,
-        final String processVersion) {
+        final String processVersion,
+        final PeaFetchVariables.Selection fetchVariables) {
 
       this.adapterId = adapterId;
       this.processVersion = processVersion;
@@ -197,6 +223,7 @@ public class PeaUserTaskHandler implements TaskHandler {
       this.workflowAggregateId = workflowAggregateId;
       this.taskId = taskId;
       this.payload = payload;
+      this.fetchVariables = fetchVariables;
 
     }
 
@@ -255,6 +282,10 @@ public class PeaUserTaskHandler implements TaskHandler {
     public Object getTaskParameter(
         final String name) {
 
+      if (!fetchVariables.covers(name)) {
+        throw new IllegalStateException(
+            PeaFetchVariables.unfetchedTaskParameter(name, externalFormReference, adapterId, fetchVariables));
+      }
       return payload.get(name);
 
     }

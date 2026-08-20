@@ -380,15 +380,44 @@ public class InMemoryProcessEngine implements DeploymentApi, StartProcessApi, Co
   // --- TaskSubscriptionApi ---
 
   /**
-   * One active task subscription: the subscribed task definition and the handler
-   * task deliveries are dispatched to.
+   * One active task subscription: the subscribed task definition, the payload
+   * variables it asked for and the handler task deliveries are dispatched to.
    *
    * @param taskDescriptionKey The subscribed task definition
+   * @param payloadDescription The payload variables the subscription asked for - an
+   *          EMPTY set is the API's way of asking for everything
    * @param handler The subscriber's task handler
    */
   public record ActiveSubscription(
                                    String taskDescriptionKey,
+                                   java.util.Set<String> payloadDescription,
                                    dev.bpmcrafters.processengineapi.task.TaskHandler handler) implements TaskSubscription {
+
+    /**
+     * Narrows a delivered payload the way an engine does: a subscription naming
+     * variables gets those and nothing else, one naming none gets everything.
+     *
+     * @param payload What the process instance holds
+     * @return What this subscription's handler sees
+     */
+    public Map<String, Object> narrow(
+        final Map<String, Object> payload) {
+
+      if (payloadDescription.isEmpty()) {
+        return payload;
+      }
+      final var narrowed = new java.util.LinkedHashMap<String, Object>();
+      payload.forEach((
+          name,
+          value) -> {
+        if (payloadDescription.contains(name)) {
+          narrowed.put(name, value);
+        }
+      });
+      return narrowed;
+
+    }
+
   }
 
   /**
@@ -436,7 +465,9 @@ public class InMemoryProcessEngine implements DeploymentApi, StartProcessApi, Co
         .accept(
             new dev.bpmcrafters.processengineapi.task.TaskInformation(
                 taskId, Map.of("bpmnProcessId", bpmnProcessId)),
-            payload);
+            // an engine hands the subscriber what the subscription asked for, and the
+            // adapter's derivation is only worth anything if the mock does the same
+            subscription.narrow(payload));
 
   }
 
@@ -445,7 +476,8 @@ public class InMemoryProcessEngine implements DeploymentApi, StartProcessApi, Co
       final SubscribeForTaskCmd cmd) {
 
     record("TaskSubscriptionApi", "subscribeForTask", cmd);
-    final var subscription = new ActiveSubscription(cmd.getTaskDescriptionKey(), cmd.getAction());
+    final var subscription = new ActiveSubscription(
+        cmd.getTaskDescriptionKey(), cmd.getPayloadDescription(), cmd.getAction());
     subscriptions.add(subscription);
     return CompletableFuture.completedFuture(subscription);
 

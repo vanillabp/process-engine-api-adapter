@@ -221,6 +221,44 @@ replaces the mock with a real Process-Engine-API implementation.
   underlying BPMS"), so there are no secondary history contexts and call activities cannot be
   drilled into; call-activity definitions are not reported either (no BPMN model type).
 
+## What a subscription asks the engine for (story 99)
+
+A `SubscribeForTaskCmd` carries a set of payload variables, and an EMPTY set means "hand me
+everything the process instance holds". That is what every subscription of this adapter named
+until this story - the same state Camunda 8 was in before story 93, and with the same cost: a
+delivery carrying a copy of the workflow aggregate the handler is served from its own database
+anyway.
+
+`PeaFetchVariables` holds the two halves of the answer, the set a subscription names and the
+messages a delivery writes when it is asked for something outside it.
+`PeaDeploymentService#fetchVariablesOf` derives the set once per subscription while
+`startWorkflowProcessing` opens them, from a `ServedTask` per BPMN task the subscription serves,
+and it asks the core twice: `resolveWorkflowAggregateIdName` per BPMN process, and
+`taskParameterNames` per task definition. Both service-task and user-task subscriptions go
+through it - a notification carries a payload like every other delivery.
+
+The core is the only possible source here. This adapter never sees a BPMN model of a deployed
+process ([`GAPS.md`](GAPS.md), entry 1), so unlike Camunda 8 it could not even have guessed the
+names from the model; what it can do is ask which variables the `@WorkflowTask` methods read.
+
+Three answers mirror Camunda 8 deliberately, because two adapters answering one question
+differently is what the migration design exists to prevent: the escape hatch is
+`vanillabp.adapters.<id>.fetch-variables: all` with the same two values and the same four
+resolution levels, `all` at any served task makes the whole subscription ask for everything,
+and a BPMN process no workflow service serves falls back to everything rather than to a set
+which may be missing what its handler reads. The overlay lives in each platform module
+(`VanillaBpPeaProperties`), which on Quarkus is also what makes the key writable at all: a key
+no registered mapping models fails the startup there.
+
+The handlers carry the `Selection` for their messages. `PeaTaskHandler` and `PeaUserTaskHandler`
+name it when the aggregate-id variable is absent, and their invocation contexts throw when
+`getTaskParameter` is asked for a name outside it - practically unreachable for a statically
+named `@TaskParam`, and kept for a name a handler computes at runtime.
+
+The mock engine narrows a delivered payload to what the subscription asked for
+(`InMemoryProcessEngine.ActiveSubscription#narrow`). Without that the derivation would be
+asserted and never exercised.
+
 ## When a phase-one check runs (story 87)
 
 The phase-one checks of this adapter are `PREFLIGHT_CHECK` completions: they validate that
