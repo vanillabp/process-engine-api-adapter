@@ -25,6 +25,37 @@
       <groupId>org.projectlombok</groupId>
       <artifactId>lombok</artifactId>
     </dependency>
+    <!-- the in-memory engine this adapter ships as its BPMS double: the tests of the
+         platform-neutral core run against it, and they count for BOTH platforms -->
+    <dependency>
+      <groupId>io.vanillabp</groupId>
+      <artifactId>process-engine-api-mock</artifactId>
+      <version>${project.version}</version>
+      <scope>test</scope>
+    </dependency>
+    <!-- the core of the platform integration: the deployment tests build the scoping
+         service the platform hands to an adapter -->
+    <dependency>
+      <groupId>io.vanillabp.adapter</groupId>
+      <artifactId>migration-adapter</artifactId>
+      <version>${adapter-platform.version}</version>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>io.vanillabp</groupId>
+      <artifactId>test-utils</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.junit.jupiter</groupId>
+      <artifactId>junit-jupiter</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.mockito</groupId>
+      <artifactId>mockito-core</artifactId>
+      <scope>test</scope>
+    </dependency>
   </dependencies>
 
   <build>

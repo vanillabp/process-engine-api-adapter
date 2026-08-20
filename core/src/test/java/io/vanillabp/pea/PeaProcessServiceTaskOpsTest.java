@@ -1,4 +1,4 @@
-package io.vanillabp.pea.springboot;
+package io.vanillabp.pea;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
