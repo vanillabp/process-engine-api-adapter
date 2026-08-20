@@ -892,6 +892,11 @@ public class PeaProcessService<A> implements MigratableProcessService<A> {
           workflowModuleId);
     } catch (final InterruptedException e) {
       Thread.currentThread().interrupt();
+      // returning here would mark the outbox entry done although nothing was
+      // broadcast, and a signal nobody receives is a workflow waiting forever
+      throw new IllegalStateException(
+          "PEA[%s]: broadcasting signal '%s' of workflow module '%s' was interrupted"
+              .formatted(adapterId, signalName, workflowModuleId), e);
     } catch (final java.util.concurrent.ExecutionException e) {
       throw new IllegalStateException(
           "PEA[%s]: broadcasting signal '%s' of workflow module '%s' failed"
