@@ -223,6 +223,9 @@
             <excludes>
               <exclude>**/target/**/</exclude>
               <exclude>**/node_modules/**/</exclude>
+              <!-- the workflows carry comments, and the YAML formatter round-trips
+                   through Jackson, which drops them -->
+              <exclude>**/.github/**/</exclude>
             </excludes>
             <sortPom>
               <quiet>true</quiet>
@@ -235,6 +238,9 @@
             <excludes>
               <exclude>**/target/**/</exclude>
               <exclude>**/node_modules/**/</exclude>
+              <!-- the workflows carry comments, and the YAML formatter round-trips
+                   through Jackson, which drops them -->
+              <exclude>**/.github/**/</exclude>
             </excludes>
             <flexmark/>
           </markdown>
@@ -245,6 +251,9 @@
             <excludes>
               <exclude>**/target/**/</exclude>
               <exclude>**/node_modules/**/</exclude>
+              <!-- the workflows carry comments, and the YAML formatter round-trips
+                   through Jackson, which drops them -->
+              <exclude>**/.github/**/</exclude>
             </excludes>
             <jackson>
               <yamlFeatures>
