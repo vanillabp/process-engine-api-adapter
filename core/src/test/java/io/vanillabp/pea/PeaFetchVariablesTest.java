@@ -1,4 +1,4 @@
-package io.vanillabp.pea.springboot;
+package io.vanillabp.pea;
 
 import java.io.ByteArrayInputStream;
 import java.nio.charset.StandardCharsets;
@@ -12,7 +12,6 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
-import io.vanillabp.pea.PeaProcessingContext;
 import io.vanillabp.pea.deployment.PeaDeploymentService;
 import io.vanillabp.pea.mock.InMemoryProcessEngine;
 import io.vanillabp.pea.wiring.PeaFetchVariables;
