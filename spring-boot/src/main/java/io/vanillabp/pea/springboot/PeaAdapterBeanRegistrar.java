@@ -88,6 +88,14 @@ public class PeaAdapterBeanRegistrar implements BeanRegistrar {
                                             .forAdapter(adapterId));
                 deploymentService.setScoping(
                     supplierContext.bean(io.vanillabp.integration.adapter.spi.NameClashAvoidanceSupport.class));
+                // story 99: what each subscription asks the engine for, resolvable down
+                // to task level
+                final var overlay = supplierContext.bean(VanillaBpPeaProperties.class);
+                deploymentService.setFetchVariablesResolver((
+                    workflowModuleId,
+                    bpmnProcessId,
+                    taskDefinition) -> overlay.fetchVariablesFor(
+                        workflowModuleId, bpmnProcessId, taskDefinition, adapterId));
                 deploymentService.setWorkflowEndedInvoker(
                     supplierContext
                         .beanProvider(
