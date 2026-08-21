@@ -40,6 +40,12 @@ import io.vanillabp.pea.processservice.PeaProcessService;
 @ExtendWith(SuppressOutputExtension.class)
 public class PeaInterruptedOperationsTest {
 
+  /**
+   * What a probe is asked about (story 107).
+   */
+  private static final io.vanillabp.integration.adapter.spi.WorkflowScope SCOPE = io.vanillabp.integration.adapter.spi.WorkflowScope
+      .of("test-module", "TestProcess");
+
   private ServiceTaskCompletionApi serviceTasks;
 
   private UserTaskCompletionApi userTasks;
@@ -117,12 +123,12 @@ public class PeaInterruptedOperationsTest {
   public void anInterruptedProbeReportsBpmsUnavailable() {
 
     Thread.currentThread().interrupt();
-    assertEquals(WorkflowAwareness.BPMS_UNAVAILABLE, service.awarenessOfTask("42", "task-2"));
+    assertEquals(WorkflowAwareness.BPMS_UNAVAILABLE, service.awarenessOfTask(SCOPE, "42", "task-2"));
     assertTrue(Thread.currentThread().isInterrupted(), "the interrupt was swallowed");
     Thread.interrupted();
 
     Thread.currentThread().interrupt();
-    assertEquals(WorkflowAwareness.BPMS_UNAVAILABLE, service.awarenessOfUserTask("42", "utask-2"));
+    assertEquals(WorkflowAwareness.BPMS_UNAVAILABLE, service.awarenessOfUserTask(SCOPE, "42", "utask-2"));
     assertTrue(Thread.currentThread().isInterrupted(), "the interrupt was swallowed");
 
   }

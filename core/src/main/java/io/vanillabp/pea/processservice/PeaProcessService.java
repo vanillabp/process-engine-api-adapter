@@ -346,6 +346,7 @@ public class PeaProcessService<A> implements MigratableProcessService<A> {
 
   @Override
   public WorkflowAwareness awarenessOfTask(
+      final io.vanillabp.integration.adapter.spi.WorkflowScope scope,
       final Object workflowAggregateId,
       final String taskId) {
 
@@ -523,6 +524,7 @@ public class PeaProcessService<A> implements MigratableProcessService<A> {
 
   @Override
   public WorkflowAwareness awarenessOfUserTask(
+      final io.vanillabp.integration.adapter.spi.WorkflowScope scope,
       final Object workflowAggregateId,
       final String taskId) {
 
@@ -659,6 +661,7 @@ public class PeaProcessService<A> implements MigratableProcessService<A> {
 
   @Override
   public WorkflowAwareness awarenessOfWorkflow(
+      final io.vanillabp.integration.adapter.spi.WorkflowScope scope,
       final io.vanillabp.integration.spi.AggregatePersistenceAware<A> aggregatePersistence,
       final Object workflowAggregateId) {
 
@@ -692,6 +695,7 @@ public class PeaProcessService<A> implements MigratableProcessService<A> {
    */
   @Override
   public WorkflowAwareness awarenessOfWorkflowForRedispatch(
+      final io.vanillabp.integration.adapter.spi.WorkflowScope scope,
       final io.vanillabp.integration.spi.AggregatePersistenceAware<A> aggregatePersistence,
       final Object workflowAggregateId) {
 

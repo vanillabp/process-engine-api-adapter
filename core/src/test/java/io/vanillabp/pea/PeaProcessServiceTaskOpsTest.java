@@ -24,6 +24,12 @@ import io.vanillabp.pea.processservice.PeaProcessService;
 @ExtendWith(SuppressOutputExtension.class)
 public class PeaProcessServiceTaskOpsTest {
 
+  /**
+   * What a probe is asked about (story 107).
+   */
+  private static final io.vanillabp.integration.adapter.spi.WorkflowScope SCOPE = io.vanillabp.integration.adapter.spi.WorkflowScope
+      .of("test-module", "TestProcess");
+
   private final InMemoryProcessEngine engine = new InMemoryProcessEngine();
 
   private final PeaProcessService<Object> service = new PeaProcessService<>("pea", engine, engine, engine, engine);
@@ -34,8 +40,8 @@ public class PeaProcessServiceTaskOpsTest {
 
     engine.getOpenTaskIds().add("task-1");
 
-    assertEquals(WorkflowAwareness.ACTIVE, service.awarenessOfTask("42", "task-1"));
-    assertEquals(WorkflowAwareness.UNKNOWN_TO_BPMS, service.awarenessOfTask("42", "task-2"));
+    assertEquals(WorkflowAwareness.ACTIVE, service.awarenessOfTask(SCOPE, "42", "task-1"));
+    assertEquals(WorkflowAwareness.UNKNOWN_TO_BPMS, service.awarenessOfTask(SCOPE, "42", "task-2"));
     // the probes never advanced anything
     assertTrue(engine.getCompletedTasks().isEmpty());
 
@@ -66,8 +72,8 @@ public class PeaProcessServiceTaskOpsTest {
 
     engine.getOpenTaskIds().add("utask-1");
 
-    assertEquals(WorkflowAwareness.ACTIVE, service.awarenessOfUserTask("42", "utask-1"));
-    assertEquals(WorkflowAwareness.UNKNOWN_TO_BPMS, service.awarenessOfUserTask("42", "utask-x"));
+    assertEquals(WorkflowAwareness.ACTIVE, service.awarenessOfUserTask(SCOPE, "42", "utask-1"));
+    assertEquals(WorkflowAwareness.UNKNOWN_TO_BPMS, service.awarenessOfUserTask(SCOPE, "42", "utask-x"));
 
     assertDoesNotThrow(() -> service.completeUserTaskPhaseOne("mod", "Process", null, new Object(), "utask-1"));
     assertDoesNotThrow(() -> service
@@ -151,12 +157,12 @@ public class PeaProcessServiceTaskOpsTest {
 
     // the election answers optimistically because the Process-Engine-API cannot
     // query workflows at all (GAPS 11) - correlation must keep working
-    assertEquals(WorkflowAwareness.ACTIVE, service.awarenessOfWorkflow(null, "42"));
+    assertEquals(WorkflowAwareness.ACTIVE, service.awarenessOfWorkflow(SCOPE, null, "42"));
 
     // the START re-dispatch mitigation must NOT be optimistic: skipping a
     // recovered start would LOSE the workflow, whereas proceeding only risks the
     // documented at-least-once duplicate
-    assertEquals(WorkflowAwareness.UNKNOWN_TO_BPMS, service.awarenessOfWorkflowForRedispatch(null, "42"));
+    assertEquals(WorkflowAwareness.UNKNOWN_TO_BPMS, service.awarenessOfWorkflowForRedispatch(SCOPE, null, "42"));
 
   }
 
