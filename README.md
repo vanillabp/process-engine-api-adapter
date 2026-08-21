@@ -329,7 +329,8 @@ Tests are pure JVM smoke tests (no Docker, no network).
 `mvn install verify` builds one aggregated JaCoCo report per platform:
 
 1. **Spring Boot** (core + Spring Boot integration) - into `test-coverage-report/spring-boot/report`
-2. **Quarkus** (core + Quarkus extension) - into `test-coverage-report/quarkus/report`
+2. **Quarkus** (core + Quarkus extension + the Quarkus end-to-end tests) - into
+   `test-coverage-report/quarkus/report`
 
 Both are published to GitHub Pages by the *Publish to GitHub Packages* workflow on every push to
 the default branch. Click the [platform's badge](#documentation-and-supported-platforms) to open
@@ -342,12 +343,12 @@ the number the badges above show). It also compares every module producing a `ja
 the two aggregates, so a module added to the build without being added to its report cannot stay
 unnoticed.
 
-The two thresholds differ, and the reason is worth knowing. Coverage is measured per platform, but
-the adapter core is platform-neutral: whatever exercises it counts only on the platform its tests run
-on. Everything of the core which can be tested without a platform now lives in `core/src/test` and
-counts on both; what is left on the Quarkus side is what only the Spring Boot integration tests
-reach. Its threshold is therefore a floor against regression, not the 90 % rule, until how to count a
-platform-neutral adapter core is decided.
+Both platforms are held to the same line. Coverage is measured per platform because the adapter core
+is platform-neutral: whatever exercises it counts only on the platform its tests ran on, so the core
+lines Quarkus never reaches are the features Quarkus never runs. `quarkus/integration-tests`
+therefore drives the same workflow lifecycle on a booted Quarkus application as the Spring Boot
+integration tests do on their side. The duplication is on purpose: a core proven once says nothing
+about a platform's glue ever calling it.
 
 ## Noteworthy & Contributors
 

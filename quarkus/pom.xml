@@ -15,6 +15,7 @@
   <modules>
     <module>runtime</module>
     <module>deployment</module>
+    <module>integration-tests</module>
   </modules>
 
   <build>
@@ -30,6 +31,10 @@
               <quarkus.log.level>ERROR</quarkus.log.level>
               <maven.home>${maven.home}</maven.home>
               <maven.repo>${settings.localRepository}</maven.repo>
+              <!--suppress UnresolvedMavenProperty - filled by goal jacoco-maven-plugin:prepare-agent in the root POM -->
+              <!-- handed to Quarkus prod-mode tests, which forward it into the JVM they
+                   fork - without it the forked run produces no coverage at all -->
+              <jacoco.agent>${jacoco.agent}</jacoco.agent>
             </systemPropertyVariables>
           </configuration>
         </plugin>

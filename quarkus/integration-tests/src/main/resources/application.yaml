@@ -1,0 +1,23 @@
+quarkus:
+  datasource:
+    db-kind: h2
+    jdbc:
+      url: jdbc:h2:mem:pea-e2e;DB_CLOSE_DELAY=-1
+  hibernate-orm:
+    database:
+      generation: drop-and-create
+vanillabp:
+  prioritized-adapters:
+    - pea
+  adapters:
+    pea:
+      type: process-engine-api
+      name-clash-avoidance: none
+  workflow-modules:
+    pea-e2e-module:
+      adapters:
+        pea:
+          resources-location: classpath:pea-e2e-module/processes
+  outbox:
+    poll-interval: PT0.5S
+    attempt-frequency: PT0.5S
