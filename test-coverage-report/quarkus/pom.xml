@@ -34,6 +34,13 @@
       <artifactId>process-engine-api-adapter-quarkus-deployment</artifactId>
       <version>${project.version}</version>
     </dependency>
+    <!-- the end-to-end suite runs the adapter on a booted Quarkus application; its
+         execution data is where the platform-neutral core's Quarkus coverage comes from -->
+    <dependency>
+      <groupId>io.vanillabp</groupId>
+      <artifactId>process-engine-api-adapter-quarkus-integration-tests</artifactId>
+      <version>${project.version}</version>
+    </dependency>
   </dependencies>
 
   <build>

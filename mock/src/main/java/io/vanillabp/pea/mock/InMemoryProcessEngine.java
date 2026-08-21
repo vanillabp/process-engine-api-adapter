@@ -187,10 +187,11 @@ public class InMemoryProcessEngine implements DeploymentApi, StartProcessApi, Co
    * Clears all recorded invocations and all fake state (deployments, started instances).
    */
   /**
-   * Clears only the task-processing recordings (invocations, completed/errored/failed
-   * tasks and one-shot failure triggers) while KEEPING deployments, started instances
-   * and active subscriptions - for tests exercising several deliveries against the
-   * subscriptions opened at startup.
+   * Clears the recordings and every injected failure while KEEPING deployments,
+   * started instances and active subscriptions - for tests exercising several
+   * operations against the subscriptions opened at startup. The start-failure
+   * injections are cleared here as well: {@link #failPreflightFor(String)} is not
+   * one-shot, so a test leaving it behind would fail every workflow start after it.
    */
   public void clearTaskRecordings() {
 
@@ -202,6 +203,8 @@ public class InMemoryProcessEngine implements DeploymentApi, StartProcessApi, Co
     failNextCompletionForTaskIds.clear();
     openTaskIds.clear();
     correlatedMessages.clear();
+    failPreflightForProcessIds.clear();
+    failNextSyncForProcessIds.clear();
 
   }
 
@@ -609,7 +612,7 @@ public class InMemoryProcessEngine implements DeploymentApi, StartProcessApi, Co
           "Task '%s' is not open (already completed or canceled)".formatted(cmd.getTaskId())));
     }
     completedTasks.add(new CompletedTask(cmd.getTaskId()));
-    completionPayloads.put(cmd.getTaskId(), Map.copyOf(cmd.get()));
+    completionPayloads.put(cmd.getTaskId(), payloadOf(cmd.get()));
     return CompletableFuture.completedFuture(Empty.INSTANCE);
 
   }
@@ -631,8 +634,28 @@ public class InMemoryProcessEngine implements DeploymentApi, StartProcessApi, Co
           "Task '%s' is not open (already completed or canceled)".formatted(cmd.getTaskId())));
     }
     erroredTasks.add(new ErroredTask(cmd.getTaskId(), cmd.getErrorCode(), cmd.getErrorMessage()));
-    completionPayloads.put(cmd.getTaskId(), Map.copyOf(cmd.get()));
+    completionPayloads.put(cmd.getTaskId(), payloadOf(cmd.get()));
     return CompletableFuture.completedFuture(Empty.INSTANCE);
+
+  }
+
+  /**
+   * A defensive copy of a completion payload which KEEPS null values. An aggregate
+   * attribute the workflow has not filled yet travels as null - {@code Map.copyOf}
+   * rejects that, and a mock stricter than the engines it stands in for turns a
+   * legitimate completion into a crash. Found by the Quarkus end-to-end suite
+   * (story 100), where the first aggregate with an unset shared attribute reached a
+   * task completion.
+   *
+   * @param payload The payload the completion command carried
+   * @return An unmodifiable copy, null values included
+   */
+  private static Map<String, Object> payloadOf(
+      final Map<String, ?> payload) {
+
+    return payload == null
+        ? Map.of()
+        : java.util.Collections.unmodifiableMap(new LinkedHashMap<String, Object>(payload));
 
   }
 

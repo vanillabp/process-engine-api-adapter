@@ -1,0 +1,80 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:zeebe="http://camunda.org/schema/zeebe/1.0" id="Definitions_peae2e" targetNamespace="http://bpmn.io/schema/bpmn">
+  <bpmn:process id="PeaE2eProcess" isExecutable="true">
+    <bpmn:startEvent id="start">
+      <bpmn:outgoing>f1</bpmn:outgoing>
+    </bpmn:startEvent>
+    <bpmn:sequenceFlow id="f1" sourceRef="start" targetRef="t_happy" />
+    <bpmn:serviceTask id="t_happy">
+      <bpmn:extensionElements>
+        <zeebe:taskDefinition type="e2eHappy" />
+      </bpmn:extensionElements>
+      <bpmn:incoming>f1</bpmn:incoming>
+      <bpmn:outgoing>f2</bpmn:outgoing>
+    </bpmn:serviceTask>
+    <bpmn:sequenceFlow id="f2" sourceRef="t_happy" targetRef="t_error" />
+    <bpmn:serviceTask id="t_error">
+      <bpmn:extensionElements>
+        <zeebe:taskDefinition type="e2eError" />
+      </bpmn:extensionElements>
+      <bpmn:incoming>f2</bpmn:incoming>
+      <bpmn:outgoing>f3</bpmn:outgoing>
+    </bpmn:serviceTask>
+    <bpmn:sequenceFlow id="f3" sourceRef="t_error" targetRef="t_fails" />
+    <bpmn:serviceTask id="t_fails">
+      <bpmn:extensionElements>
+        <zeebe:taskDefinition type="e2eFails" />
+      </bpmn:extensionElements>
+      <bpmn:incoming>f3</bpmn:incoming>
+      <bpmn:outgoing>f4</bpmn:outgoing>
+    </bpmn:serviceTask>
+    <bpmn:sequenceFlow id="f4" sourceRef="t_fails" targetRef="t_async" />
+    <bpmn:serviceTask id="t_async">
+      <bpmn:extensionElements>
+        <zeebe:taskDefinition type="e2eAsync" />
+      </bpmn:extensionElements>
+      <bpmn:incoming>f4</bpmn:incoming>
+      <bpmn:outgoing>f5</bpmn:outgoing>
+    </bpmn:serviceTask>
+    <bpmn:sequenceFlow id="f5" sourceRef="t_async" targetRef="t_user" />
+    <bpmn:userTask id="t_user">
+      <bpmn:extensionElements>
+        <zeebe:userTask />
+        <zeebe:formDefinition externalReference="e2eApprove" />
+      </bpmn:extensionElements>
+      <bpmn:incoming>f5</bpmn:incoming>
+      <bpmn:outgoing>f6</bpmn:outgoing>
+    </bpmn:userTask>
+    <bpmn:sequenceFlow id="f6" sourceRef="t_user" targetRef="end" />
+    <bpmn:endEvent id="end">
+      <bpmn:incoming>f6</bpmn:incoming>
+    </bpmn:endEvent>
+  </bpmn:process>
+  <bpmn:message id="Msg_E2ePayment" name="E2ePaymentReceived" />
+  <bpmn:message id="Msg_E2eOrder" name="E2eOrderPlaced" />
+  <bpmn:process id="PeaE2eMessageProcess" isExecutable="true">
+    <bpmn:startEvent id="PMP_start">
+      <bpmn:outgoing>PMP_f1</bpmn:outgoing>
+    </bpmn:startEvent>
+    <bpmn:sequenceFlow id="PMP_f1" sourceRef="PMP_start" targetRef="PMP_wait" />
+    <bpmn:intermediateCatchEvent id="PMP_wait">
+      <bpmn:incoming>PMP_f1</bpmn:incoming>
+      <bpmn:outgoing>PMP_f2</bpmn:outgoing>
+      <bpmn:messageEventDefinition id="PMP_msgDef" messageRef="Msg_E2ePayment" />
+    </bpmn:intermediateCatchEvent>
+    <bpmn:sequenceFlow id="PMP_f2" sourceRef="PMP_wait" targetRef="PMP_end" />
+    <bpmn:endEvent id="PMP_end">
+      <bpmn:incoming>PMP_f2</bpmn:incoming>
+    </bpmn:endEvent>
+  </bpmn:process>
+  <bpmn:process id="PeaE2eMessageStartProcess" isExecutable="true">
+    <bpmn:startEvent id="PMS_start">
+      <bpmn:outgoing>PMS_f1</bpmn:outgoing>
+      <bpmn:messageEventDefinition id="PMS_msgDef" messageRef="Msg_E2eOrder" />
+    </bpmn:startEvent>
+    <bpmn:sequenceFlow id="PMS_f1" sourceRef="PMS_start" targetRef="PMS_end" />
+    <bpmn:endEvent id="PMS_end">
+      <bpmn:incoming>PMS_f1</bpmn:incoming>
+    </bpmn:endEvent>
+  </bpmn:process>
+</bpmn:definitions>
