@@ -424,6 +424,10 @@ public class PeaDeploymentServiceTest {
       throw new UnsupportedOperationException();
     }
 
+    // story 66's migration fallback, deprecated for removal in 2.1 and none of this
+    // BPMS's business: a test double implements it as long as the interface declares
+    // it, and the mandatory 'removal' lint needs the suppression
+    @SuppressWarnings("removal")
     @Override
     public boolean workflowAggregateHasProperty(
         final String workflowModuleId,
@@ -432,6 +436,7 @@ public class PeaDeploymentServiceTest {
       return false;
     }
 
+    @SuppressWarnings("removal")
     @Override
     public Object resolveWorkflowAggregateProperty(
         final String workflowModuleId,
