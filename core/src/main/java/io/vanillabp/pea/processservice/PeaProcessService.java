@@ -180,7 +180,9 @@ public class PeaProcessService<A> implements MigratableProcessService<A> {
    * workflow: the aggregate's shared attributes PLUS - always, no matter what the
    * sync model says - the variable carrying the aggregate's ID (named after the
    * aggregate's ID property). The Process-Engine-API has no business-key slot:
-   * that variable is how VanillaBP finds the workflow again.
+   * that variable is how VanillaBP finds the workflow again, so an aggregate
+   * annotated {@code @NoSyncWithBPMS} must not lose it. See
+   * {@code PeaSharedValuesTest} (story 106).
    */
   private Map<String, Object> payloadOf(
       final AggregatePersistenceAware<A> aggregatePersistence,
