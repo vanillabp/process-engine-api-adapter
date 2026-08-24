@@ -650,28 +650,28 @@ public class PeaE2eIntrospectionController {
       final String aggregateId,
       final java.util.function.Supplier<List<ExecutionMode>> modesInsideTransaction) throws Exception {
 
-    final var result = new LinkedHashMap<String, Object>();
+    final var report = new LinkedHashMap<String, Object>();
     userTransaction.begin();
     try {
       operation.accept(repository.findById(aggregateId));
-      result.put("modesInsideTransaction", modesInsideTransaction
+      report.put("modesInsideTransaction", modesInsideTransaction
           .get()
           .stream()
           .map(Enum::name)
           .toList());
-      result.put("correlationsInsideTransaction", engine
+      report.put("correlationsInsideTransaction", engine
           .getCorrelatedMessages()
           .size());
     } catch (Exception e) {
       userTransaction.rollback();
-      result.put("exception", e
+      report.put("exception", e
           .getClass()
           .getSimpleName());
-      result.put("message", e.getMessage());
-      return result;
+      report.put("message", e.getMessage());
+      return report;
     }
     userTransaction.commit();
-    return result;
+    return report;
 
   }
 

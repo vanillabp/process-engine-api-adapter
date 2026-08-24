@@ -12,7 +12,7 @@ import io.vanillabp.pea.mock.InMemoryProcessEngine;
 import io.vanillabp.pea.processservice.PeaProcessService;
 
 /**
- * Story 73: what this adapter can say about a failed phase-two operation. The API has no
+ * What this adapter can say about a failed phase-two operation. The API has no
  * typed exceptions, so exactly one family is classifiable - the one the adapter throws
  * itself when its API cannot do what VanillaBP asks.
  */

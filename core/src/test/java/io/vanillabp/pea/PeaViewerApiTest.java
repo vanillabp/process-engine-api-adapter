@@ -16,7 +16,7 @@ import io.vanillabp.pea.mock.InMemoryProcessEngine;
 import io.vanillabp.pea.processservice.PeaProcessService;
 
 /**
- * The viewer/history API (story 26) of the Process-Engine-API adapter. The
+ * The viewer/history API of the Process-Engine-API adapter. The
  * Process-Engine-API has neither a repository nor a query/history API
  * ({@code GAPS.md} entries 12 and 13), so the adapter answers from what it
  * deployed at boot:

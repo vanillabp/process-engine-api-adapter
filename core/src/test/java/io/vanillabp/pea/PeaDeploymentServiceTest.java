@@ -343,7 +343,7 @@ public class PeaDeploymentServiceTest {
         "expected the failing task definition to be named but got: "
             + failure.getMessage());
 
-    // failing USER-task subscriptions are equally guiding (story 24)
+    // failing USER-task subscriptions are equally guiding
     final var userTaskXml = """
         <?xml version="1.0" encoding="UTF-8"?>
         <bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:zeebe="http://camunda.org/schema/zeebe/1.0">
@@ -424,7 +424,7 @@ public class PeaDeploymentServiceTest {
       throw new UnsupportedOperationException();
     }
 
-    // story 66's migration fallback, deprecated for removal in 2.1 and none of this
+    // The migration fallback, deprecated for removal in 2.1 and none of this
     // BPMS's business: a test double implements it as long as the interface declares
     // it, and the mandatory 'removal' lint needs the suppression
     @SuppressWarnings("removal")
@@ -480,7 +480,7 @@ public class PeaDeploymentServiceTest {
   @org.junit.jupiter.api.DisplayName("Two adapter ids of this type cannot address different engines - the boot fails guiding")
   public void twoAdapterIdsOfThisTypeAreRejected() {
 
-    // story 34: the Process-Engine-API is provided by the application as beans and
+    // The Process-Engine-API is provided by the application as beans and
     // carries no per-adapter-id connection configuration (GAPS.md, entry 14)
     final var exception = Assertions.assertThrows(
         IllegalStateException.class,
@@ -498,7 +498,7 @@ public class PeaDeploymentServiceTest {
 
 
   /**
-   * Story 35: this BPMS has no isolation mechanism of its own, so the DEFAULT mode
+   * This BPMS has no isolation mechanism of its own, so the DEFAULT mode
    * {@code by-adapter} cannot be served - and {@code use-prefix} rewrites the raw
    * BPMN (the API has no model type).
    */
@@ -572,6 +572,7 @@ public class PeaDeploymentServiceTest {
       // the record keeps the PLAIN identifiers - they key the core's registries ...
       Assertions.assertEquals("RiskAssessment", context.getModels().getFirst().bpmnProcessId());
       // ... while the deployed BYTES carry the scoped ones
+      // (see decision 2 in the repository's README.md)
       final var deployed = new String(
           context.getModels().getFirst().resource(), StandardCharsets.UTF_8);
       Assertions.assertTrue(deployed.contains("id=\"loan-approval__RiskAssessment\""), deployed);

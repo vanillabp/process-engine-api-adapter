@@ -211,7 +211,7 @@ migration scenarios. Opening the command classes (or accepting interfaces) plus 
 workflow-existence query would resolve this. The mock treats a DEFAULT-mode
 `StartProcessByMessageCmd` as the phase-two start (documented in the mock).
 
-Follow-up (election story 25): the START re-dispatch mitigation probes
+Follow-up, the BPMS election: the START re-dispatch mitigation probes
 `awarenessOfWorkflowForRedispatch` before re-dispatching a recovered start entry.
 That probe must NEVER be optimistic (a wrong "known" skips the start and LOSES the
 workflow), so the adapter overrides it to an honest `UNKNOWN_TO_BPMS` - recovered
@@ -222,7 +222,7 @@ enable the mitigation here, too.
 ## 12. No repository API - deployed processes cannot be read back
 
 **Needed by VanillaBP:** the viewer API (`ProcessService#getProcessDefinitions` and
-`#getBpmnXml`, story 26) answers "which process definitions does this workflow use, and
+`#getBpmnXml`) answers "which process definitions does this workflow use, and
 what is their BPMN XML" - a BPMN viewer renders the diagram from it.
 
 **Offered by the Process-Engine-API:** nothing. `DeploymentApi.deploy` returns a
@@ -247,7 +247,7 @@ definition id/version) would resolve this.
 
 ## 13. No query/history API - workflows have no observable timeline
 
-**Needed by VanillaBP:** `ProcessService#getWorkflowHistory` (story 26) reports when a
+**Needed by VanillaBP:** `ProcessService#getWorkflowHistory` reports when a
 workflow started/ended and which elements were executed (start/end time, canceled, error,
 and for call activities a context to dig into the called instance).
 
@@ -268,7 +268,7 @@ would resolve it.
 
 **Needed by VanillaBP:** VanillaBP's migration feature configures several adapter ids of
 ONE BPMS type side by side (e.g. two Camunda 8 clusters) - new workflows start in the
-first-priority one while existing workflows are located in the others. Story 34 asks
+first-priority one while existing workflows are located in the others. VanillaBP asks
 every adapter to validate that its configured ids actually address DIFFERENT systems.
 
 **Offered by the Process-Engine-API:** nothing to distinguish them by. The engine is
@@ -347,7 +347,7 @@ out of proportion. A "process instance ended" subscription in the API would reso
 ## 18. The payload of a running process instance cannot be updated
 
 **Needed by VanillaBP:** an application may tell the BPMS that the workflow aggregate
-changed (`aggregateChanged`, story 44) - so the engine sees the current state before it
+changed (`aggregateChanged`) - so the engine sees the current state before it
 evaluates anything else. Camunda 7 writes the shared values at the workflow's or a task's
 scope, Camunda 8 sends `SetVariables` for the process instance respectively the element
 instance.
@@ -367,7 +367,7 @@ after the commit. A payload-modification command for process instances would res
 
 **Needed by VanillaBP:** an application may serve several versions of a deployed process
 with different methods (`@WorkflowTask(version = ...)`, and likewise
-`@WorkflowStartedByBpms` and `@WorkflowEnded`, story 48). That needs two things from the
+`@WorkflowStartedByBpms` and `@WorkflowEnded`). That needs two things from the
 BPMS: the version a delivered task belongs to, and - where the specification names a
 version TAG - which versions carry which tag.
 
@@ -391,8 +391,8 @@ of this process" query would resolve it.
 ## 20. No way to check the older versions the engine still holds
 
 **Needed by VanillaBP:** a BPMS keeps every version of a process it was ever given, and
-workflows keep running on them, while the application brings only its newest model. Story
-57 therefore asks each BPMS at startup which versions it still holds, reads the models of
+workflows keep running on them, while the application brings only its newest model.
+VanillaBP therefore asks each BPMS at startup which versions it still holds, reads the models of
 the older ones and reports the task definitions no `@WorkflowTask` method serves any more -
 before those workflows run into an incident. It also asks how many workflows still run on a
 version, which decides whether a finding is a warning or a defect, and which tells an
@@ -415,7 +415,7 @@ deployed versions and their models would close gap 19 and this one together.
 
 **Needed by VanillaBP:** as soon as a BPMN process can hold more than one token, two
 branches write the same workflow aggregate, and without a version attribute one of the two
-writes is lost silently (story 59). VanillaBP therefore asks each adapter, while it wires a
+writes is lost silently. VanillaBP therefore asks each adapter, while it wires a
 process, which elements can put a second token into a running workflow - a non-interrupting
 boundary event, a forking parallel or inclusive gateway, a parallel multi-instance activity,
 a non-interrupting event subprocess. The core turns that into one guiding WARN per process
@@ -427,7 +427,7 @@ runs, so there is nothing to search for those elements.
 
 **Consequence for the adapter:** it reports nothing, which switches the hint off for
 applications on this adapter - the core stays silent rather than guessing from an absent
-answer. Everything else of story 59 works here, because it does not depend on the model:
+answer. The rest of the concurrent-token support works here, because it does not depend on the model:
 VanillaBP owns the transaction of a task, recognizes a version conflict in its commit, logs
 the guiding message and passes the exception on to this adapter. What the engine behind the
 Process-Engine-API does with the failed task is its own business, as with every failure.

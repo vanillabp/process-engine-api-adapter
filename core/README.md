@@ -78,7 +78,7 @@ records the `PREFLIGHT_CHECK` but never dispatches a `SYNC`.
 **Idempotency limitation:** phase two is at-least-once (outbox), so a crash between a
 successful create and the outbox entry removal can duplicate the instance. Strict dedup by
 `workflowModuleId + bpmnProcessId + workflowAggregateId` needs the core-side
-`WorkflowInstanceRegistry` (a separate story).
+`WorkflowInstanceRegistry`, which does not exist yet.
 
 ## Process-Engine-API interfaces used
 

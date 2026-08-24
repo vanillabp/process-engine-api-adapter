@@ -18,7 +18,7 @@ import io.vanillabp.pea.quarkus.tasksample.TaskWorkflowService;
 import jakarta.inject.Inject;
 
 /**
- * Task processing on Quarkus (story 21c): the adapter subscribes per task
+ * Task processing on Quarkus: the adapter subscribes per task
  * definition at boot and a delivered task dispatches through the core's
  * transaction runner (JTA transaction + activated request context) into the
  * {@code @WorkflowTask} handler - the aggregate mutation is committed BEFORE the
@@ -63,7 +63,7 @@ public class PeaTaskProcessingTest {
         subscribed,
         "expected one subscription per task definition of the deployed BPMN");
 
-    // story 99: the subscription names what the delivery has to carry - here the
+    // The subscription names what the delivery has to carry - here the
     // aggregate-ID variable alone, since the handler declares no @TaskParam. The
     // 'fetch-variables: all' of the yaml belongs to another task definition and must
     // not reach this subscription

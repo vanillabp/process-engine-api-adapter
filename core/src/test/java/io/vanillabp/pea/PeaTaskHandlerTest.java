@@ -20,7 +20,7 @@ import io.vanillabp.pea.mock.InMemoryProcessEngine;
 import io.vanillabp.pea.wiring.PeaTaskHandler;
 
 /**
- * Routing and failure edge cases of the {@link PeaTaskHandler} (story 21c) which
+ * Routing and failure edge cases of the {@link PeaTaskHandler} which
  * the end-to-end tests do not reach: the mock engine always supplies the
  * {@code bpmnProcessId} meta entry, so the unique-definition fallback and the
  * ambiguous-definition guiding failure are exercised here directly.
@@ -47,7 +47,7 @@ public class PeaTaskHandlerTest {
     String invokedProcessVersion;
 
     /**
-     * A <code>&#64;TaskParam</code> the handler method would read (story 99), or
+     * A <code>&#64;TaskParam</code> the handler method would read, or
      * <code>null</code> for a method reading nothing but its aggregate.
      */
     String readParameter;
@@ -69,7 +69,7 @@ public class PeaTaskHandlerTest {
 
     }
 
-    // story 66's migration fallback, deprecated for removal in 2.1 and none of this
+    // The migration fallback, deprecated for removal in 2.1 and none of this
     // BPMS's business: a test double implements it as long as the interface declares
     // it, and the mandatory 'removal' lint needs the suppression
     @SuppressWarnings("removal")
@@ -103,7 +103,7 @@ public class PeaTaskHandlerTest {
 
 
     /**
-     * Story 28b: what the completion payload carries beside the ID variable.
+     * What the completion payload carries beside the ID variable.
      */
     java.util.Map<String, Object> syncedValues = java.util.Map.of();
 
@@ -187,7 +187,7 @@ public class PeaTaskHandlerTest {
   @Test
   public void theVersionTagOfTheTaskMetaIsReported() {
 
-    // story 48 / GAPS 19: the Process-Engine-API knows no version NUMBER, so the
+    // The Process-Engine-API knows no version NUMBER (GAPS.md, entry 19), so the
     // version tag from the task's meta map is all a version specification can be
     // matched against - and only where the engine behind the API supplies it
     engine.getOpenTaskIds().add("task-4");
@@ -229,7 +229,7 @@ public class PeaTaskHandlerTest {
   @Test
   public void aTaskParameterTheSubscriptionAskedForIsAnswered() {
 
-    // story 99: the subscription named 'region', so the delivery carries it and the
+    // The subscription named 'region', so the delivery carries it and the
     // core reads it through the invocation context
     engine.getOpenTaskIds().add("task-6");
     invoker.readParameter = "region";

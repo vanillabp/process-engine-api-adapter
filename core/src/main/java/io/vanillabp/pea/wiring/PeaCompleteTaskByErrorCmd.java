@@ -21,8 +21,8 @@ public class PeaCompleteTaskByErrorCmd extends CompleteTaskByErrorCmd {
   }
 
   /**
-   * The BPMN error carrying the aggregate state shared with the engine (story
-   * 28b) - the error boundary's outgoing path may branch on it.
+   * The BPMN error carrying the aggregate state shared with the engine - the error
+   * boundary's outgoing path may branch on it.
    *
    * @param taskId The task to cancel
    * @param errorCode The BPMN error code

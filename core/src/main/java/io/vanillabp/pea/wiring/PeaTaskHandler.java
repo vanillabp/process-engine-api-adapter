@@ -70,13 +70,13 @@ public class PeaTaskHandler implements TaskHandler {
   private final ServiceTaskCompletionApi serviceTaskCompletionApi;
 
   /**
-   * Translates the identifiers the engine knows back into the plain ones (story 35)
+   * Translates the identifiers the engine knows back into the plain ones
    * - a no-op unless the module uses prefixes. May be <code>null</code>.
    */
   private final io.vanillabp.integration.adapter.spi.NameClashAvoidanceSupport scoping;
 
   /**
-   * What this subscription asked the engine for (story 99) - the payload of a delivery
+   * What this subscription asked the engine for - the payload of a delivery
    * carries exactly that, so a <code>&#64;TaskParam</code> naming anything else is
    * answered with a guiding failure instead of a <code>null</code>.
    */
@@ -218,7 +218,7 @@ public class PeaTaskHandler implements TaskHandler {
   }
 
   /**
-   * The payload a completion command carries (story 28b): the values the workflow
+   * The payload a completion command carries: the values the workflow
    * aggregate shares with the engine - the {@code @WorkflowTask} method just
    * changed it and a gateway right behind this task has to see the NEW values -
    * plus, always, the variable holding the aggregate's ID (the
@@ -324,17 +324,17 @@ public class PeaTaskHandler implements TaskHandler {
 
     /**
      * The version tag of the deployed process definition or <code>null</code> - the
-     * Process-Engine-API knows no version number (story 48, GAPS.md).
+     * Process-Engine-API knows no version number (GAPS.md).
      */
     private final String processVersion;
 
     /**
-     * The adapter delivering this task (story 54).
+     * The adapter delivering this task.
      */
     private final String adapterId;
 
     /**
-     * What the subscription asked for (story 99) - see
+     * What the subscription asked for - see
      * {@link #getTaskParameter(String)}.
      */
     private final PeaFetchVariables.Selection fetchVariables;
@@ -412,7 +412,7 @@ public class PeaTaskHandler implements TaskHandler {
       // the engine's task ID identifies this piece of work: a task redelivered
       // because the engine never learned the result arrives under the same ID, a new
       // activation of the element under a different one - the identity the core
-      // remembers a processed delivery by (story 51)
+      // remembers a processed delivery by
       return taskId;
 
     }

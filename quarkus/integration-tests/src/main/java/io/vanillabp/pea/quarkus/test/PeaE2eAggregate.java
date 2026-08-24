@@ -3,6 +3,8 @@ package io.vanillabp.pea.quarkus.test;
 import io.vanillabp.spi.service.NoSyncWithBPMS;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
+import lombok.Getter;
+import lombok.Setter;
 
 /**
  * The workflow aggregate of the Quarkus end-to-end application. It is a JPA entity
@@ -16,6 +18,8 @@ import jakarta.persistence.Id;
  * set which only work while a session is open.
  */
 @Entity
+@Getter
+@Setter
 public class PeaE2eAggregate {
 
   @Id
@@ -26,63 +30,11 @@ public class PeaE2eAggregate {
   private String taskId;
 
   /**
-   * Never sent to the engine - which (story 28b) also makes the class' sync mode
+   * Never sent to the engine - which also makes the class' sync mode
    * "share everything else".
    */
   @NoSyncWithBPMS
   private String secret;
-
-  public String getId() {
-
-    return id;
-
-  }
-
-  public void setId(
-      final String id) {
-
-    this.id = id;
-
-  }
-
-  public String getResults() {
-
-    return results;
-
-  }
-
-  public void setResults(
-      final String results) {
-
-    this.results = results;
-
-  }
-
-  public String getTaskId() {
-
-    return taskId;
-
-  }
-
-  public void setTaskId(
-      final String taskId) {
-
-    this.taskId = taskId;
-
-  }
-
-  public String getSecret() {
-
-    return secret;
-
-  }
-
-  public void setSecret(
-      final String secret) {
-
-    this.secret = secret;
-
-  }
 
   public void appendResult(
       final String result) {

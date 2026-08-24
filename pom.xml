@@ -48,8 +48,7 @@
     <jacoco.version>0.8.15</jacoco.version>
     <!-- the line each platform's aggregated report has to stay above, in PERCENT of
          covered instructions - enforced by test-coverage-report/coverage-gate. Both
-         platforms are held to the rule of 90 since story 100 gave Quarkus the
-         end-to-end suite it was missing. -->
+         platforms are held to the same rule of 90. -->
     <coverage.threshold.spring-boot>90</coverage.threshold.spring-boot>
     <coverage.threshold.quarkus>90</coverage.threshold.quarkus>
     <lombok.version>1.18.46</lombok.version>

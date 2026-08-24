@@ -11,8 +11,8 @@ import io.vanillabp.integration.utils.SpringDataUtil;
  * says who owns a workflow aggregate nobody else claims. Any usage of either fails loudly:
  * the skeleton tests never persist anything.
  * <p>
- * The second bean is what story 114 of the platform asks for. An aggregate without a
- * persistence ends the startup now, because the fallback looks for a Spring Data
+ * The second bean is what the platform asks for. An aggregate without a
+ * persistence ends the startup, because the fallback looks for a Spring Data
  * repository and gets the stub's exception instead - and a context of this module reaches
  * that state easily, since scanning picks up the {@code @WorkflowService} classes of the
  * other tests without the persistence beans they declare next to themselves. A double

@@ -16,7 +16,7 @@ import io.vanillabp.pea.mock.InMemoryProcessEngine;
 import io.vanillabp.pea.processservice.PeaProcessService;
 
 /**
- * Task-operation edge cases of the {@link PeaProcessService} (story 22) at the
+ * Task-operation edge cases of the {@link PeaProcessService} at the
  * Process-Engine-API boundary: the awareness probe (PREFLIGHT_CHECK completion),
  * the phase-one existence check aborting the transaction and the gone-task
  * tolerance of phase two (at-least-once residual).
@@ -25,7 +25,7 @@ import io.vanillabp.pea.processservice.PeaProcessService;
 public class PeaProcessServiceTaskOpsTest {
 
   /**
-   * What a probe is asked about (story 107).
+   * What a probe is asked about.
    */
   private static final io.vanillabp.integration.adapter.spi.WorkflowScope SCOPE = io.vanillabp.integration.adapter.spi.WorkflowScope
       .of("test-module", "TestProcess");
@@ -90,7 +90,7 @@ public class PeaProcessServiceTaskOpsTest {
     service.cancelUserTaskPhaseTwo("mod", "Process", null, "42", "utask-2", "APPROVAL_WITHDRAWN");
     assertEquals("APPROVAL_WITHDRAWN", engine.getErroredTasks().getFirst().errorCode());
 
-    // repeating both fails now (story 86): whether the user task was finished meanwhile or
+    // repeating both fails now: whether the user task was finished meanwhile or
     // the engine is unreachable looks the same to this adapter, so the outbox decides
     assertThrows(
         IllegalStateException.class,
@@ -102,7 +102,7 @@ public class PeaProcessServiceTaskOpsTest {
   }
 
   @Test
-  @DisplayName("phase two completes/cancels open tasks, and a failure reaches the outbox (story 86)")
+  @DisplayName("phase two completes/cancels open tasks, and a failure reaches the outbox")
   public void phaseTwoReportsFailuresInsteadOfDroppingThem() {
 
     engine.getOpenTaskIds().add("task-4");

@@ -18,10 +18,10 @@ import io.vanillabp.pea.wiring.PeaFetchVariables;
 import io.vanillabp.pea.wiring.PeaFetchVariablesResolver;
 
 /**
- * What a task subscription of this adapter asks the engine for (story 99), asserted where
+ * What a task subscription of this adapter asks the engine for, asserted where
  * it becomes visible: the {@code SubscribeForTaskCmd} the adapter hands the
- * Process-Engine-API. Until this story every subscription named the empty set, which is
- * the API's way of asking for the complete payload of the process instance.
+ * Process-Engine-API. A subscription naming the empty set asks for the complete payload
+ * of the process instance, which is what the named set avoids.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class PeaFetchVariablesTest {

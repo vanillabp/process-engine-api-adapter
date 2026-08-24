@@ -22,8 +22,8 @@ public class OutboxTestApplication {
    * VanillaBP registers the {@code @WorkflowService} classes it finds for the workflow
    * module on the classpath, and every test of this Maven module shares one classpath and
    * one module id, so this application is asked for a persistence of
-   * {@code TaskProcessingIntegrationTest}'s aggregate as well. Since story 114 of the
-   * platform an aggregate whose persistence cannot be determined ends the startup instead
+   * {@code TaskProcessingIntegrationTest}'s aggregate as well. An aggregate whose
+   * persistence cannot be determined ends the startup instead
    * of failing at the first task, which is what this bean answers: it is declared FOR that
    * class, so it does not compete with the JPA persistence this application really uses,
    * and every method fails loudly because nothing here may reach it.

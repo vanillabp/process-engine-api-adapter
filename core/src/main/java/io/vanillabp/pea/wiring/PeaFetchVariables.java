@@ -10,10 +10,9 @@ import java.util.TreeSet;
  *
  * <p>
  * A {@code SubscribeForTaskCmd} carries a set of payload variables, and an EMPTY set
- * means "hand me everything the process instance holds". That is what this adapter
- * subscribed with until story 99, and it is the same state Camunda 8 was in before story
- * 93: every delivery carries a copy of data the handler already has in the workflow
- * aggregate, plus whatever else the model accumulated.
+ * means "hand me everything the process instance holds". Subscribing that way makes
+ * every delivery carry a copy of data the handler already has in the workflow aggregate,
+ * plus whatever else the model accumulated, so this adapter names the set instead.
  * </p>
  *
  * <p>
@@ -150,9 +149,8 @@ public final class PeaFetchVariables {
 
   /**
    * What a delivery says when the variable holding the workflow aggregate's ID is not
-   * there. Until story 99 there was one cause, a workflow started past VanillaBP; since
-   * the subscriptions name what they ask for, a set which does not carry the name is the
-   * second one, so the message names the set too.
+   * there. Two causes lead here: a workflow started past VanillaBP, and a subscription
+   * whose named set does not carry the name. The message therefore names the set too.
    *
    * @param what What kind of task it is, capitalized ("Task", "User task")
    * @param taskId The engine's task id

@@ -40,6 +40,8 @@ import io.vanillabp.pea.PeaAdapter;
  * @param <A> The workflow aggregate type
  */
 @lombok.extern.slf4j.Slf4j
+// see decision 3 in the repository's README.md
+@SuppressWarnings("LombokSetterMayBeUsed")
 public class PeaProcessService<A> implements MigratableProcessService<A> {
 
   private final String adapterId;
@@ -53,7 +55,7 @@ public class PeaProcessService<A> implements MigratableProcessService<A> {
   private final dev.bpmcrafters.processengineapi.correlation.CorrelationApi correlationApi;
 
   /**
-   * The engine's signal API (story 42). Optional: an engine implementation without
+   * The engine's signal API. Optional: an engine implementation without
    * it leaves signals unsupported, which {@link #sendSignalPhaseTwo} says.
    */
   private dev.bpmcrafters.processengineapi.correlation.SignalApi signalApi;
@@ -72,7 +74,7 @@ public class PeaProcessService<A> implements MigratableProcessService<A> {
 
   /**
    * Runs a phase-one check right before the transaction of the workflow aggregate commits
-   * (story 87, platform-supplied). Optional: without it the checks run when the application
+   * (platform-supplied). Optional: without it the checks run when the application
    * calls, which is what this adapter did before - correct, with a wider window between the
    * check and the phase-two dispatch.
    */
@@ -114,7 +116,7 @@ public class PeaProcessService<A> implements MigratableProcessService<A> {
   }
 
   /**
-   * The core's sync model (story 28). The Process-Engine-API is treated as a
+   * The core's sync model. The Process-Engine-API is treated as a
    * REMOTE BPMS - it can only evaluate what VanillaBP puts into the payload - so
    * the adapter's default is
    * {@link io.vanillabp.integration.adapter.spi.AggregateSyncMode#FULL}. May be
@@ -130,7 +132,7 @@ public class PeaProcessService<A> implements MigratableProcessService<A> {
   public static final io.vanillabp.integration.adapter.spi.AggregateSyncMode SYNC_MODE = io.vanillabp.integration.adapter.spi.AggregateSyncMode.FULL;
 
   /**
-   * The core's name-clash-avoidance model (story 35): translates process ids, message
+   * The core's name-clash-avoidance model: translates process ids, message
    * names and error codes into what the engine knows. May be <code>null</code>
    * (tests): identifiers are passed through then.
    */
@@ -182,7 +184,7 @@ public class PeaProcessService<A> implements MigratableProcessService<A> {
    * aggregate's ID property). The Process-Engine-API has no business-key slot:
    * that variable is how VanillaBP finds the workflow again, so an aggregate
    * annotated {@code @NoSyncWithBPMS} must not lose it. See
-   * {@code PeaSharedValuesTest} (story 106).
+   * {@code PeaSharedValuesTest}.
    */
   private Map<String, Object> payloadOf(
       final AggregatePersistenceAware<A> aggregatePersistence,
@@ -339,8 +341,8 @@ public class PeaProcessService<A> implements MigratableProcessService<A> {
   public boolean deliversTasksAtLeastOnce() {
 
     // subscriptions report a task as completed AFTER the local transaction was
-    // committed, so an engine which did not learn the result delivers the task again
-    // (story 51). The identity across such a redelivery is the TASK ID the engine
+    // committed, so an engine which did not learn the result delivers the task again.
+    // The identity across such a redelivery is the TASK ID the engine
     // reports, which every invocation context carries.
     return true;
 
@@ -387,8 +389,8 @@ public class PeaProcessService<A> implements MigratableProcessService<A> {
       final String taskId) {
 
     // the non-advancing phase-one check: a PREFLIGHT_CHECK completion validates the task
-    // still exists so the local transaction can abort early - run right before the commit
-    // (story 87), which keeps the window to the phase-two dispatch small
+    // still exists so the local transaction can abort early - run right before the commit,
+    // which keeps the window to the phase-two dispatch small
     beforeCommit(
         aggregatePersistence,
         () -> preflight(new io.vanillabp.pea.wiring.PeaCompleteTaskCmd(
@@ -413,7 +415,7 @@ public class PeaProcessService<A> implements MigratableProcessService<A> {
   }
 
   /**
-   * Hands a phase-one check to the platform's pre-commit hook (story 87), so it runs right
+   * Hands a phase-one check to the platform's pre-commit hook, so it runs right
    * before the transaction of the workflow aggregate commits instead of when the application
    * called - the later the check, the smaller the window in which its answer goes stale
    * before phase two acts on it. Without a hook the check runs immediately.
@@ -466,7 +468,7 @@ public class PeaProcessService<A> implements MigratableProcessService<A> {
 
     try {
       serviceTaskCompletionApi
-          // story 28b: the aggregate changed before the task was completed - the
+          // The aggregate changed before the task was completed - the
           // engine only sees what the adapter sends
           .completeTask(new io.vanillabp.pea.wiring.PeaCompleteTaskCmd(
               taskId, payloadOf(aggregatePersistence, workflowAggregateId, null)))
@@ -499,7 +501,7 @@ public class PeaProcessService<A> implements MigratableProcessService<A> {
 
     try {
       serviceTaskCompletionApi
-          // story 28b: the error boundary's outgoing path may branch on the
+          // The error boundary's outgoing path may branch on the
           // aggregate, which the caller changed before canceling the task
           .completeTaskByError(new io.vanillabp.pea.wiring.PeaCompleteTaskByErrorCmd(
               taskId, scopedIdentifier(workflowModuleId,
@@ -686,8 +688,8 @@ public class PeaProcessService<A> implements MigratableProcessService<A> {
   private final java.util.concurrent.atomic.AtomicBoolean noWorkflowAwarenessWarned = new java.util.concurrent.atomic.AtomicBoolean();
 
   /**
-   * The START re-dispatch mitigation probe (story 25) - STRICTER contract than
-   * {@link #awarenessOfWorkflow(io.vanillabp.integration.spi.AggregatePersistenceAware, Object)}: the answer must NEVER be optimistic.
+   * The START re-dispatch mitigation probe - STRICTER contract than
+   * {@link #awarenessOfWorkflow}: the answer must NEVER be optimistic.
    * The Process-Engine-API cannot probe a workflow's existence at all (GAPS.md
    * entry 11), so the honest answer is
    * {@link WorkflowAwareness#UNKNOWN_TO_BPMS}: the recovered start proceeds and
@@ -706,7 +708,7 @@ public class PeaProcessService<A> implements MigratableProcessService<A> {
   }
 
   /**
-   * What a failed phase-two operation throws (story 86).
+   * What a failed phase-two operation throws.
    * <p>
    * The Process-Engine-API declares no typed exceptions, so this adapter cannot tell "the
    * task is gone" - the accepted at-least-once residual - from "the engine is unreachable".
@@ -744,7 +746,7 @@ public class PeaProcessService<A> implements MigratableProcessService<A> {
   }
 
   /**
-   * Whether repeating a failed phase-two operation may succeed (story 73).
+   * Whether repeating a failed phase-two operation may succeed.
    * <p>
    * The Process-Engine-API declares no typed exceptions: whatever an engine
    * implementation throws arrives wrapped in an {@link java.util.concurrent.ExecutionException},
@@ -920,9 +922,8 @@ public class PeaProcessService<A> implements MigratableProcessService<A> {
       final String messageName,
       final String correlationId) {
 
-    // PAYLOAD DOCTRINE: no message CONTENT travels - what does travel is the
-    // aggregate state shared with the engine (story 28/28b), because the engine
-    // can only evaluate expressions against the payload it was given.
+    // no message CONTENT travels - what does travel is the aggregate state shared
+    // with the engine (see decision 1 in the repository's README.md).
     // CorrelateMessageCmd is FINAL - the command carries the DEFAULT execution
     // mode; the intended SYNC semantics cannot be expressed (GAPS.md entry 11).
     final var correlationKey = correlationId != null
@@ -981,7 +982,7 @@ public class PeaProcessService<A> implements MigratableProcessService<A> {
       final String messageName) {
 
     // no message CONTENT travels - what travels is the aggregate state shared with
-    // the engine (story 28) plus the technical aggregate-ID variable;
+    // the engine plus the technical aggregate-ID variable;
     // StartProcessByMessageCmd is FINAL - the DEFAULT execution mode travels
     // (GAPS.md entry 11); schedule deduplication comes from the outbox key
     // 'module|process|aggregateId'
@@ -1044,7 +1045,7 @@ public class PeaProcessService<A> implements MigratableProcessService<A> {
     // actually create the process instance (SYNC). The aggregate id travels as a payload
     // variable named after the aggregate's ID property. A failed start throws so the
     // outbox retries the dispatch. Idempotency (moduleId+bpmnProcessId+aggregateId)
-    // relies on the core-side WorkflowInstanceRegistry - a separate story; until then a
+    // relies on the core-side WorkflowInstanceRegistry, which does not exist yet; a
     // crash between a successful create and marking the outbox entry DONE may duplicate
     // the instance (at-least-once).
     await(

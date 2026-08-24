@@ -146,10 +146,10 @@ replaces the mock with a real Process-Engine-API implementation.
   the core-side `WorkflowInstanceRegistry` story lands.
 - **Platform coverage:** deployment is wired and integration-tested on **both platforms**:
   Spring Boot (`PeaDeploymentServiceTest`, `DeploymentIntegrationTest`) and Quarkus
-  (`PeaDeploymentPipelineTest` - since story 26b the Quarkus platform integration runs the
-  deployment pipeline at boot; the test proves `deployResources` reaches the in-memory mock
+  (`PeaDeploymentPipelineTest` - the Quarkus platform integration runs the
+  deployment pipeline at boot, and the test proves `deployResources` reaches the in-memory mock
   engine, `InMemoryProcessEngine.getDeployments()`).
-- **Task processing** (story 21c): at `startWorkflowProcessing` the adapter subscribes ONE
+- **Task processing:** at `startWorkflowProcessing` the adapter subscribes ONE
   `TaskSubscriptionApi` subscription per distinct task definition of the module's BPMN files
   (the `zeebe:taskDefinition` type of service/send/business-rule/script tasks - the API does
   not define the mapping, [`GAPS.md`](GAPS.md), entry 7). Task wiring is validated during
@@ -158,7 +158,7 @@ replaces the mock with a real Process-Engine-API implementation.
   BEFORE the completion command is sent (at-least-once ordering; handlers must be idempotent).
   Outcomes: normal return → `completeTask`; `TaskException` → `completeTaskByError` with the
   error code (aggregate changes committed - the V1 contract); `@TaskId` handlers leave the
-  task open for asynchronous completion (upcoming story); any other exception → local rollback
+  task open for asynchronous completion; any other exception → local rollback
   plus `failTask` (retry semantics are the underlying engine's). All completion commands carry
   **`ExecutionMode.SYNC`** - they run AFTER the local commit, the phase-two shape; the built-in
   command classes cannot carry a non-default mode, so the adapter subclasses them
@@ -167,7 +167,7 @@ replaces the mock with a real Process-Engine-API implementation.
   entry the task definition has to be unique across the module's processes. A completion
   failing AFTER the local commit is tolerated with a WARN - the engine redelivers and the
   idempotent handler converges.
-- **Completing/canceling async tasks** (`ProcessService#completeTask`/`#cancelTask`, story 22):
+- **Completing/canceling async tasks** (`ProcessService#completeTask`/`#cancelTask`):
   the awareness probe and the phase-one existence check are `ExecutionMode.PREFLIGHT_CHECK`
   completions (validate only - exactly what the mode is for); the actual completion/cancellation
   runs after the caller's commit through the outbox as a SYNC `completeTask`/`completeTaskByError`
@@ -177,7 +177,7 @@ replaces the mock with a real Process-Engine-API implementation.
   CANCELED` cannot be delivered (the subscription's termination callback carries only the task
   ID, no aggregate reference). The mock tracks open tasks (`deliverTask` opens,
   SYNC completions close) so preflights validate honestly.
-- **User tasks** (story 24): user tasks with a `zeebe:formDefinition` EXTERNAL reference (the
+- **User tasks:** user tasks with a `zeebe:formDefinition` EXTERNAL reference (the
   reference is the task definition) are subscribed via the Task Subscription API with
   `TaskType.USER`; a delivered user task is a CREATED notification to an OPTIONAL
   `@WorkflowTask` method (never completing the task; the task's ID arrives as `@TaskId`).
@@ -185,14 +185,14 @@ replaces the mock with a real Process-Engine-API implementation.
   `completeUserTask`/`cancelUserTask` run through the `UserTaskCompletionApi` with the same
   PREFLIGHT_CHECK (phase one) / SYNC (phase two) mapping as service tasks; failing
   notifications are logged loudly but never break the user task itself.
-- **Message correlation** (story 23): `correlateMessage` sends a `CorrelateMessageCmd` with
+- **Message correlation:** `correlateMessage` sends a `CorrelateMessageCmd` with
   `correlationKey = correlationId ?? aggregate ID` after the caller's commit (outbox); no
   payload travels. `startWorkflowByMessage` sends a `StartProcessByMessageCmd` carrying only
   the aggregate-ID variable. LIMITATION ([`GAPS.md`](GAPS.md), entry 11): both command classes
   are FINAL - the execution mode cannot be transported (no PREFLIGHT_CHECK phase one, commands
   travel with DEFAULT mode) and workflow awareness cannot be probed at all (the adapter answers
   optimistically with a one-time guiding WARN - unsafe for multi-BPMS migration setups).
-- **Aggregate sync** (stories 28 and 44): the API is a remote BPMS, so everything is shared
+- **Aggregate sync:** the API is a remote BPMS, so everything is shared
   unless `@NoSyncWithBPMS` excludes it, and the shared attributes travel as the payload of
   every command sent on behalf of a workflow (start, task completion incl.
   `completeTaskByError`, async-task and user-task completion, correlation). The aggregate is
@@ -212,8 +212,8 @@ replaces the mock with a real Process-Engine-API implementation.
   the version TAG from the task meta (key `processDefinitionVersionTag`, named by the API's
   `CommonRestrictions`) where the engine supplies it. An exact tag therefore works, while a
   range over tags and any specification made of numbers matches nothing and is reported once.
-- **Viewing workflows** (`ProcessService#getProcessDefinitions`/`#getBpmnXml`/`#getWorkflowHistory`,
-  story 26): served from what THIS application version deployed - the Process-Engine-API has
+- **Viewing workflows** (`ProcessService#getProcessDefinitions`/`#getBpmnXml`/`#getWorkflowHistory`):
+  served from what THIS application version deployed - the Process-Engine-API has
   neither a repository nor a query/history API ([`GAPS.md`](GAPS.md), entries 12 and 13). The
   adapter-native process definition id is `<workflow module>|<bpmn process id>`, the reported
   version is the deployment key, and the BPMN XML is the deployed resource byte for byte. The
@@ -221,13 +221,12 @@ replaces the mock with a real Process-Engine-API implementation.
   underlying BPMS"), so there are no secondary history contexts and call activities cannot be
   drilled into; call-activity definitions are not reported either (no BPMN model type).
 
-## What a subscription asks the engine for (story 99)
+## What a subscription asks the engine for
 
 A `SubscribeForTaskCmd` carries a set of payload variables, and an EMPTY set means "hand me
-everything the process instance holds". That is what every subscription of this adapter named
-until this story - the same state Camunda 8 was in before story 93, and with the same cost: a
-delivery carrying a copy of the workflow aggregate the handler is served from its own database
-anyway.
+everything the process instance holds". A subscription which names nothing costs a delivery
+carrying a copy of the workflow aggregate the handler is served from its own database anyway,
+so every subscription of this adapter names its set.
 
 `PeaFetchVariables` holds the two halves of the answer, the set a subscription names and the
 messages a delivery writes when it is asked for something outside it.
@@ -259,7 +258,7 @@ The mock engine narrows a delivered payload to what the subscription asked for
 (`InMemoryProcessEngine.ActiveSubscription#narrow`). Without that the derivation would be
 asserted and never exercised.
 
-## When a phase-one check runs (story 87)
+## When a phase-one check runs
 
 The phase-one checks of this adapter are `PREFLIGHT_CHECK` completions: they validate that
 the task still exists and never advance the process. They used to run when the application
@@ -269,7 +268,7 @@ in which its answer goes stale before phase two acts on it, and a failing check 
 the caller's transaction - that is the whole point of asking in phase one.
 
 The platform resolves the transaction runner of the aggregate first, so the check hooks into
-the unit of work the aggregate is actually stored in - which since story 70 may be one the
+the unit of work the aggregate is actually stored in - which may be one the
 application brought. Where no hook is available the check runs immediately, the behaviour this
 adapter had before.
 
@@ -278,7 +277,7 @@ a missing query: `CorrelateMessageCmd` and `SendSignalCmd` are Kotlin `data clas
 final, so the `PREFLIGHT_CHECK` execution mode cannot be transported. Task commands are `open`
 classes, which is why the checks above exist at all.
 
-## Which phase-two failures are repeated (story 73)
+## Which phase-two failures are repeated
 
 The phase-two outbox repeats a failed operation until the entry is blocked. The
 Process-Engine-API declares no typed exceptions - whatever an engine implementation throws
@@ -288,10 +287,10 @@ itself: `UnsupportedOperationException`, raised where the API cannot do what Van
 signal without a `SignalApi`, pushing a changed aggregate into a running instance). Those
 entries are blocked at once. Everything else is repeated, which is the safe default.
 
-### A failure of phase two is reported, not dropped (story 86)
+### A failure of phase two is reported, not dropped
 
-Until story 86 the phase-two completion of a task caught every failure, wrote a WARN line
-saying the task was gone and consumed the outbox entry. That is right for the case it was
+The phase-two completion of a task used to catch every failure, write a WARN line saying the
+task was gone and consume the outbox entry. That is right for the case it was
 written for - a repeated completion of a task the engine already finished, the accepted
 at-least-once residual of every remote BPMS - and wrong for every other, because this API
 reports no typed errors: an engine which is unreachable answers exactly like one which
@@ -311,6 +310,44 @@ cause, then remove the entry. The message of the failure says so.
 The DELIVERY path is unchanged: when the engine hands this adapter a task and the completion
 afterwards fails, the engine redelivers the task, which is the recovery this adapter relies
 on. Nothing is lost there without the outbox.
+
+## Decision log
+
+Decisions this repository's code points at. A number is handed out once and never reused or
+renumbered, so a citation stays resolvable; a decision which gets overturned keeps its entry,
+marked as superseded and naming the entry which replaced it.
+
+### 1. A command carries the shared aggregate attributes and the aggregate-ID variable, nothing else
+
+The Process-Engine-API has no business key, so the variable named after the aggregate's ID
+attribute is the only way back from a process instance to the workflow, and it is written no
+matter what the sync model says. Beside it travels the state the aggregate shares with the
+engine, because the engine can evaluate an expression only against the payload it was given.
+Nothing else does: a correlated message carries no content of its own, and an attribute
+excluded by `@NoSyncWithBPMS` stays out of every command.
+
+This holds for every command sent on behalf of a workflow - starting it, completing a task
+with or without an error, completing or canceling an async or user task, correlating a
+message. The bullet *Aggregate sync* under
+[Behavior and limitations](#behavior-and-limitations) says what that means per operation.
+
+### 2. The deployed bytes carry scoped identifiers, the model in memory keeps plain ones
+
+This BPMS has no namespace which matches a workflow module, so name-clash avoidance is what
+keeps two modules apart, and it is applied by rewriting the BPMN resource on its way to the
+`DeploymentApi`: process ids, message and signal names, error and escalation codes, task
+definitions and form references. The `PeaBpmnModel` kept in memory holds the plain
+identifiers, because they are what the core's registries are keyed by, and every delivery
+coming back from the engine is translated to plain before the core sees it.
+
+### 3. A class opens its fields one by one, not as a whole
+
+The process service and the deployment service of this adapter hold dozens of fields, most of
+them collaborators nobody outside the class needs. Which of them a caller may read belongs to
+the surface of the class, so an accessor is declared per field, and `@Getter` on the class is
+refused even where an IDE offers it: it would publish the current field list and then keep
+publishing whatever field a later change adds. `@SuppressWarnings("LombokGetterMayBeUsed")` on
+such a class is what keeps that offer from coming back.
 
 ## Build
 

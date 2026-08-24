@@ -15,7 +15,7 @@ import io.vanillabp.spi.process.ProcessService;
 import jakarta.inject.Inject;
 
 /**
- * Proves the platform's runtime deployment pipeline (story 26b) drives the
+ * Proves the platform's runtime deployment pipeline drives the
  * Process-Engine-API adapter on Quarkus: the BPMN resource below the configured
  * <code>resources-location</code> is read at boot
  * ({@code readBpmn}/{@code prepareBpmn}/{@code wireBpmn}) and
