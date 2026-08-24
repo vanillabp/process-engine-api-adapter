@@ -40,6 +40,9 @@ import io.vanillabp.pea.PeaAdapter;
  * @param <A> The workflow aggregate type
  */
 @lombok.extern.slf4j.Slf4j
+// no Lombok here: the accessors are the deliberate surface of this class,
+// and generating them would hide which of its fields are meant to be read
+@SuppressWarnings("LombokSetterMayBeUsed")
 public class PeaProcessService<A> implements MigratableProcessService<A> {
 
   private final String adapterId;
@@ -687,7 +690,7 @@ public class PeaProcessService<A> implements MigratableProcessService<A> {
 
   /**
    * The START re-dispatch mitigation probe - STRICTER contract than
-   * {@link #awarenessOfWorkflow(io.vanillabp.integration.spi.AggregatePersistenceAware, Object)}: the answer must NEVER be optimistic.
+   * {@link #awarenessOfWorkflow}: the answer must NEVER be optimistic.
    * The Process-Engine-API cannot probe a workflow's existence at all (GAPS.md
    * entry 11), so the honest answer is
    * {@link WorkflowAwareness#UNKNOWN_TO_BPMS}: the recovered start proceeds and

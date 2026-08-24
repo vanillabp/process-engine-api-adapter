@@ -37,6 +37,7 @@ import io.vanillabp.spi.service.TaskException;
 import io.vanillabp.spi.service.TaskId;
 import io.vanillabp.spi.service.WorkflowService;
 import io.vanillabp.spi.service.WorkflowTask;
+import lombok.Getter;
 
 /**
  * Task processing against the extended in-memory mock, asserted at
@@ -72,8 +73,10 @@ public class TaskProcessingIntegrationTest {
 
   public static class PeaTaskAggregate {
 
+    @Getter
     String id;
 
+    @Getter
     String results;
 
     String taskId;
@@ -83,21 +86,11 @@ public class TaskProcessingIntegrationTest {
      * "share everything else" (opt-out).
      */
     @io.vanillabp.spi.service.NoSyncWithBPMS
+    @Getter
     String secret;
 
     // the sync model reads JavaBean properties: only what has a getter can be
     // shared with the engine at all
-    public String getId() {
-      return id;
-    }
-
-    public String getResults() {
-      return results;
-    }
-
-    public String getSecret() {
-      return secret;
-    }
 
     void appendResult(
         final String result) {

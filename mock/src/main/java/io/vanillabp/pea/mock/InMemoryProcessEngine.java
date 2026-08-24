@@ -184,9 +184,6 @@ public class InMemoryProcessEngine implements DeploymentApi, StartProcessApi, Co
   }
 
   /**
-   * Clears all recorded invocations and all fake state (deployments, started instances).
-   */
-  /**
    * Clears the recordings and every injected failure while KEEPING deployments,
    * started instances and active subscriptions - for tests exercising several
    * operations against the subscriptions opened at startup. The start-failure
@@ -208,6 +205,9 @@ public class InMemoryProcessEngine implements DeploymentApi, StartProcessApi, Co
 
   }
 
+  /**
+   * Clears all recorded invocations and all fake state (deployments, started instances).
+   */
   public void reset() {
 
     invocations.clear();

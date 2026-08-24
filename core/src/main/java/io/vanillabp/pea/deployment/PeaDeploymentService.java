@@ -47,6 +47,9 @@ import lombok.extern.slf4j.Slf4j;
  * implementation).
  */
 @Slf4j
+// no Lombok here: the accessors are the deliberate surface of this class,
+// and generating them would hide which of its fields are meant to be read
+@SuppressWarnings("LombokSetterMayBeUsed")
 public class PeaDeploymentService implements AdapterDeploymentService<PeaBpmnModel, PeaProcessingContext> {
 
   private final String adapterId;
@@ -145,9 +148,6 @@ public class PeaDeploymentService implements AdapterDeploymentService<PeaBpmnMod
   }
 
   /**
-   * A task definition as the engine knows it (prefixed under {@code use-prefix}).
-   */
-  /**
    * Resolves whether a subscription asks for the DERIVED payload variables or for all of
    * them, supplied by the platform modules. May be <code>null</code> (tests):
    * the derived set applies.
@@ -226,6 +226,9 @@ public class PeaDeploymentService implements AdapterDeploymentService<PeaBpmnMod
 
   }
 
+  /**
+   * A task definition as the engine knows it (prefixed under {@code use-prefix}).
+   */
   private String scopedTaskDefinition(
       final String workflowModuleId,
       final String bpmnProcessId,
