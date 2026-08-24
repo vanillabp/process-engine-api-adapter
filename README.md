@@ -340,6 +340,15 @@ definitions and form references. The `PeaBpmnModel` kept in memory holds the pla
 identifiers, because they are what the core's registries are keyed by, and every delivery
 coming back from the engine is translated to plain before the core sees it.
 
+### 3. A class opens its fields one by one, not as a whole
+
+The process service and the deployment service of this adapter hold dozens of fields, most of
+them collaborators nobody outside the class needs. Which of them a caller may read belongs to
+the surface of the class, so an accessor is declared per field, and `@Getter` on the class is
+refused even where an IDE offers it: it would publish the current field list and then keep
+publishing whatever field a later change adds. `@SuppressWarnings("LombokGetterMayBeUsed")` on
+such a class is what keeps that offer from coming back.
+
 ## Build
 
 Prerequisites installed into the local Maven repository first (build order):

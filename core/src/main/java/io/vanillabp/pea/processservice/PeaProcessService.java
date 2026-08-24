@@ -40,8 +40,7 @@ import io.vanillabp.pea.PeaAdapter;
  * @param <A> The workflow aggregate type
  */
 @lombok.extern.slf4j.Slf4j
-// no Lombok here: the accessors are the deliberate surface of this class,
-// and generating them would hide which of its fields are meant to be read
+// see decision 3 in the repository's README.md
 @SuppressWarnings("LombokSetterMayBeUsed")
 public class PeaProcessService<A> implements MigratableProcessService<A> {
 
