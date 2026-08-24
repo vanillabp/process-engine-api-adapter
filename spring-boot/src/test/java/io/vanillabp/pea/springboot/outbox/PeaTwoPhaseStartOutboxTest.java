@@ -141,7 +141,7 @@ public class PeaTwoPhaseStartOutboxTest {
   }
 
   @Test
-  @DisplayName("The start payload carries the shared attributes plus the ID variable (story 28/28b)")
+  @DisplayName("The start payload carries the shared attributes plus the ID variable")
   public void startPayloadCarriesTheSharedAttributes() throws Exception {
 
     final var attached = transactionTemplate.execute(status -> {

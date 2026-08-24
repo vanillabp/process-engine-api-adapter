@@ -7,8 +7,8 @@ import io.vanillabp.integration.spi.PhaseTwoOutbox;
 
 /**
  * Provides a {@link PhaseTwoOutbox} stub for smoke tests booting WITHOUT a database:
- * the PEA adapter requires a two-phase commit for starting workflows, so since story
- * 26i an outbox has to be RESOLVABLE at startup (the platform validates eagerly).
+ * the PEA adapter requires a two-phase commit for starting workflows, and the platform
+ * wants the outbox RESOLVABLE at startup, validated eagerly.
  * The smoke tests never start workflows - any usage of the stub fails loudly. Tests
  * with a real database (e.g. the deployment integration test) must NOT import this
  * configuration: they use the platform's default outbox.
@@ -26,7 +26,7 @@ public class TestOutboxConfiguration {
   }
 
   /**
-   * The unit of work of the application (story 70 of the platform): these contexts have no
+   * The unit of work the application brings: these contexts have no
    * transactional persistence at all, and a two-phase adapter needs a transaction to write
    * the aggregate and the outbox entry in. A pass-through runner is enough - nothing is
    * persisted here, what these tests pin is the wiring.

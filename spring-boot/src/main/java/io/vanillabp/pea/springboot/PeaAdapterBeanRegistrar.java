@@ -60,7 +60,7 @@ public class PeaAdapterBeanRegistrar implements BeanRegistrar {
                                             .bean(io.vanillabp.integration.adapter.spi.WorkflowAggregateSync.class));
                 processService.setScoping(
                     supplierContext.bean(io.vanillabp.integration.adapter.spi.NameClashAvoidanceSupport.class));
-                // story 87: phase-one checks run right before the transaction of the
+                // Phase-one checks run right before the transaction of the
                 // aggregate commits, in whatever unit of work that is
                 processService.setPreCommitRegistrar(
                     supplierContext.bean(io.vanillabp.integration.adapter.spi.PreCommitRegistrar.class));
@@ -88,7 +88,7 @@ public class PeaAdapterBeanRegistrar implements BeanRegistrar {
                                             .forAdapter(adapterId));
                 deploymentService.setScoping(
                     supplierContext.bean(io.vanillabp.integration.adapter.spi.NameClashAvoidanceSupport.class));
-                // story 99: what each subscription asks the engine for, resolvable down
+                // What each subscription asks the engine for, resolvable down
                 // to task level
                 final var overlay = supplierContext.bean(VanillaBpPeaProperties.class);
                 deploymentService.setFetchVariablesResolver((

@@ -21,7 +21,7 @@ import io.vanillabp.pea.wiring.PeaUserTaskHandler;
 import io.vanillabp.spi.service.TaskEvent;
 
 /**
- * Edge cases of the {@link PeaUserTaskHandler} (story 24): the notification is
+ * Edge cases of the {@link PeaUserTaskHandler}: the notification is
  * OPTIONAL (skipped without a handler), routing failures and handler defects are
  * logged loudly but never break the user task itself, and a TaskException in a
  * notification handler is a defect.
@@ -73,7 +73,7 @@ public class PeaUserTaskHandlerTest {
 
     }
 
-    // story 66's migration fallback, deprecated for removal in 2.1 and none of this
+    // The migration fallback, deprecated for removal in 2.1 and none of this
     // BPMS's business: a test double implements it as long as the interface declares
     // it, and the mandatory 'removal' lint needs the suppression
     @SuppressWarnings("removal")

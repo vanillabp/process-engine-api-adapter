@@ -29,7 +29,7 @@
                  beforeAll, after this extension's and before its first beforeEach, so
                  nothing captures it. Hence the file - and the workflow uploads these
                  reports when a build fails, so the full log of a red run is one download
-                 away instead of the last line Surefire prints (story 109). -->
+                 away instead of the last line Surefire prints. -->
             <redirectTestOutputToFile>true</redirectTestOutputToFile>
             <systemPropertyVariables>
               <java.util.logging.manager>org.jboss.logmanager.LogManager</java.util.logging.manager>

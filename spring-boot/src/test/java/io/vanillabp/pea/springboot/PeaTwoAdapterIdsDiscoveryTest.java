@@ -18,8 +18,8 @@ import io.vanillabp.integration.workflowmodule.WorkflowModuleAutoConfiguration;
 import io.vanillabp.pea.springboot.processservice.PeaAdapterProcessServiceConfiguration;
 
 /**
- * Discovery test of the per-adapter-id bean convention (adapter-config-model story
- * 26d): TWO adapter ids of type {@code process-engine-api} yield one
+ * Discovery test of the per-adapter-id bean convention (the adapter config model): TWO
+ * adapter ids of type {@code process-engine-api} yield one
  * {@code PeaProcessService} and one {@code PeaDeploymentService} element bean PER
  * configured id (both sharing the in-memory mock engine). No Docker and no network
  * involved.

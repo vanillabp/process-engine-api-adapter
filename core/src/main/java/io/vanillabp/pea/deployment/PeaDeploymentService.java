@@ -60,7 +60,7 @@ public class PeaDeploymentService implements AdapterDeploymentService<PeaBpmnMod
   private final WorkflowTaskInvoker workflowTaskInvoker;
 
   /**
-   * The core's entry point for workflows which ended (story 43) - used ONLY to warn
+   * The core's entry point for workflows which ended - used ONLY to warn
    * about methods this adapter cannot serve. May be <code>null</code> (tests).
    */
   private io.vanillabp.integration.adapter.spi.workflowend.WorkflowEndedInvoker workflowEndedInvoker;
@@ -124,7 +124,7 @@ public class PeaDeploymentService implements AdapterDeploymentService<PeaBpmnMod
   }
 
   /**
-   * The core's name-clash-avoidance model (story 35). The Process-Engine-API has no
+   * The core's name-clash-avoidance model. The Process-Engine-API has no
    * isolation mechanism of its own, so only {@code none} and {@code use-prefix} can
    * be served - {@code by-adapter} (the default!) is rejected at startup with a
    * guiding message. May be <code>null</code> (tests).
@@ -149,7 +149,7 @@ public class PeaDeploymentService implements AdapterDeploymentService<PeaBpmnMod
    */
   /**
    * Resolves whether a subscription asks for the DERIVED payload variables or for all of
-   * them (story 99), supplied by the platform modules. May be <code>null</code> (tests):
+   * them, supplied by the platform modules. May be <code>null</code> (tests):
    * the derived set applies.
    */
   private io.vanillabp.pea.wiring.PeaFetchVariablesResolver fetchVariablesResolver;
@@ -179,7 +179,7 @@ public class PeaDeploymentService implements AdapterDeploymentService<PeaBpmnMod
   }
 
   /**
-   * What one subscription asks the engine for (story 99): the union of the aggregate-ID
+   * What one subscription asks the engine for: the union of the aggregate-ID
    * variables and the declared <code>&#64;TaskParam</code> names of everything it serves,
    * unless a level of the configuration says <code>all</code>.
    *
@@ -239,7 +239,7 @@ public class PeaDeploymentService implements AdapterDeploymentService<PeaBpmnMod
 
   /**
    * Two <code>process-engine-api</code> adapter ids cannot address different
-   * engines (story 34): the Process-Engine-API is provided by the APPLICATION as a
+   * engines: the Process-Engine-API is provided by the APPLICATION as a
    * set of CDI/Spring beans - there is no per-adapter-id connection configuration,
    * so every configured id of this type ends up talking to the very same engine
    * beans. Configuring two of them is therefore a defect, not a migration setup
@@ -398,7 +398,7 @@ public class PeaDeploymentService implements AdapterDeploymentService<PeaBpmnMod
               currentUserTaskId = reader.getAttributeValue(null, "id");
               currentUserTaskHasFormReference = false;
             } else if ((currentUserTaskId != null) && "formDefinition".equals(element)) {
-              // user tasks (story 24): the zeebe:formDefinition external reference
+              // user tasks: the zeebe:formDefinition external reference
               // IS the task definition (Camunda-8-style convention); the handler is
               // OPTIONAL (notification only)
               final var externalReference = reader.getAttributeValue(null, "externalReference");
@@ -463,8 +463,9 @@ public class PeaDeploymentService implements AdapterDeploymentService<PeaBpmnMod
     final var context = existingContext == null
         ? new PeaProcessingContext(workflowModuleId)
         : existingContext;
-    // story 35: the deployed BYTES carry the scoped identifiers, while the model's
+    // The deployed BYTES carry the scoped identifiers, while the model's
     // own bpmnProcessId/tasks stay PLAIN - they key the core's registries
+    // (see decision 2 in the repository's README.md)
     final var scopedResource = PeaScoping.apply(
         model.resource(), workflowModuleId, model.bpmnProcessId(), adapterId, scoping);
     context
@@ -582,7 +583,7 @@ public class PeaDeploymentService implements AdapterDeploymentService<PeaBpmnMod
       final String workflowModuleId,
       final PeaProcessingContext bpmsProcessingContext) throws IllegalStateException {
 
-    // story 35: the Process-Engine-API has no isolation mechanism of its own, so the
+    // The Process-Engine-API has no isolation mechanism of its own, so the
     // DEFAULT mode 'by-adapter' cannot be served - fail with a guiding message
     // instead of silently deploying every workflow module into one scope
     if (scoping != null) {
@@ -645,7 +646,7 @@ public class PeaDeploymentService implements AdapterDeploymentService<PeaBpmnMod
     // any wired process are a defect (per-module check, honors the policy)
     workflowTaskInvoker.validateNoUnwiredWorkflowTaskMethods(workflowModuleId);
 
-    // story 48: this adapter registers no version catalog (the API cannot be asked
+    // This adapter registers no version catalog (the API cannot be asked
     // which versions of a process exist - GAPS.md 19), so this call only reports the
     // version tags the application names and nobody can resolve
     workflowTaskInvoker.resolveProcessVersions(workflowModuleId);
@@ -679,7 +680,7 @@ public class PeaDeploymentService implements AdapterDeploymentService<PeaBpmnMod
                     key -> new ArrayList<>())
                 .add(new ServedTask(model.bpmnProcessId(), task.taskDefinition()))));
 
-    // user-task notifications (story 24): one USER-type subscription per distinct
+    // user-task notifications: one USER-type subscription per distinct
     // external form reference; the handler is a notification-only variant
     final var processesByUserTaskReference = new LinkedHashMap<String, List<ServedTask>>();
     bpmsProcessingContext
@@ -698,7 +699,7 @@ public class PeaDeploymentService implements AdapterDeploymentService<PeaBpmnMod
           .stream()
           .map(ServedTask::bpmnProcessId)
           .toList();
-      // story 99: a user-task notification carries a payload too, so it is narrowed the
+      // A user-task notification carries a payload too, so it is narrowed the
       // same way as a service task
       final var fetchVariables = fetchVariablesOf(workflowModuleId, served);
       final var handler = new io.vanillabp.pea.wiring.PeaUserTaskHandler(
@@ -737,7 +738,7 @@ public class PeaDeploymentService implements AdapterDeploymentService<PeaBpmnMod
           .stream()
           .map(ServedTask::bpmnProcessId)
           .toList();
-      // story 99: what the delivered payload has to carry - the aggregate's ID and the
+      // What the delivered payload has to carry - the aggregate's ID and the
       // variables the handlers read, instead of everything the process instance holds
       final var fetchVariables = fetchVariablesOf(workflowModuleId, served);
       final var handler = new PeaTaskHandler(

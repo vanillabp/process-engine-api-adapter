@@ -64,7 +64,7 @@ public class PeaDeploymentServiceProducer {
               adapterId, deploymentApi, workflowTaskRegistry, taskSubscriptionApi, serviceTaskCompletionApi, deployedProcessesRegistry
                   .forAdapter(adapterId));
           deploymentService.setScoping(scoping);
-          // story 99: what each subscription asks the engine for, resolvable down to
+          // What each subscription asks the engine for, resolvable down to
           // task level
           deploymentService.setFetchVariablesResolver((
               workflowModuleId,

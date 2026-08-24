@@ -17,8 +17,8 @@ import io.vanillabp.integration.adapter.spi.NameClashAvoidanceSupport;
 import lombok.extern.slf4j.Slf4j;
 
 /**
- * Applies {@link NameClashAvoidance#USE_PREFIX} to a Process-Engine-API model (story
- * 35). The API has no BPMN model type - only opaque resources - so the adapter
+ * Applies {@link NameClashAvoidance#USE_PREFIX} to a Process-Engine-API model. The API
+ * has no BPMN model type - only opaque resources - so the adapter
  * rewrites the raw XML itself: the identifiers are read and written by LOCAL NAME,
  * independent of the BPMN dialect the underlying engine uses.
  * <p>

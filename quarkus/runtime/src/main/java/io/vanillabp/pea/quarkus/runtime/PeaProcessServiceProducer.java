@@ -58,7 +58,7 @@ public class PeaProcessServiceProducer {
                   adapterId, startProcessApi, serviceTaskCompletionApi, userTaskCompletionApi, correlationApi, deployedProcessesRegistry
                       .forAdapter(adapterId), aggregateSync);
               processService.setScoping(scoping);
-              // story 87: phase-one checks run right before the transaction of the
+              // Phase-one checks run right before the transaction of the
               // aggregate commits, in whatever unit of work that is
               processService.setPreCommitRegistrar(preCommitRegistrar);
               // optional: an engine implementation without a SignalApi leaves

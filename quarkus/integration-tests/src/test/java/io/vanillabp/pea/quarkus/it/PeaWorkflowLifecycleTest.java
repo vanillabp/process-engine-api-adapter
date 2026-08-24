@@ -27,7 +27,7 @@ import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
 /**
  * The Process-Engine-API adapter's documented features, run end to end on a BOOTED
- * Quarkus application against the in-memory mock engine (story 100).
+ * Quarkus application against the in-memory mock engine.
  * <p>
  * This duplicates what the Spring Boot suite proves, and the duplication is the
  * point: the adapter's platform-neutral core being correct says nothing about a
@@ -206,7 +206,7 @@ public class PeaWorkflowLifecycleTest {
         strings("introspect/subscriptions"),
         "every task definition of the deployed BPMN needs a subscription, user tasks included");
 
-    // story 99: the subscription names what a delivery has to carry - here the
+    // The subscription names what a delivery has to carry - here the
     // aggregate-ID variable alone, since no handler declares a @TaskParam
     assertEquals(
         List.of("id"),
@@ -230,8 +230,8 @@ public class PeaWorkflowLifecycleTest {
             .anyMatch(variables -> "q-start-1".equals(variables.get("id"))),
         "the workflow to be started after the commit");
 
-    // PAYLOAD DOCTRINE (story 28b): the technical aggregate-ID variable plus the
-    // attributes shared with the engine travel, nothing else
+    // the technical aggregate-ID variable plus the attributes shared with the
+    // engine travel, nothing else (see decision 1 in the repository's README.md)
     final var variables = startedInstances()
         .stream()
         .filter(candidate -> "q-start-1".equals(candidate.get("id")))

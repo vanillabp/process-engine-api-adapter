@@ -17,7 +17,7 @@ import io.vanillabp.pea.mock.InMemoryProcessEngine;
 import io.vanillabp.pea.processservice.PeaProcessService;
 
 /**
- * Story 87: the phase-one check of this adapter is handed to the platform's pre-commit hook
+ * The phase-one check of this adapter is handed to the platform's pre-commit hook
  * instead of running when the application calls, so the window in which its answer goes
  * stale before phase two stays small. Without a hook it runs immediately, the behaviour this
  * adapter had before.
@@ -116,7 +116,7 @@ public class PeaPreCommitHookTest {
   }
 
   @Test
-  @DisplayName("Without a hook the check runs immediately - the behaviour before story 87")
+  @DisplayName("Without a hook the check runs immediately")
   public void withoutAHookTheCheckRunsImmediately() {
 
     final var service = service();

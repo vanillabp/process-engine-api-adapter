@@ -26,7 +26,7 @@ public class Aggregate {
   private String content;
 
   /**
-   * Never part of the payload sent to the engine - which since story 28b also
+   * Never part of the payload sent to the engine - which also
    * derives the class' mode "share everything else" (opt-out).
    */
   @io.vanillabp.spi.service.NoSyncWithBPMS

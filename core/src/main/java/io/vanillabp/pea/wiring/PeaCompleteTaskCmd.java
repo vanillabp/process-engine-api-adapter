@@ -23,8 +23,8 @@ public class PeaCompleteTaskCmd extends CompleteTaskCmd {
   }
 
   /**
-   * The completion carrying the aggregate state shared with the engine (story
-   * 28b) - a gateway right behind the completed task has to see the values the
+   * The completion carrying the aggregate state shared with the engine - a gateway right
+   * behind the completed task has to see the values the
    * {@code @WorkflowTask} method produced.
    *
    * @param taskId The task to complete

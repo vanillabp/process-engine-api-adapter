@@ -521,7 +521,7 @@ public class InMemoryProcessEngine implements DeploymentApi, StartProcessApi, Co
   private final List<CompletedTask> completedTasks = new CopyOnWriteArrayList<>();
 
   /**
-   * The payload a completion command carried, per task ID (story 28b): the values
+   * The payload a completion command carried, per task ID: the values
    * the workflow aggregate shares with the engine plus the aggregate-ID variable.
    * Kept beside {@link #completedTasks} so tests asserting the completion itself
    * stay unaffected.
@@ -643,8 +643,8 @@ public class InMemoryProcessEngine implements DeploymentApi, StartProcessApi, Co
    * A defensive copy of a completion payload which KEEPS null values. An aggregate
    * attribute the workflow has not filled yet travels as null - {@code Map.copyOf}
    * rejects that, and a mock stricter than the engines it stands in for turns a
-   * legitimate completion into a crash. Found by the Quarkus end-to-end suite
-   * (story 100), where the first aggregate with an unset shared attribute reached a
+   * legitimate completion into a crash. Found by the Quarkus end-to-end suite,
+   * where the first aggregate with an unset shared attribute reached a
    * task completion.
    *
    * @param payload The payload the completion command carried

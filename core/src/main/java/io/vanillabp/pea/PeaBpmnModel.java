@@ -30,7 +30,7 @@ public record PeaBpmnModel(
                            java.util.List<io.vanillabp.integration.adapter.spi.workflowtask.BpmnTaskSpec> userTasks) {
 
   /**
-   * Convenience constructor without user tasks (story 24 added them).
+   * Convenience constructor for a process without user tasks.
    */
   public PeaBpmnModel(
       final String filename,

@@ -15,7 +15,7 @@ import io.vanillabp.pea.mock.InMemoryProcessEngine;
 import io.vanillabp.pea.processservice.PeaProcessService;
 
 /**
- * Broadcasting a BPMN signal through the Process-Engine-API (story 42). The API has
+ * Broadcasting a BPMN signal through the Process-Engine-API. The API has
  * a {@code SignalApi}, so unlike the other gaps of this adapter this one needed no
  * workaround - what the test pins is that the broadcast waits for phase two (the
  * engine is treated as REMOTE) and that an engine implementation without that API

@@ -39,7 +39,7 @@ import io.vanillabp.spi.service.WorkflowService;
 import io.vanillabp.spi.service.WorkflowTask;
 
 /**
- * Task processing against the extended in-memory mock (story 21c), asserted at
+ * Task processing against the extended in-memory mock, asserted at
  * the Process-Engine-API boundary: the adapter subscribes per task definition at
  * startup, delivered tasks dispatch through the core (new local transaction which
  * commits BEFORE the completion command), the three outcomes map to
@@ -79,7 +79,7 @@ public class TaskProcessingIntegrationTest {
     String taskId;
 
     /**
-     * Never sent to the engine - which (story 28b) also derives the class' mode
+     * Never sent to the engine - which also derives the class' mode
      * "share everything else" (opt-out).
      */
     @io.vanillabp.spi.service.NoSyncWithBPMS
@@ -399,7 +399,7 @@ public class TaskProcessingIntegrationTest {
   }
 
   @Test
-  @DisplayName("The completion carries the shared aggregate attributes plus the ID variable (story 28b)")
+  @DisplayName("The completion carries the shared aggregate attributes plus the ID variable")
   public void completionCarriesTheAggregateState() {
 
     seed("4715");
@@ -756,9 +756,9 @@ public class TaskProcessingIntegrationTest {
         .filter(candidate -> "4743".equals(candidate.variables().get("id")))
         .findFirst()
         .orElseThrow();
-    // PAYLOAD DOCTRINE: no message CONTENT travels - what travels is the technical
-    // aggregate-ID variable plus the aggregate state shared with the engine
-    // (story 28b; 'results' is still null on a freshly started workflow, and the
+    // no message CONTENT travels - what travels is the technical aggregate-ID
+    // variable plus the shared aggregate state (see decision 1 in the repository's README.md)
+    // ('results' is still null on a freshly started workflow, and the
     // @NoSyncWithBPMS attribute is absent as always)
     final var variables = new java.util.HashMap<>(instance.variables());
     assertEquals("4743", variables.remove("id"));

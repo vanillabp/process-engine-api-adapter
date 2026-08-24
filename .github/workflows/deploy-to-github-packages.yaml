@@ -37,7 +37,7 @@ jobs:
       # 'install' and not 'install verify': install already runs every phase verify
       # has, so naming both made Maven walk two lifecycles per module. The tests
       # skipped their second run, the compiler did not, and every javac warning was
-      # reported twice - once per compilation (story 111). It stays 'install' because
+      # reported twice - once per compilation. It stays 'install' because
       # the Quarkus tests load modules from the local repository.
       - name: Build and test
         if: "${{ github.event_name == 'pull_request' }}"
@@ -50,8 +50,8 @@ jobs:
           CI: false
       # what a failing test printed is in these reports, and for the Quarkus modules
       # booting their application in the test JVM it is ONLY there: their output is
-      # redirected to file because that boot logs into a log context no extension reaches
-      # (story 109). Surefire prints its last line, which is never the interesting one.
+      # redirected to file because that boot logs into a log context no extension
+      # reaches. Surefire prints its last line, which is never the interesting one.
       - name: Upload the test reports of a failed build
         if: failure()
         uses: actions/upload-artifact@v4

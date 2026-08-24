@@ -26,7 +26,7 @@ public class PeaE2eAggregate {
   private String taskId;
 
   /**
-   * Never sent to the engine - which (story 28b) also makes the class' sync mode
+   * Never sent to the engine - which also makes the class' sync mode
    * "share everything else".
    */
   @NoSyncWithBPMS

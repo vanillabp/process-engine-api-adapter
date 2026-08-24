@@ -19,7 +19,7 @@ import io.vanillabp.pea.processservice.PeaProcessService;
 
 /**
  * Two claims about the payload this adapter sends, both written down in the SPI and in
- * this adapter and held by nothing until story 106:
+ * this adapter and held by this test:
  * <ol>
  * <li>{@code WorkflowAggregateSync} promises that the workflow-aggregate's ID is never
  * part of the shared values and that the technical variable carrying it is written
@@ -27,7 +27,7 @@ import io.vanillabp.pea.processservice.PeaProcessService;
  * business-key slot, so that variable is the only way back to the workflow: an
  * aggregate annotated {@code @NoSyncWithBPMS} must not become unaddressable.</li>
  * <li>{@code AggregateSyncMode} promises that {@link AggregateSyncMode#FULL} is the
- * default of EVERY adapter since story 66, so a model may read the same attributes
+ * default of EVERY adapter, so a model may read the same attributes
  * wherever it runs. This adapter therefore has to ask with FULL.</li>
  * </ol>
  */
@@ -147,7 +147,7 @@ public class PeaSharedValuesTest {
   }
 
   @Test
-  @DisplayName("This adapter asks for everything - FULL is the default of every adapter since story 66")
+  @DisplayName("This adapter asks for everything - FULL is the default of every adapter")
   public void theAdapterAsksWithFull() {
 
     final var recording = new RecordingSync(Map.of());

@@ -12,7 +12,7 @@ import io.vanillabp.spi.service.TaskEvent;
 import lombok.extern.slf4j.Slf4j;
 
 /**
- * The handler of one USER-task subscription (story 24): a delivered user task is a
+ * The handler of one USER-task subscription: a delivered user task is a
  * NOTIFICATION - the optional <code>&#64;WorkflowTask</code> method receives
  * {@link TaskEvent.Event#CREATED} with the user task's ID (as
  * <code>&#64;TaskId</code>) and never completes the task on return; completion
@@ -26,7 +26,7 @@ import lombok.extern.slf4j.Slf4j;
 public class PeaUserTaskHandler implements TaskHandler {
 
   /**
-   * Story 35: translates the scoped task definition of this subscription back into
+   * Translates the scoped task definition of this subscription back into
    * the plain one. May be <code>null</code>.
    */
   private final io.vanillabp.integration.adapter.spi.NameClashAvoidanceSupport scoping;
@@ -42,7 +42,7 @@ public class PeaUserTaskHandler implements TaskHandler {
   private final WorkflowTaskInvoker workflowTaskInvoker;
 
   /**
-   * What this subscription asked the engine for (story 99) - a user-task notification
+   * What this subscription asked the engine for - a user-task notification
    * carries a payload like every other delivery, and it is narrowed the same way.
    */
   private final PeaFetchVariables.Selection fetchVariables;
@@ -59,7 +59,7 @@ public class PeaUserTaskHandler implements TaskHandler {
   }
 
   /**
-   * Story 35: translates the identifiers the engine knows back into the plain ones.
+   * Translates the identifiers the engine knows back into the plain ones.
    */
   public PeaUserTaskHandler(
       final String adapterId,
@@ -193,17 +193,17 @@ public class PeaUserTaskHandler implements TaskHandler {
 
     /**
      * The version tag of the deployed process definition or <code>null</code> - the
-     * Process-Engine-API knows no version number (story 48, GAPS.md).
+     * Process-Engine-API knows no version number (GAPS.md).
      */
     private final String processVersion;
 
     /**
-     * The adapter delivering this notification (story 54).
+     * The adapter delivering this notification.
      */
     private final String adapterId;
 
     /**
-     * What the subscription asked for (story 99) - see
+     * What the subscription asked for - see
      * {@link #getTaskParameter(String)}.
      */
     private final PeaFetchVariables.Selection fetchVariables;
@@ -273,7 +273,7 @@ public class PeaUserTaskHandler implements TaskHandler {
     public String getDeliveryId() {
 
       // the user task's ID as the engine reports it - the same on a redelivery of the
-      // notification, different for the next user task (story 51)
+      // notification, different for the next user task
       return taskId;
 
     }
