@@ -313,41 +313,10 @@ on. Nothing is lost there without the outbox.
 
 ## Decision log
 
-Decisions this repository's code points at. A number is handed out once and never reused or
-renumbered, so a citation stays resolvable; a decision which gets overturned keeps its entry,
-marked as superseded and naming the entry which replaced it.
-
-### 1. A command carries the shared aggregate attributes and the aggregate-ID variable, nothing else
-
-The Process-Engine-API has no business key, so the variable named after the aggregate's ID
-attribute is the only way back from a process instance to the workflow, and it is written no
-matter what the sync model says. Beside it travels the state the aggregate shares with the
-engine, because the engine can evaluate an expression only against the payload it was given.
-Nothing else does: a correlated message carries no content of its own, and an attribute
-excluded by `@NoSyncWithBPMS` stays out of every command.
-
-This holds for every command sent on behalf of a workflow - starting it, completing a task
-with or without an error, completing or canceling an async or user task, correlating a
-message. The bullet *Aggregate sync* under
-[Behavior and limitations](#behavior-and-limitations) says what that means per operation.
-
-### 2. The deployed bytes carry scoped identifiers, the model in memory keeps plain ones
-
-This BPMS has no namespace which matches a workflow module, so name-clash avoidance is what
-keeps two modules apart, and it is applied by rewriting the BPMN resource on its way to the
-`DeploymentApi`: process ids, message and signal names, error and escalation codes, task
-definitions and form references. The `PeaBpmnModel` kept in memory holds the plain
-identifiers, because they are what the core's registries are keyed by, and every delivery
-coming back from the engine is translated to plain before the core sees it.
-
-### 3. A class opens its fields one by one, not as a whole
-
-The process service and the deployment service of this adapter hold dozens of fields, most of
-them collaborators nobody outside the class needs. Which of them a caller may read belongs to
-the surface of the class, so an accessor is declared per field, and `@Getter` on the class is
-refused even where an IDE offers it: it would publish the current field list and then keep
-publishing whatever field a later change adds. `@SuppressWarnings("LombokGetterMayBeUsed")` on
-such a class is what keeps that offer from coming back.
+Decisions several places in this repository rely on live in [`DECISIONS.md`](./DECISIONS.md), the
+one thing the code is allowed to cite. A citation reads `see decision 2 in the repository's
+DECISIONS.md`, numbers are never reused, and an overturned entry stays and names its successor, so
+a citation written today still resolves in a year.
 
 ## Build
 

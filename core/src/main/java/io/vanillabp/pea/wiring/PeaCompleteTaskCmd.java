@@ -10,6 +10,9 @@ import dev.bpmcrafters.processengineapi.task.CompleteTaskCmd;
  * engines execute in the caller's thread, remote engines write an outbox entry).
  * The API's built-in command cannot carry a non-default execution mode (see
  * {@code GAPS.md}), so the adapter subclasses it.
+ * <p>
+ * Why a subclass is needed to carry the execution mode is decision 4 in the repository's
+ * DECISIONS.md.
  */
 public class PeaCompleteTaskCmd extends CompleteTaskCmd {
 

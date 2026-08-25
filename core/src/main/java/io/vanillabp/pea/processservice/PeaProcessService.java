@@ -37,10 +37,17 @@ import io.vanillabp.pea.PeaAdapter;
  * platform modules inject an implementation - by default the in-memory mock, later a
  * real Process-Engine-API implementation contributed by the application.
  *
+ * <p>
+ * Three rules of this class are written down because several places rely on them: a preflight asks
+ * inside the caller's transaction while the SYNC command runs after the commit (decision 4 in the
+ * repository's DECISIONS.md), a failure of phase two is propagated rather than consumed (decision
+ * 5 in the repository's DECISIONS.md), and only a capability the API lacks entirely counts as
+ * permanent (decision 6 in the repository's DECISIONS.md).
+ *
  * @param <A> The workflow aggregate type
  */
 @lombok.extern.slf4j.Slf4j
-// see decision 3 in the repository's README.md
+// see decision 3 in the repository's DECISIONS.md
 @SuppressWarnings("LombokSetterMayBeUsed")
 public class PeaProcessService<A> implements MigratableProcessService<A> {
 
@@ -923,7 +930,7 @@ public class PeaProcessService<A> implements MigratableProcessService<A> {
       final String correlationId) {
 
     // no message CONTENT travels - what does travel is the aggregate state shared
-    // with the engine (see decision 1 in the repository's README.md).
+    // with the engine (see decision 1 in the repository's DECISIONS.md).
     // CorrelateMessageCmd is FINAL - the command carries the DEFAULT execution
     // mode; the intended SYNC semantics cannot be expressed (GAPS.md entry 11).
     final var correlationKey = correlationId != null

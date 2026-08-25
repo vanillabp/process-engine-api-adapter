@@ -37,6 +37,9 @@ import lombok.extern.slf4j.Slf4j;
  * meta key <code>bpmnProcessId</code> (adapter convention - the API does not
  * define it, see {@code GAPS.md}); without it the task definition has to be
  * unique across the module's processes.
+ * <p>
+ * Why this path swallows nothing but also needs no outbox, unlike the phase-two operations of the
+ * process service, is decision 5 in the repository's DECISIONS.md.
  */
 @Slf4j
 public class PeaTaskHandler implements TaskHandler {

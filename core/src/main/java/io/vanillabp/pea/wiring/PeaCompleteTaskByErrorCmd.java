@@ -6,6 +6,9 @@ import dev.bpmcrafters.processengineapi.task.CompleteTaskByErrorCmd;
 /**
  * A {@code CompleteTaskByErrorCmd} carrying {@link ExecutionMode#SYNC} - see
  * {@link PeaCompleteTaskCmd} for the reasoning.
+ * <p>
+ * Why a subclass is needed to carry the execution mode is decision 4 in the repository's
+ * DECISIONS.md.
  */
 public class PeaCompleteTaskByErrorCmd extends CompleteTaskByErrorCmd {
 

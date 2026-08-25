@@ -47,7 +47,7 @@ import lombok.extern.slf4j.Slf4j;
  * implementation).
  */
 @Slf4j
-// see decision 3 in the repository's README.md
+// see decision 3 in the repository's DECISIONS.md
 @SuppressWarnings("LombokSetterMayBeUsed")
 public class PeaDeploymentService implements AdapterDeploymentService<PeaBpmnModel, PeaProcessingContext> {
 
@@ -467,7 +467,7 @@ public class PeaDeploymentService implements AdapterDeploymentService<PeaBpmnMod
         : existingContext;
     // The deployed BYTES carry the scoped identifiers, while the model's
     // own bpmnProcessId/tasks stay PLAIN - they key the core's registries
-    // (see decision 2 in the repository's README.md)
+    // (see decision 2 in the repository's DECISIONS.md)
     final var scopedResource = PeaScoping.apply(
         model.resource(), workflowModuleId, model.bpmnProcessId(), adapterId, scoping);
     context
