@@ -376,9 +376,20 @@ the respective report.
 The build breaks below the line: `test-coverage-report/coverage-gate` is the last module of the
 reactor, reads both reports and fails whenever a platform is below its threshold in the root POM
 (`coverage.threshold.spring-boot`, `coverage.threshold.quarkus`, in percent of covered instructions -
-the number the badges above show). It also compares every module producing a `jacoco.exec` against
-the two aggregates, so a module added to the build without being added to its report cannot stay
-unnoticed.
+the number the badges above show). Both properties hold 85, the same number every VanillaBP
+repository gates on, and that is not the target: the rule is 90 per platform, so a report between
+85 and 90 passes the build and still names a gap. The gate is where the gap has grown too big to
+carry, which is why it is never edited to make a build pass. It also compares every module
+producing a `jacoco.exec` against the two aggregates, so a module added to the build without being
+added to its report cannot stay unnoticed.
+
+The gate reports what it measured on every run, green ones included, which is the one place in
+VanillaBP where a passing test prints:
+
+```
+coverage gate | Spring Boot: 90.71 % instructions (484 of 5209 missed) | at the rule of 90 %
+coverage gate | Quarkus: 90.99 % instructions (465 of 5163 missed) | at the rule of 90 %
+```
 
 Both platforms are held to the same line. Coverage is measured per platform because the adapter core
 is platform-neutral: whatever exercises it counts only on the platform its tests ran on, so the core
