@@ -572,7 +572,7 @@ public class PeaDeploymentServiceTest {
       // the record keeps the PLAIN identifiers - they key the core's registries ...
       Assertions.assertEquals("RiskAssessment", context.getModels().getFirst().bpmnProcessId());
       // ... while the deployed BYTES carry the scoped ones
-      // (see decision 2 in the repository's README.md)
+      // (see decision 2 in the repository's DECISIONS.md)
       final var deployed = new String(
           context.getModels().getFirst().resource(), StandardCharsets.UTF_8);
       Assertions.assertTrue(deployed.contains("id=\"loan-approval__RiskAssessment\""), deployed);

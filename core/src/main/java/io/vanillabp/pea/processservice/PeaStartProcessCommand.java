@@ -20,6 +20,9 @@ import dev.bpmcrafters.processengineapi.process.StartProcessCommand;
  * {@code definitionKey}) and the process variables. The workflow-aggregate id is passed as
  * an ordinary payload variable (there is no dedicated business-key/correlation slot on the
  * start command - see {@code GAPS.md}).
+ * <p>
+ * Why this adapter sends subclasses of the built-in commands at all is decision 4 in the
+ * repository's DECISIONS.md: only a subclass can carry a non-default execution mode.
  */
 public final class PeaStartProcessCommand implements StartProcessCommand {
 

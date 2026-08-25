@@ -231,7 +231,7 @@ public class PeaWorkflowLifecycleTest {
         "the workflow to be started after the commit");
 
     // the technical aggregate-ID variable plus the attributes shared with the
-    // engine travel, nothing else (see decision 1 in the repository's README.md)
+    // engine travel, nothing else (see decision 1 in the repository's DECISIONS.md)
     final var variables = startedInstances()
         .stream()
         .filter(candidate -> "q-start-1".equals(candidate.get("id")))

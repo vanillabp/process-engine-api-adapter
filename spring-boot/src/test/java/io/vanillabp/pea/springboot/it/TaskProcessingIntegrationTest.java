@@ -750,7 +750,7 @@ public class TaskProcessingIntegrationTest {
         .findFirst()
         .orElseThrow();
     // no message CONTENT travels - what travels is the technical aggregate-ID
-    // variable plus the shared aggregate state (see decision 1 in the repository's README.md)
+    // variable plus the shared aggregate state (see decision 1 in the repository's DECISIONS.md)
     // ('results' is still null on a freshly started workflow, and the
     // @NoSyncWithBPMS attribute is absent as always)
     final var variables = new java.util.HashMap<>(instance.variables());

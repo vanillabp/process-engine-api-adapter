@@ -7,6 +7,9 @@ import dev.bpmcrafters.processengineapi.task.FailTaskCmd;
  * A {@code FailTaskCmd} carrying {@link ExecutionMode#SYNC} - see
  * {@link PeaCompleteTaskCmd} for the reasoning. Retries and retry timeout are left
  * to the engine's defaults (<code>null</code>).
+ * <p>
+ * Why a subclass is needed to carry the execution mode is decision 4 in the repository's
+ * DECISIONS.md.
  */
 public class PeaFailTaskCmd extends FailTaskCmd {
 

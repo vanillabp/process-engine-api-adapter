@@ -46,6 +46,9 @@ import java.util.TreeSet;
  * annotation carries - a value read through a path the scanner cannot see. A statically
  * named {@code @TaskParam} needs none of it.
  * </p>
+ * <p>
+ * Why the core reports the names instead of a scan of the model deriving them is decision 7 in the
+ * repository's DECISIONS.md.
  */
 public final class PeaFetchVariables {
 
