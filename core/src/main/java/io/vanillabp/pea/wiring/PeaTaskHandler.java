@@ -421,6 +421,18 @@ public class PeaTaskHandler implements TaskHandler {
     }
 
     @Override
+    public String getActivationId() {
+
+      // the same value as the delivery id, and deliberately: this engine creates one
+      // task per activation of an element and redelivers it under that id, so both
+      // contracts are satisfied by one value here. It is not a shortcut - an engine
+      // whose redelivery gets a new id would have to answer these two differently,
+      // and the Process-Engine-API does not
+      return taskId;
+
+    }
+
+    @Override
     public Object getTaskParameter(
         final String name) {
 

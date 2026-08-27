@@ -46,6 +46,10 @@ public class PeaTaskHandlerTest {
 
     String invokedProcessVersion;
 
+    String invokedDeliveryId;
+
+    String invokedActivationId;
+
     /**
      * A <code>&#64;TaskParam</code> the handler method would read, or
      * <code>null</code> for a method reading nothing but its aggregate.
@@ -62,6 +66,8 @@ public class PeaTaskHandlerTest {
 
       invokedBpmnProcessId = bpmnProcessId;
       invokedProcessVersion = context.getProcessVersion();
+      invokedDeliveryId = context.getDeliveryId();
+      invokedActivationId = context.getActivationId();
       if (readParameter != null) {
         readParameterValue = context.getTaskParameter(readParameter);
       }
@@ -206,6 +212,30 @@ public class PeaTaskHandlerTest {
             Map.of("id", "4711"));
 
     assertEquals(null, invoker.invokedProcessVersion);
+
+  }
+
+  @Test
+  public void everyTaskIsItsOwnActivation() {
+
+    // Two elements of a multi-instance activity are two tasks of this engine, so their
+    // activations differ - which is what keeps the correlations they plan from sharing
+    // an idempotency key. Here the delivery id and the activation id are the same
+    // value on purpose: this engine creates one task per activation and redelivers it
+    // under that id, so one value answers both contracts
+    engine.getOpenTaskIds().add("task-mi-0");
+    final var testee = handler(List.of("OnlyProcess"));
+    testee.accept(new TaskInformation("task-mi-0", Map.of()), Map.of("id", "4711"));
+    final var firstElement = invoker.invokedActivationId;
+    assertEquals("task-mi-0", firstElement);
+    assertEquals(invoker.invokedDeliveryId, firstElement);
+
+    engine.getOpenTaskIds().add("task-mi-1");
+    testee.accept(new TaskInformation("task-mi-1", Map.of()), Map.of("id", "4711"));
+    assertEquals("task-mi-1", invoker.invokedActivationId);
+    assertTrue(
+        !firstElement.equals(invoker.invokedActivationId),
+        "two elements of one aggregate must not share an activation");
 
   }
 
