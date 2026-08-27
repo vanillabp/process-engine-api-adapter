@@ -76,9 +76,12 @@ exactly one `PREFLIGHT_CHECK` is recorded while the transaction is open (no inst
 records the `PREFLIGHT_CHECK` but never dispatches a `SYNC`.
 
 **Idempotency limitation:** phase two is at-least-once (outbox), so a crash between a
-successful create and the outbox entry removal can duplicate the instance. Strict dedup by
-`workflowModuleId + bpmnProcessId + workflowAggregateId` needs the core-side
-`WorkflowInstanceRegistry`, which does not exist yet.
+successful create and the outbox entry removal can duplicate the instance. There is no
+registry which would deduplicate it strictly: a workflow is located by asking rather than
+remembered (decision 25 of the platform's `DECISIONS.md`). The core narrows the window by
+probing before a re-dispatched start, and this adapter answers that probe optimistically
+([`GAPS.md`](../GAPS.md), entry 11), so the residual stays wider here than on an adapter which
+can be asked.
 
 ## Process-Engine-API interfaces used
 

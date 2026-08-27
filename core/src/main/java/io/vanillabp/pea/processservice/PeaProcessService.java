@@ -1051,10 +1051,11 @@ public class PeaProcessService<A> implements MigratableProcessService<A> {
     // Phase two runs after the local transaction was committed, dispatched via the outbox:
     // actually create the process instance (SYNC). The aggregate id travels as a payload
     // variable named after the aggregate's ID property. A failed start throws so the
-    // outbox retries the dispatch. Idempotency (moduleId+bpmnProcessId+aggregateId)
-    // relies on the core-side WorkflowInstanceRegistry, which does not exist yet; a
-    // crash between a successful create and marking the outbox entry DONE may duplicate
-    // the instance (at-least-once).
+    // outbox retries the dispatch. A crash between a successful create and marking the
+    // outbox entry DONE may duplicate the instance (at-least-once): a workflow is located
+    // by asking rather than remembered in a registry (decision 25 of the platform's
+    // DECISIONS.md), and the core's probe before a re-dispatched start is what narrows
+    // the window - which this adapter answers optimistically (GAPS.md, entry 11).
     await(
         startProcessApi.startProcess(
             new PeaStartProcessCommand(
