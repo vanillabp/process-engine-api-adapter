@@ -279,6 +279,15 @@ public class PeaUserTaskHandler implements TaskHandler {
     }
 
     @Override
+    public String getActivationId() {
+
+      // one user task per activation of its element, redelivered under that id: both
+      // contracts meet in one value here, as they do on the asynchronous-task side
+      return taskId;
+
+    }
+
+    @Override
     public Object getTaskParameter(
         final String name) {
 

@@ -311,6 +311,13 @@ The DELIVERY path is unchanged: when the engine hands this adapter a task and th
 afterwards fails, the engine redelivers the task, which is the recovery this adapter relies
 on. Nothing is lost there without the outbox.
 
+The core asks this adapter for two identities of one delivery and gets the task id for both. That
+is not an oversight: this engine creates one task per activation of an element and redelivers it
+under that id, so the identity of the DELIVERY (equal across redeliveries) and the identity of the
+ACTIVATION (different between two activations of one element) really are one value here. An engine
+whose redelivery got a new id would have to answer the two differently, which is why they are two
+methods rather than one.
+
 ## Decision log
 
 Decisions several places in this repository rely on live in [`DECISIONS.md`](./DECISIONS.md), the
