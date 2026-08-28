@@ -792,6 +792,16 @@ public class PeaDeploymentService implements AdapterDeploymentService<PeaBpmnMod
             .get();
       } catch (final InterruptedException e) {
         Thread.currentThread().interrupt();
+        // shutting down is what interrupts this thread, so stop trying - but the
+        // engine keeps every subscription not yet given back and will deliver tasks
+        // to an application which is going away, which nobody sees unless it is said
+        log.warn(
+            "Process-Engine-API adapter '{}': interrupted while unsubscribing from the tasks of "
+                + "workflow module '{}' - {} subscription(s) stay open in the engine and their "
+                + "deliveries are lost until it drops them",
+            adapterId,
+            workflowModuleId,
+            i + 1);
         return;
       } catch (final ExecutionException e) {
         log.warn(

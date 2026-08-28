@@ -67,10 +67,19 @@ completion of a task which already finished, and wrong for every other, because 
 no typed errors and an unreachable engine answers exactly like a rejected command. A completion
 was lost in silence.
 
-So all five of them propagate now, with a message naming operation, process, workflow module and
-adapter, and saying that a blocked entry on an already finished task is the harmless reading. The
-DELIVERY path is deliberately unchanged: there the engine delivers again, which is the recovery,
-and no outbox entry is involved.
+So every phase-two operation propagates now, with a message naming operation, process, workflow
+module and adapter, and saying that a blocked entry on an already finished task is the harmless
+reading: completing and canceling a task, the same for a user task, correlating a message,
+broadcasting a signal and starting a workflow by message. The last one had kept a second way to
+look successful after the other five were fixed. It waits on a future like all of them, and an
+interrupted wait returned normally, which marked the entry done although no workflow had been
+started, so the application's database carried an aggregate no engine knew about. An interrupt is
+therefore a failure of phase two like any other and reaches the outbox as one.
+
+The DELIVERY path is deliberately unchanged: there the engine delivers again, which is the
+recovery, and no outbox entry is involved. It does say now that the outcome was lost, an
+interrupt included, because an unannounced redelivery reads like a business method running twice
+for no reason.
 See [A failure of phase two is reported, not dropped](./README.md#a-failure-of-phase-two-is-reported-not-dropped).
 
 ### 6. Only what the API cannot do at all is a permanent failure

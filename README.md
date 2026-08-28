@@ -171,7 +171,9 @@ replaces the mock with a real Process-Engine-API implementation.
   adapter meta-key convention `bpmnProcessId` ([`GAPS.md`](GAPS.md), entry 6); without the meta
   entry the task definition has to be unique across the module's processes. A completion
   failing AFTER the local commit is tolerated with a WARN - the engine redelivers and the
-  idempotent handler converges.
+  idempotent handler converges. A completion INTERRUPTED after that commit gets the same WARN:
+  a shutdown interrupts the subscription thread, the outcome does not reach the engine either
+  way, and without the line the redelivery which follows looks unexplained.
 - **Completing/canceling async tasks** (`ProcessService#completeTask`/`#cancelTask`):
   the awareness probe and the phase-one existence check are `ExecutionMode.PREFLIGHT_CHECK`
   completions (validate only - exactly what the mode is for); the actual completion/cancellation
@@ -303,9 +305,12 @@ finished the task meanwhile. The completion was therefore lost whenever the seco
 real, and the workflow kept waiting at a task the application considered done.
 
 Every phase-two operation of the `ProcessService` now lets the failure through:
-completing and canceling a task, the same for a user task, and correlating a message.
+completing and canceling a task, the same for a user task, correlating a message, broadcasting
+a signal and starting a workflow by message. An interrupted wait is such a failure too: the
+engine did not answer, which is all the outbox has to know.
 `PeaPhaseTwoClassificationTest` holds which failures propagate and which of them the outbox
-treats as permanent. The
+treats as permanent, `PeaInterruptedOperationsTest` holds that an interrupt survives the call
+and consumes no entry. The
 outbox repeats them and blocks the entry when the attempts are used up, so:
 
 - an unreachable engine costs retries and ends in a blocked entry naming the cause,
