@@ -686,6 +686,23 @@ public class PeaProcessService<A> implements MigratableProcessService<A> {
   private final java.util.concurrent.atomic.AtomicBoolean noWorkflowAwarenessWarned = new java.util.concurrent.atomic.AtomicBoolean();
 
   /**
+   * Always <code>false</code>: the Process-Engine-API has no query API, and its command
+   * classes carry no execution mode which could ask without acting (GAPS.md entry 11).
+   * {@link #awarenessOfWorkflow} therefore answers optimistically, which is right while
+   * this is the only configured BPMS and a guess as soon as it is not - and saying so
+   * here is what makes the core refuse the second case while it boots rather than
+   * routing operations by list order.
+   *
+   * @return <code>false</code>
+   */
+  @Override
+  public boolean canLocateWorkflows() {
+
+    return false;
+
+  }
+
+  /**
    * The START re-dispatch mitigation probe - STRICTER contract than
    * {@link #awarenessOfWorkflow}: the answer must NEVER be optimistic.
    * The Process-Engine-API cannot probe a workflow's existence at all (GAPS.md

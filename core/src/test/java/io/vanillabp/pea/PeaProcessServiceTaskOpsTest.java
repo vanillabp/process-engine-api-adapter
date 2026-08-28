@@ -2,6 +2,7 @@ package io.vanillabp.pea;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -163,6 +164,17 @@ public class PeaProcessServiceTaskOpsTest {
     // recovered start would LOSE the workflow, whereas proceeding only risks the
     // documented at-least-once duplicate
     assertEquals(WorkflowAwareness.UNKNOWN_TO_BPMS, service.awarenessOfWorkflowForRedispatch(SCOPE, null, "42"));
+
+  }
+
+  @Test
+  @DisplayName("This adapter says that it cannot locate workflows, so a migration setup is refused")
+  public void workflowsCannotBeLocated() {
+
+    // the optimistic ACTIVE above is right while this is the only configured BPMS and
+    // a guess as soon as it is not. Saying so is what makes the platform refuse the
+    // second case while it boots, instead of routing operations by list order
+    assertFalse(service.canLocateWorkflows());
 
   }
 
