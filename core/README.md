@@ -24,8 +24,8 @@ business SPI transitively) and `dev.bpm-crafters.process-engine-api:process-engi
   models and deploys them (see below). A `DeploymentApi` is a constructor parameter, so the
   platform modules inject the implementation (the mock by default).
 - `processservice/PeaProcessService<A>` — implements `MigratableProcessService<A>`.
-  `needsTwoPhaseCommitForStartingWorkflows()` returns `true`; `startWorkflowPhaseOne` starts
-  with `PREFLIGHT_CHECK`, `startWorkflowPhaseTwo` with `SYNC` (see below). The
+  `startWorkflowPhaseOne` asks with `PREFLIGHT_CHECK`, `startWorkflowPhaseTwo` acts with
+  `SYNC` (see below). The
   Process-Engine-API interfaces are constructor parameters, so the platform modules inject an
   implementation.
 - `processservice/PeaStartProcessCommand` — the adapter's own `StartProcessCommand` carrying
