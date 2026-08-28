@@ -589,16 +589,26 @@ public class TaskProcessingIntegrationTest {
   }
 
   @Test
-  @DisplayName("completeTask of an unknown task raises the guiding TaskNotFoundException")
+  @DisplayName("completeTask of an unknown task raises the guiding TaskNotFoundException, at once")
   public void completeUnknownTaskRaisesGuidingException() {
 
     seed("4724");
 
+    final var startedAt = System.nanoTime();
     final var exception = org.junit.jupiter.api.Assertions.assertThrows(
         io.vanillabp.spi.process.TaskNotFoundException.class,
         () -> transactionTemplate.executeWithoutResult(status -> taskWorkflowService
             .completeAsyncTask(stored("4724"), "no-such-task")));
+    final var elapsed = java.time.Duration.ofNanos(System.nanoTime() - startedAt);
+
     assertTrue(exception.getMessage().contains("no-such-task"));
+    // the preflight completion answers exactly, and this runs in the caller's
+    // transaction - so it fails there rather than after any waiting (decision 27 of
+    // the platform's DECISIONS.md)
+    assertTrue(
+        elapsed.toSeconds() < 5,
+        "an unknown task must fail without waiting, but took "
+            + elapsed);
 
   }
 
