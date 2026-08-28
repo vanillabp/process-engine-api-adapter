@@ -60,6 +60,7 @@ jobs:
           path: |
             **/target/surefire-reports/**
             **/target/failsafe-reports/**
+            **/target/*application*.log
           retention-days: 7
           if-no-files-found: ignore
       - name: Publish package
