@@ -6,10 +6,13 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mockito;
 
+import dev.bpmcrafters.processengineapi.task.ServiceTaskCompletionApi;
 import dev.bpmcrafters.processengineapi.task.TaskInformation;
 import io.vanillabp.integration.adapter.spi.workflowtask.BpmnTaskSpec;
 import io.vanillabp.integration.adapter.spi.workflowtask.TaskInvocationContext;
@@ -291,6 +294,58 @@ public class PeaTaskHandlerTest {
         reason.contains("bigPayload") && reason.contains("vanillabp.adapters.pea.fetch-variables"),
         "expected a guiding failure naming the variable and the escape hatch but got: "
             + reason);
+
+  }
+
+  @Test
+  public void anInterruptedCompletionIsReportedInsteadOfSwallowed() {
+
+    // the local transaction is committed when the completion is sent, so an interrupt -
+    // what a shutdown does to a subscription thread - used to leave a task the engine
+    // still owns, with nothing in the log explaining the redelivery which follows
+    final var engineWhichNeverAnswers = Mockito.mock(
+        ServiceTaskCompletionApi.class,
+        Mockito.withSettings().defaultAnswer(invocation -> new CompletableFuture<>()));
+    final var testee = new PeaTaskHandler(
+        "pea", "test-module", "someTask", List.of("OnlyProcess"), invoker, engineWhichNeverAnswers);
+
+    Thread.currentThread().interrupt();
+    final var warnings = warningsOf(
+        () -> testee.accept(new TaskInformation("task-8", Map.of()), Map.of("id", "4711")));
+    final var interruptSurvived = Thread.interrupted();
+
+    assertTrue(interruptSurvived, "the interrupt was swallowed");
+    assertEquals(1, warnings.size(), () -> "expected exactly one warning but got: "
+        + warnings);
+    assertTrue(
+        warnings.getFirst().contains("task-8") && warnings.getFirst().contains("redelivers"),
+        "expected a warning naming the task and the redelivery but got: "
+            + warnings.getFirst());
+
+  }
+
+  /**
+   * What the handler logged at WARN or above while the given work ran.
+   */
+  private List<String> warningsOf(
+      final Runnable work) {
+
+    final var logWatcher = new ch.qos.logback.core.read.ListAppender<ch.qos.logback.classic.spi.ILoggingEvent>();
+    logWatcher.start();
+    final var logger = (ch.qos.logback.classic.Logger) org.slf4j.LoggerFactory
+        .getLogger(PeaTaskHandler.class);
+    logger.addAppender(logWatcher);
+    try {
+      work.run();
+    } finally {
+      logger.detachAppender(logWatcher);
+      logWatcher.stop();
+    }
+    return logWatcher.list
+        .stream()
+        .filter(event -> event.getLevel().isGreaterOrEqual(ch.qos.logback.classic.Level.WARN))
+        .map(ch.qos.logback.classic.spi.ILoggingEvent::getFormattedMessage)
+        .toList();
 
   }
 

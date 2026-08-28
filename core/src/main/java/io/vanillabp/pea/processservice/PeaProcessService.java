@@ -1009,6 +1009,10 @@ public class PeaProcessService<A> implements MigratableProcessService<A> {
           workflowAggregateId);
     } catch (final InterruptedException e) {
       Thread.currentThread().interrupt();
+      // returning here would mark the outbox entry done although no workflow was
+      // started, and the application's database would carry an aggregate no engine knows
+      throw new IllegalStateException(
+          "Phase two of starting a workflow by message '%s' was interrupted".formatted(messageName), e);
     } catch (final java.util.concurrent.ExecutionException e) {
       throw new IllegalStateException(
           "Phase two of starting a workflow by message '%s' failed".formatted(messageName), e.getCause());

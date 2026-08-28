@@ -290,18 +290,39 @@ public class PeaTaskHandler implements TaskHandler {
       call.run();
     } catch (final InterruptedException e) {
       Thread.currentThread().interrupt();
+      // the caller is a subscription thread of the engine, usually one being shut
+      // down: nobody up the stack acts on the flag, so an interrupt gets the same
+      // line a failure gets instead of leaving the task neither reported nor logged
+      couldNotReportBack(taskId, description, e);
     } catch (final ExecutionException e) {
-      // the local transaction is committed - a failing completion is the
-      // documented at-least-once residual (the engine redelivers, the handler
-      // converges idempotently)
-      log.warn(
-          "Process-Engine-API adapter '{}': could not {} task '{}' - if the engine redelivers the "
-              + "task, the (idempotent) business method will run again",
-          adapterId,
-          description,
-          taskId,
-          e.getCause());
+      couldNotReportBack(taskId, description, e.getCause());
     }
+
+  }
+
+  /**
+   * Says that the engine did not learn the outcome of a task.
+   * <p>
+   * The local transaction is committed by now, so this is the documented
+   * at-least-once residual: the engine redelivers the task and the idempotent
+   * handler converges.
+   *
+   * @param taskId The task which stays open in the engine
+   * @param description What was attempted, as a verb ("complete", "fail")
+   * @param cause Why it did not reach the engine
+   */
+  private void couldNotReportBack(
+      final String taskId,
+      final String description,
+      final Throwable cause) {
+
+    log.warn(
+        "Process-Engine-API adapter '{}': could not {} task '{}' - if the engine redelivers the "
+            + "task, the (idempotent) business method will run again",
+        adapterId,
+        description,
+        taskId,
+        cause);
 
   }
 

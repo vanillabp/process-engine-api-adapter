@@ -54,6 +54,8 @@ public class PeaInterruptedOperationsTest {
 
   private SignalApi signals;
 
+  private StartProcessApi starts;
+
   private PeaProcessService<Object> service;
 
   @BeforeEach
@@ -65,9 +67,10 @@ public class PeaInterruptedOperationsTest {
     userTasks = Mockito.mock(UserTaskCompletionApi.class, neverAnswers);
     correlation = Mockito.mock(CorrelationApi.class, neverAnswers);
     signals = Mockito.mock(SignalApi.class, neverAnswers);
+    starts = Mockito.mock(StartProcessApi.class, neverAnswers);
 
     service = new PeaProcessService<>(
-        "pea", Mockito.mock(StartProcessApi.class), serviceTasks, userTasks, correlation);
+        "pea", starts, serviceTasks, userTasks, correlation);
     service.setSignalApi(signals);
 
   }
@@ -140,6 +143,29 @@ public class PeaInterruptedOperationsTest {
     // returning normally would mark the entry done although nothing was broadcast, and
     // a signal nobody receives is a workflow waiting forever
     assertFailsNaming("OrderCancelled", () -> service.sendSignalPhaseTwo("mod", "Process", "OrderCancelled"));
+
+  }
+
+  @Test
+  @DisplayName("An interrupted start by message fails instead of consuming the outbox entry")
+  public void anInterruptedStartByMessageFails() {
+
+    // this one used to return normally: the outbox entry was marked done, the router
+    // reported success, and the application kept an aggregate whose workflow was never
+    // started - the most expensive of the interrupts, because nothing is left to notice it
+    assertFailsNaming(
+        "OrderPlaced",
+        () -> service.startWorkflowByMessagePhaseTwo("mod", "Process", null, "42", "OrderPlaced"));
+
+  }
+
+  @Test
+  @DisplayName("An interrupted start fails naming the BPMN process")
+  public void anInterruptedStartFails() {
+
+    assertFailsNaming(
+        "Process",
+        () -> service.startWorkflowPhaseTwo("mod", "Process", null, "42"));
 
   }
 
