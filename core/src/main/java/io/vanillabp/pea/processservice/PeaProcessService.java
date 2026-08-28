@@ -17,8 +17,8 @@ import io.vanillabp.pea.PeaAdapter;
  * to - one instance per configured adapter id.
  * <p>
  * The Process-Engine-API is treated as a remote BPMS: it cannot join the application's
- * local transaction, therefore {@link #needsTwoPhaseCommitForStartingWorkflows()}
- * returns {@code true} and workflow starts are routed through the generic outbox path.
+ * local transaction, so workflow starts are routed through the generic outbox path like
+ * every other operation which reaches the engine.
  * Phase one maps to the Process-Engine-API's {@code ExecutionMode.PREFLIGHT_CHECK} (validate
  * only, inside the caller's transaction) and phase two to {@code ExecutionMode.SYNC} (create
  * the instance, after commit, dispatched via the outbox). The workflow-aggregate id travels
@@ -332,15 +332,6 @@ public class PeaProcessService<A> implements MigratableProcessService<A> {
   public String getAdapterId() {
 
     return adapterId;
-
-  }
-
-  @Override
-  public boolean needsTwoPhaseCommitForStartingWorkflows() {
-
-    // The Process-Engine-API is treated as a remote BPMS: it cannot join the local
-    // transaction, so starting a workflow has to run through the generic outbox path.
-    return true;
 
   }
 

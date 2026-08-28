@@ -61,9 +61,9 @@ Since version 1.6 every Process-Engine-API command carries an
 - **phase one ≈ `PREFLIGHT_CHECK`** — validate only, no execution;
 - **phase two ≈ `SYNC`** — execute in the caller's transaction context.
 
-Accordingly the adapter treats the Process-Engine-API as a **remote BPMS**
-(`needsTwoPhaseCommitForStartingWorkflows()` returns `true`) so workflow starts run
-through VanillaBP's generic transaction-outbox path.
+Accordingly the adapter treats the Process-Engine-API as a **remote BPMS**: workflow
+starts run through VanillaBP's generic transaction-outbox path, like everything else this
+adapter sends to the engine.
 
 ## Coordinates
 
