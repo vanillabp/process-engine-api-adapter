@@ -73,6 +73,18 @@ public class PeaFetchVariablesTest {
    * <code>&#64;TaskParam</code> names per task definition - the two questions the
    * derivation asks it.
    */
+  /**
+   * The service under test, with the given core standing in for both halves of the task
+   * SPI: this service derives its subscriptions while wiring and hands the deliveries of
+   * those subscriptions back at runtime.
+   */
+  private PeaDeploymentService deploymentService(
+      final PeaDeploymentServiceTest.PermissiveInvoker core) {
+
+    return new PeaDeploymentService("pea", engine, core, core, engine, engine);
+
+  }
+
   private static PeaDeploymentServiceTest.PermissiveInvoker invoker(
       final java.util.function.Function<String, String> aggregateIdNames,
       final java.util.function.Function<String, List<String>> taskParameters) {
@@ -137,8 +149,7 @@ public class PeaFetchVariablesTest {
   @DisplayName("A subscription names the aggregate-ID variable instead of asking for everything")
   public void theSubscriptionNamesWhatItReads() {
 
-    final var service = new PeaDeploymentService(
-        "pea", engine, invoker(bpmnProcessId -> "id", taskDefinition -> List.of()), engine, engine);
+    final var service = deploymentService(invoker(bpmnProcessId -> "id", taskDefinition -> List.of()));
 
     service.startWorkflowProcessing(MODULE, wire(service, "two.bpmn", TWO_PROCESSES));
 
@@ -153,14 +164,13 @@ public class PeaFetchVariablesTest {
   @DisplayName("A subscription serving two processes asks for the union of both")
   public void theUnionCoversEverythingTheSubscriptionServes() {
 
-    final var service = new PeaDeploymentService(
-        "pea", engine, invoker(
-            bpmnProcessId -> "Loans".equals(bpmnProcessId)
-                ? "loanId"
-                : "cardId",
-            taskDefinition -> "approve".equals(taskDefinition)
-                ? List.of("region")
-                : List.of()), engine, engine);
+    final var service = deploymentService(invoker(
+        bpmnProcessId -> "Loans".equals(bpmnProcessId)
+            ? "loanId"
+            : "cardId",
+        taskDefinition -> "approve".equals(taskDefinition)
+            ? List.of("region")
+            : List.of()));
 
     service.startWorkflowProcessing(MODULE, wire(service, "two.bpmn", TWO_PROCESSES));
 
@@ -176,8 +186,7 @@ public class PeaFetchVariablesTest {
   @DisplayName("A @TaskParam naming a variable no model mentions travels with the delivery")
   public void aDeclaredParameterIsAskedFor() {
 
-    final var service = new PeaDeploymentService(
-        "pea", engine, invoker(bpmnProcessId -> "id", taskDefinition -> List.of("bigPayload")), engine, engine);
+    final var service = deploymentService(invoker(bpmnProcessId -> "id", taskDefinition -> List.of("bigPayload")));
 
     service.startWorkflowProcessing(MODULE, wire(service, "two.bpmn", TWO_PROCESSES));
 
@@ -193,8 +202,7 @@ public class PeaFetchVariablesTest {
   @DisplayName("'all' makes the subscription ask for the complete payload again")
   public void theEscapeHatchAsksForEverything() {
 
-    final var service = new PeaDeploymentService(
-        "pea", engine, invoker(bpmnProcessId -> "id", taskDefinition -> List.of()), engine, engine);
+    final var service = deploymentService(invoker(bpmnProcessId -> "id", taskDefinition -> List.of()));
     service.setFetchVariablesResolver((
         workflowModuleId,
         bpmnProcessId,
@@ -216,8 +224,7 @@ public class PeaFetchVariablesTest {
   @DisplayName("A BPMN process no workflow service serves is asked blindly rather than incompletely")
   public void anUnknownAggregateFallsBackToEverything() {
 
-    final var service = new PeaDeploymentService(
-        "pea", engine, invoker(bpmnProcessId -> null, taskDefinition -> List.of()), engine, engine);
+    final var service = deploymentService(invoker(bpmnProcessId -> null, taskDefinition -> List.of()));
 
     service.startWorkflowProcessing(MODULE, wire(service, "two.bpmn", TWO_PROCESSES));
 
@@ -232,12 +239,11 @@ public class PeaFetchVariablesTest {
   @DisplayName("A user-task subscription is narrowed the same way")
   public void theUserTaskSubscriptionIsNarrowedToo() {
 
-    final var service = new PeaDeploymentService(
-        "pea", engine, invoker(
-            bpmnProcessId -> "id",
-            taskDefinition -> "utApprove".equals(taskDefinition)
-                ? List.of("decision")
-                : List.of()), engine, engine);
+    final var service = deploymentService(invoker(
+        bpmnProcessId -> "id",
+        taskDefinition -> "utApprove".equals(taskDefinition)
+            ? List.of("decision")
+            : List.of()));
 
     service.startWorkflowProcessing(MODULE, wire(service, "ut.bpmn", USER_TASK_PROCESS));
 
@@ -301,8 +307,7 @@ public class PeaFetchVariablesTest {
   @DisplayName("The mock hands the handler what the subscription asked for")
   public void theEngineNarrowsThePayload() {
 
-    final var service = new PeaDeploymentService(
-        "pea", engine, invoker(bpmnProcessId -> "id", taskDefinition -> List.of()), engine, engine);
+    final var service = deploymentService(invoker(bpmnProcessId -> "id", taskDefinition -> List.of()));
     service.startWorkflowProcessing(MODULE, wire(service, "two.bpmn", TWO_PROCESSES));
 
     final var subscription = engine

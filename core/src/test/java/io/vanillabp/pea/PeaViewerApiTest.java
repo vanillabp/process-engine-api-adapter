@@ -69,7 +69,7 @@ public class PeaViewerApiTest {
   private final PeaDeployedProcesses deployedProcesses = new PeaDeployedProcesses();
 
   private final PeaDeploymentService deploymentService = new PeaDeploymentService(
-      "pea", engine, new PeaDeploymentServiceTest.PermissiveInvoker(), engine, engine, deployedProcesses);
+      "pea", engine, new PeaDeploymentServiceTest.PermissiveInvoker(), new PeaDeploymentServiceTest.PermissiveInvoker(), engine, engine, deployedProcesses);
 
   private final PeaProcessService<Aggregate> processService = new PeaProcessService<>(
       "pea", engine, engine, engine, engine, deployedProcesses);

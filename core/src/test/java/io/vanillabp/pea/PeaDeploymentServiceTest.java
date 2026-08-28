@@ -22,7 +22,7 @@ public class PeaDeploymentServiceTest {
 
   private final InMemoryProcessEngine engine = new InMemoryProcessEngine();
 
-  private final PeaDeploymentService service = new PeaDeploymentService("pea", engine, new PermissiveInvoker(), engine, engine);
+  private final PeaDeploymentService service = new PeaDeploymentService("pea", engine, new PermissiveInvoker(), new PermissiveInvoker(), engine, engine);
 
   private static ByteArrayInputStream bpmn(
       final String xml) {
@@ -279,7 +279,7 @@ public class PeaDeploymentServiceTest {
 
     };
     final var failingService = new PeaDeploymentService(
-        "pea", failingDeploy, new PermissiveInvoker(), engine, engine);
+        "pea", failingDeploy, new PermissiveInvoker(), new PermissiveInvoker(), engine, engine);
 
     final var xml = """
         <?xml version="1.0" encoding="UTF-8"?>
@@ -331,7 +331,7 @@ public class PeaDeploymentServiceTest {
 
     };
     final var failingService = new PeaDeploymentService(
-        "pea", engine, new PermissiveInvoker(), failingSubscribe, engine);
+        "pea", engine, new PermissiveInvoker(), new PermissiveInvoker(), failingSubscribe, engine);
 
     final var context = contextWithOneTask(failingService);
 
@@ -402,7 +402,12 @@ public class PeaDeploymentServiceTest {
 
   }
 
-  static class PermissiveInvoker implements io.vanillabp.integration.adapter.spi.workflowtask.WorkflowTaskInvoker {
+  /**
+   * Plays both halves of the split task SPI: the deployment service wires through
+   * {@code WorkflowTaskWiring} and opens its task subscriptions with
+   * {@code WorkflowTaskInvoker}, so a double standing in for the core answers both.
+   */
+  static class PermissiveInvoker implements io.vanillabp.integration.adapter.spi.workflowtask.WorkflowTaskWiring, io.vanillabp.integration.adapter.spi.workflowtask.WorkflowTaskInvoker {
 
     @Override
     public void validateTaskWiring(

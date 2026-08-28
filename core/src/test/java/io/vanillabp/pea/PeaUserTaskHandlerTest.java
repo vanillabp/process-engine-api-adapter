@@ -3,7 +3,6 @@ package io.vanillabp.pea;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 
-import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 
@@ -12,7 +11,6 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 
 import dev.bpmcrafters.processengineapi.task.TaskInformation;
-import io.vanillabp.integration.adapter.spi.workflowtask.BpmnTaskSpec;
 import io.vanillabp.integration.adapter.spi.workflowtask.TaskInvocationContext;
 import io.vanillabp.integration.adapter.spi.workflowtask.WorkflowTaskInvoker;
 import io.vanillabp.integration.adapter.spi.workflowtask.WorkflowTaskOutcome;
@@ -38,18 +36,6 @@ public class PeaUserTaskHandlerTest {
     String invokedBpmnProcessId;
 
     TaskEvent.Event invokedEvent;
-
-    @Override
-    public void validateTaskWiring(
-        final String workflowModuleId,
-        final String bpmnProcessId,
-        final Collection<BpmnTaskSpec> tasks) {
-    }
-
-    @Override
-    public void validateNoUnwiredWorkflowTaskMethods(
-        final String workflowModuleId) {
-    }
 
     @Override
     public boolean workflowTaskHandlerExists(
