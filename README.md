@@ -142,8 +142,13 @@ replaces the mock with a real Process-Engine-API implementation.
   phase two (after commit, via the outbox) to `ExecutionMode.SYNC` (create the instance). The
   aggregate id travels as a process variable named after the aggregate's ID property
   (`AggregatePersistenceAware.getAggregateIdName()`; there is no business-key slot —
-  [`GAPS.md`](GAPS.md), entry 3). Phase two is at-least-once, so duplicates are possible until
-  the core-side `WorkflowInstanceRegistry` story lands.
+  [`GAPS.md`](GAPS.md), entry 3). Phase two is at-least-once, so a crash between a successful
+  start and the outbox entry being marked done can duplicate the instance. No registry is
+  coming for it: a workflow is located by asking rather than remembered (decision 25 of the
+  platform's `DECISIONS.md`), and what narrows the window is the core's probe before a
+  re-dispatched start - which this adapter cannot answer, see
+  [`GAPS.md`](GAPS.md), entry 11, and the residual described by the
+  [Camunda 8 adapter](https://github.com/vanillabp/camunda8-adapter/blob/main/README.md#idempotency-limitation).
 - **Platform coverage:** deployment is wired and integration-tested on **both platforms**:
   Spring Boot (`PeaDeploymentServiceTest`, `DeploymentIntegrationTest`) and Quarkus
   (`PeaDeploymentPipelineTest` - the Quarkus platform integration runs the
@@ -298,7 +303,9 @@ finished the task meanwhile. The completion was therefore lost whenever the seco
 real, and the workflow kept waiting at a task the application considered done.
 
 Every phase-two operation of the `ProcessService` now lets the failure through:
-completing and canceling a task, the same for a user task, and correlating a message. The
+completing and canceling a task, the same for a user task, and correlating a message.
+`PeaPhaseTwoClassificationTest` holds which failures propagate and which of them the outbox
+treats as permanent. The
 outbox repeats them and blocks the entry when the attempts are used up, so:
 
 - an unreachable engine costs retries and ends in a blocked entry naming the cause,
