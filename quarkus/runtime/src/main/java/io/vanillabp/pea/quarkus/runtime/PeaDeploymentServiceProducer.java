@@ -61,7 +61,7 @@ public class PeaDeploymentServiceProducer {
         .sorted()
         .map(adapterId -> {
           final var deploymentService = new PeaDeploymentService(
-              adapterId, deploymentApi, workflowTaskRegistry, taskSubscriptionApi, serviceTaskCompletionApi, deployedProcessesRegistry
+              adapterId, deploymentApi, workflowTaskRegistry, workflowTaskRegistry, taskSubscriptionApi, serviceTaskCompletionApi, deployedProcessesRegistry
                   .forAdapter(adapterId));
           deploymentService.setScoping(scoping);
           // What each subscription asks the engine for, resolvable down to

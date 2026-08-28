@@ -80,12 +80,16 @@ public class PeaAdapterBeanRegistrar implements BeanRegistrar {
                 final var deploymentService = new PeaDeploymentService(
                     adapterId, supplierContext.bean(DeploymentApi.class), supplierContext
                         .bean(
-                            io.vanillabp.integration.adapter.spi.workflowtask.WorkflowTaskInvoker.class), supplierContext
-                                .bean(dev.bpmcrafters.processengineapi.task.TaskSubscriptionApi.class), supplierContext
-                                    .bean(
-                                        dev.bpmcrafters.processengineapi.task.ServiceTaskCompletionApi.class), supplierContext
-                                            .bean(io.vanillabp.pea.deployment.PeaDeployedProcessesRegistry.class)
-                                            .forAdapter(adapterId));
+                            io.vanillabp.integration.adapter.spi.workflowtask.WorkflowTaskWiring.class), supplierContext
+                                .bean(
+                                    io.vanillabp.integration.adapter.spi.workflowtask.WorkflowTaskInvoker.class), supplierContext
+                                        .bean(
+                                            dev.bpmcrafters.processengineapi.task.TaskSubscriptionApi.class), supplierContext
+                                                .bean(
+                                                    dev.bpmcrafters.processengineapi.task.ServiceTaskCompletionApi.class), supplierContext
+                                                        .bean(
+                                                            io.vanillabp.pea.deployment.PeaDeployedProcessesRegistry.class)
+                                                        .forAdapter(adapterId));
                 deploymentService.setScoping(
                     supplierContext.bean(io.vanillabp.integration.adapter.spi.NameClashAvoidanceSupport.class));
                 // What each subscription asks the engine for, resolvable down

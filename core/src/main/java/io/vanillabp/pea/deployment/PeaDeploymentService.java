@@ -27,6 +27,7 @@ import io.vanillabp.integration.adapter.spi.AdapterPlatformVersion;
 import io.vanillabp.integration.adapter.spi.BpmnParseException;
 import io.vanillabp.integration.adapter.spi.workflowtask.BpmnTaskSpec;
 import io.vanillabp.integration.adapter.spi.workflowtask.WorkflowTaskInvoker;
+import io.vanillabp.integration.adapter.spi.workflowtask.WorkflowTaskWiring;
 import io.vanillabp.pea.PeaAdapter;
 import io.vanillabp.pea.PeaBpmnModel;
 import io.vanillabp.pea.PeaProcessingContext;
@@ -58,6 +59,13 @@ public class PeaDeploymentService implements AdapterDeploymentService<PeaBpmnMod
   /**
    * The core's task-processing entry point: wiring validation during
    * {@link #wireBpmn} and task dispatch at runtime.
+   */
+  private final WorkflowTaskWiring workflowTaskWiring;
+
+  /**
+   * The runtime half of the split SPI. This service does not only wire: it opens the task
+   * subscriptions at {@code startWorkflowProcessing}, and their handlers hand every
+   * delivery to the core - so it holds both halves and passes this one on.
    */
   private final WorkflowTaskInvoker workflowTaskInvoker;
 
@@ -98,17 +106,19 @@ public class PeaDeploymentService implements AdapterDeploymentService<PeaBpmnMod
   public PeaDeploymentService(
       final String adapterId,
       final DeploymentApi deploymentApi,
+      final WorkflowTaskWiring workflowTaskWiring,
       final WorkflowTaskInvoker workflowTaskInvoker,
       final TaskSubscriptionApi taskSubscriptionApi,
       final ServiceTaskCompletionApi serviceTaskCompletionApi) {
 
-    this(adapterId, deploymentApi, workflowTaskInvoker, taskSubscriptionApi, serviceTaskCompletionApi, new PeaDeployedProcesses());
+    this(adapterId, deploymentApi, workflowTaskWiring, workflowTaskInvoker, taskSubscriptionApi, serviceTaskCompletionApi, new PeaDeployedProcesses());
 
   }
 
   public PeaDeploymentService(
       final String adapterId,
       final DeploymentApi deploymentApi,
+      final WorkflowTaskWiring workflowTaskWiring,
       final WorkflowTaskInvoker workflowTaskInvoker,
       final TaskSubscriptionApi taskSubscriptionApi,
       final ServiceTaskCompletionApi serviceTaskCompletionApi,
@@ -118,6 +128,7 @@ public class PeaDeploymentService implements AdapterDeploymentService<PeaBpmnMod
 
     this.adapterId = adapterId;
     this.deploymentApi = deploymentApi;
+    this.workflowTaskWiring = workflowTaskWiring;
     this.workflowTaskInvoker = workflowTaskInvoker;
     this.taskSubscriptionApi = taskSubscriptionApi;
     this.serviceTaskCompletionApi = serviceTaskCompletionApi;
@@ -201,7 +212,7 @@ public class PeaDeploymentService implements AdapterDeploymentService<PeaBpmnMod
       }
       final String aggregateIdName;
       try {
-        aggregateIdName = workflowTaskInvoker
+        aggregateIdName = workflowTaskWiring
             .resolveWorkflowAggregateIdName(workflowModuleId, task.bpmnProcessId());
       } catch (final RuntimeException e) {
         log.debug(
@@ -218,7 +229,7 @@ public class PeaDeploymentService implements AdapterDeploymentService<PeaBpmnMod
       // names off the methods while wiring, and this adapter has no model to guess from
       variables
           .addAll(
-              workflowTaskInvoker
+              workflowTaskWiring
                   .taskParameterNames(workflowModuleId, task.bpmnProcessId(), task.taskDefinition()));
     }
     return io.vanillabp.pea.wiring.PeaFetchVariables.Selection.of(variables);
@@ -492,7 +503,7 @@ public class PeaDeploymentService implements AdapterDeploymentService<PeaBpmnMod
     // throwing here honors the deployment-failure policy
     final var specs = new ArrayList<BpmnTaskSpec>(model.tasks());
     specs.addAll(model.userTasks());
-    workflowTaskInvoker.validateTaskWiring(workflowModuleId, bpmnProcessId, specs);
+    workflowTaskWiring.validateTaskWiring(workflowModuleId, bpmnProcessId, specs);
 
     failOnBpmsInitiatedStartEvents(workflowModuleId, filename, bpmnProcessId, model);
     warnAboutUnservedWorkflowEndedHandlers(workflowModuleId, bpmnProcessId);
@@ -646,12 +657,10 @@ public class PeaDeploymentService implements AdapterDeploymentService<PeaBpmnMod
 
     // after ALL processes of the module were wired: methods matching no task of
     // any wired process are a defect (per-module check, honors the policy)
-    workflowTaskInvoker.validateNoUnwiredWorkflowTaskMethods(workflowModuleId);
 
     // This adapter registers no version catalog (the API cannot be asked
     // which versions of a process exist - GAPS.md 19), so this call only reports the
     // version tags the application names and nobody can resolve
-    workflowTaskInvoker.resolveProcessVersions(workflowModuleId);
 
   }
 

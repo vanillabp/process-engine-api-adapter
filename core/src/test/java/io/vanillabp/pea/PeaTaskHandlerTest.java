@@ -3,7 +3,6 @@ package io.vanillabp.pea;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
@@ -14,7 +13,6 @@ import org.mockito.Mockito;
 
 import dev.bpmcrafters.processengineapi.task.ServiceTaskCompletionApi;
 import dev.bpmcrafters.processengineapi.task.TaskInformation;
-import io.vanillabp.integration.adapter.spi.workflowtask.BpmnTaskSpec;
 import io.vanillabp.integration.adapter.spi.workflowtask.TaskInvocationContext;
 import io.vanillabp.integration.adapter.spi.workflowtask.WorkflowTaskInvoker;
 import io.vanillabp.integration.adapter.spi.workflowtask.WorkflowTaskOutcome;
@@ -34,18 +32,6 @@ public class PeaTaskHandlerTest {
   static class RecordingInvoker implements WorkflowTaskInvoker {
 
     String invokedBpmnProcessId;
-
-    @Override
-    public void validateTaskWiring(
-        final String workflowModuleId,
-        final String bpmnProcessId,
-        final Collection<BpmnTaskSpec> tasks) {
-    }
-
-    @Override
-    public void validateNoUnwiredWorkflowTaskMethods(
-        final String workflowModuleId) {
-    }
 
     String invokedProcessVersion;
 

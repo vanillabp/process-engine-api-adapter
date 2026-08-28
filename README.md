@@ -158,7 +158,9 @@ replaces the mock with a real Process-Engine-API implementation.
   `TaskSubscriptionApi` subscription per distinct task definition of the module's BPMN files
   (the `zeebe:taskDefinition` type of service/send/business-rule/script tasks - the API does
   not define the mapping, [`GAPS.md`](GAPS.md), entry 7). Task wiring is validated during
-  `wireBpmn`; unwired `@WorkflowTask` methods are reported at the end of `deployResources`.
+  `wireBpmn`; a `@WorkflowTask` method matching no task of any BPMN process of its workflow
+  module ends the boot, checked by the core itself once every adapter of the module finished
+  deploying (story 158) - `OrphanMethodBootTest` holds it.
   A delivered task runs the `@WorkflowTask` method in a NEW local transaction which commits
   BEFORE the completion command is sent (at-least-once ordering; handlers must be idempotent).
   Outcomes: normal return → `completeTask`; `TaskException` → `completeTaskByError` with the
