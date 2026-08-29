@@ -73,19 +73,7 @@ public class PeaDeploymentService implements AdapterDeploymentService<PeaBpmnMod
    * The core's entry point for workflows which ended - used ONLY to warn
    * about methods this adapter cannot serve. May be <code>null</code> (tests).
    */
-  private io.vanillabp.integration.adapter.spi.workflowend.WorkflowEndedInvoker workflowEndedInvoker;
-
-  /**
-   * Hands over the core's entry point for workflows which ended.
-   *
-   * @param workflowEndedInvoker The core's invoker
-   */
-  public void setWorkflowEndedInvoker(
-      final io.vanillabp.integration.adapter.spi.workflowend.WorkflowEndedInvoker workflowEndedInvoker) {
-
-    this.workflowEndedInvoker = workflowEndedInvoker;
-
-  }
+  private final io.vanillabp.integration.adapter.spi.workflowend.WorkflowEndedInvoker workflowEndedInvoker;
 
   private final TaskSubscriptionApi taskSubscriptionApi;
 
@@ -106,20 +94,18 @@ public class PeaDeploymentService implements AdapterDeploymentService<PeaBpmnMod
   public PeaDeploymentService(
       final String adapterId,
       final DeploymentApi deploymentApi,
-      final WorkflowTaskWiring workflowTaskWiring,
-      final WorkflowTaskInvoker workflowTaskInvoker,
+      final io.vanillabp.integration.adapter.spi.AdapterCollaborators collaborators,
       final TaskSubscriptionApi taskSubscriptionApi,
       final ServiceTaskCompletionApi serviceTaskCompletionApi) {
 
-    this(adapterId, deploymentApi, workflowTaskWiring, workflowTaskInvoker, taskSubscriptionApi, serviceTaskCompletionApi, new PeaDeployedProcesses());
+    this(adapterId, deploymentApi, collaborators, taskSubscriptionApi, serviceTaskCompletionApi, new PeaDeployedProcesses());
 
   }
 
   public PeaDeploymentService(
       final String adapterId,
       final DeploymentApi deploymentApi,
-      final WorkflowTaskWiring workflowTaskWiring,
-      final WorkflowTaskInvoker workflowTaskInvoker,
+      final io.vanillabp.integration.adapter.spi.AdapterCollaborators collaborators,
       final TaskSubscriptionApi taskSubscriptionApi,
       final ServiceTaskCompletionApi serviceTaskCompletionApi,
       final PeaDeployedProcesses deployedProcesses) {
@@ -128,8 +114,11 @@ public class PeaDeploymentService implements AdapterDeploymentService<PeaBpmnMod
 
     this.adapterId = adapterId;
     this.deploymentApi = deploymentApi;
-    this.workflowTaskWiring = workflowTaskWiring;
-    this.workflowTaskInvoker = workflowTaskInvoker;
+    this.collaborators = collaborators;
+    this.workflowTaskWiring = collaborators.workflowTaskWiring();
+    this.workflowTaskInvoker = collaborators.workflowTaskInvoker();
+    this.workflowEndedInvoker = collaborators.workflowEndedInvoker().orElse(null);
+    this.scoping = collaborators.scoping();
     this.taskSubscriptionApi = taskSubscriptionApi;
     this.serviceTaskCompletionApi = serviceTaskCompletionApi;
     this.deployedProcesses = deployedProcesses;
@@ -142,20 +131,14 @@ public class PeaDeploymentService implements AdapterDeploymentService<PeaBpmnMod
    * be served - {@code by-adapter} (the default!) is rejected at startup with a
    * guiding message. May be <code>null</code> (tests).
    */
-  private io.vanillabp.integration.adapter.spi.NameClashAvoidanceSupport scoping;
+  private final io.vanillabp.integration.adapter.spi.NameClashAvoidanceSupport scoping;
 
   /**
-   * Sets the name-clash-avoidance support (the platform modules construct this
-   * service and inject it afterwards).
-   *
-   * @param scoping The name-clash-avoidance support
+   * Everything the platform hands over. An adapter which is registered incompletely does
+   * not come into existence (see
+   * {@link io.vanillabp.integration.adapter.spi.AdapterCollaborators}).
    */
-  public void setScoping(
-      final io.vanillabp.integration.adapter.spi.NameClashAvoidanceSupport scoping) {
-
-    this.scoping = scoping;
-
-  }
+  private final io.vanillabp.integration.adapter.spi.AdapterCollaborators collaborators;
 
   /**
    * Resolves whether a subscription asks for the DERIVED payload variables or for all of

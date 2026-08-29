@@ -45,7 +45,11 @@ public class PeaDeploymentServiceProducer {
       final dev.bpmcrafters.processengineapi.task.TaskSubscriptionApi taskSubscriptionApi,
       final dev.bpmcrafters.processengineapi.task.ServiceTaskCompletionApi serviceTaskCompletionApi,
       final io.vanillabp.pea.deployment.PeaDeployedProcessesRegistry deployedProcessesRegistry,
-      final io.vanillabp.integration.adapter.spi.NameClashAvoidanceSupport scoping) {
+      final io.vanillabp.integration.adapter.spi.NameClashAvoidanceSupport scoping,
+      final io.vanillabp.integration.adapter.spi.WorkflowAggregateSync aggregateSync,
+      final io.vanillabp.integration.adapter.spi.PreCommitRegistrar preCommitRegistrar,
+      @jakarta.enterprise.inject.Any final jakarta.enterprise.inject.Instance<io.vanillabp.integration.adapter.spi.workflowend.WorkflowEndedInvoker> workflowEndedInvoker,
+      @jakarta.enterprise.inject.Any final jakarta.enterprise.inject.Instance<io.vanillabp.integration.adapter.spi.workflowstart.BpmsInitiatedStartInvoker> bpmsInitiatedStartInvoker) {
 
     final var overlay = org.eclipse.microprofile.config.ConfigProvider
         .getConfig()
@@ -61,9 +65,11 @@ public class PeaDeploymentServiceProducer {
         .sorted()
         .map(adapterId -> {
           final var deploymentService = new PeaDeploymentService(
-              adapterId, deploymentApi, workflowTaskRegistry, workflowTaskRegistry, taskSubscriptionApi, serviceTaskCompletionApi, deployedProcessesRegistry
-                  .forAdapter(adapterId));
-          deploymentService.setScoping(scoping);
+              adapterId, deploymentApi, PeaProcessServiceProducer
+                  .collaboratorsOf(
+                      adapterId, workflowTaskRegistry, scoping, aggregateSync, preCommitRegistrar, workflowEndedInvoker,
+                      bpmsInitiatedStartInvoker), taskSubscriptionApi, serviceTaskCompletionApi, deployedProcessesRegistry
+                          .forAdapter(adapterId));
           // What each subscription asks the engine for, resolvable down to
           // task level
           deploymentService.setFetchVariablesResolver((
@@ -71,7 +77,6 @@ public class PeaDeploymentServiceProducer {
               bpmnProcessId,
               taskDefinition) -> overlay.fetchVariablesFor(
                   workflowModuleId, bpmnProcessId, taskDefinition, adapterId));
-          deploymentService.setWorkflowEndedInvoker(workflowTaskRegistry);
           return deploymentService;
         })
         .toList();

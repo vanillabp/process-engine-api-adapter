@@ -27,6 +27,26 @@ public class PeaProcessServiceProducer {
    * Only the Process-Engine-APIs the adapter actually uses are injected (currently
    * {@link StartProcessApi}); upcoming stories add theirs when they consume them.
    */
+  /**
+   * What the platform hands the adapter, built the same way for both services of an
+   * adapter id.
+   */
+  static io.vanillabp.integration.adapter.spi.AdapterCollaborators collaboratorsOf(
+      final String adapterId,
+      final io.vanillabp.integration.adapter.migration.workflowtask.WorkflowTaskRegistry workflowTaskRegistry,
+      final io.vanillabp.integration.adapter.spi.NameClashAvoidanceSupport scoping,
+      final io.vanillabp.integration.adapter.spi.WorkflowAggregateSync aggregateSync,
+      final io.vanillabp.integration.adapter.spi.PreCommitRegistrar preCommitRegistrar,
+      final jakarta.enterprise.inject.Instance<io.vanillabp.integration.adapter.spi.workflowend.WorkflowEndedInvoker> workflowEndedInvoker,
+      final jakarta.enterprise.inject.Instance<io.vanillabp.integration.adapter.spi.workflowstart.BpmsInitiatedStartInvoker> bpmsInitiatedStartInvoker) {
+
+    return io.vanillabp.integration.runtime.support.AdapterCollaboratorsSupport
+        .collaborators(
+            adapterId, workflowTaskRegistry, workflowTaskRegistry, scoping, aggregateSync, preCommitRegistrar,
+            workflowEndedInvoker, bpmsInitiatedStartInvoker);
+
+  }
+
   @Produces
   public List<MigratableProcessService<Object>> peaMigratableProcessServices(
       final MigrationAdapterProperties properties,
@@ -38,7 +58,10 @@ public class PeaProcessServiceProducer {
       final io.vanillabp.pea.deployment.PeaDeployedProcessesRegistry deployedProcessesRegistry,
       final io.vanillabp.integration.adapter.spi.WorkflowAggregateSync aggregateSync,
       final io.vanillabp.integration.adapter.spi.NameClashAvoidanceSupport scoping,
-      final io.vanillabp.integration.adapter.spi.PreCommitRegistrar preCommitRegistrar) {
+      final io.vanillabp.integration.adapter.spi.PreCommitRegistrar preCommitRegistrar,
+      final io.vanillabp.integration.adapter.migration.workflowtask.WorkflowTaskRegistry workflowTaskRegistry,
+      @jakarta.enterprise.inject.Any final jakarta.enterprise.inject.Instance<io.vanillabp.integration.adapter.spi.workflowend.WorkflowEndedInvoker> workflowEndedInvoker,
+      @jakarta.enterprise.inject.Any final jakarta.enterprise.inject.Instance<io.vanillabp.integration.adapter.spi.workflowstart.BpmsInitiatedStartInvoker> bpmsInitiatedStartInvoker) {
 
     // ONE bean of type List with one instance PER configured adapter id of this
     // adapter's type (a CDI producer cannot yield N element beans for N
@@ -56,11 +79,9 @@ public class PeaProcessServiceProducer {
             adapterId -> {
               final var processService = new PeaProcessService<>(
                   adapterId, startProcessApi, serviceTaskCompletionApi, userTaskCompletionApi, correlationApi, deployedProcessesRegistry
-                      .forAdapter(adapterId), aggregateSync);
-              processService.setScoping(scoping);
-              // Phase-one checks run right before the transaction of the
-              // aggregate commits, in whatever unit of work that is
-              processService.setPreCommitRegistrar(preCommitRegistrar);
+                      .forAdapter(adapterId), collaboratorsOf(
+                          adapterId, workflowTaskRegistry, scoping, aggregateSync, preCommitRegistrar,
+                          workflowEndedInvoker, bpmsInitiatedStartInvoker));
               // optional: an engine implementation without a SignalApi leaves
               // signals unsupported, which the process service says when asked
               processService
