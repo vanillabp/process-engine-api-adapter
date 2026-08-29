@@ -95,7 +95,9 @@ public class PeaPreCommitHookTest {
       deferred.add(check);
     });
 
-    service.completeTaskPhaseOne("mod", "Process", persistence(), new Object(), "task-1");
+    PhaseOperations.phaseOne(service, io.vanillabp.integration.spi.PhaseOperation.COMPLETE_TASK, "mod", "Process",
+        persistence(), new Object(),
+        PhaseOperations.args(io.vanillabp.integration.spi.PhaseTwoCall.ARG_TASK_ID, "task-1"));
 
     // nothing was asked of the engine yet - the check waits for the commit
     assertEquals(List.of("handed over for OrderAggregate"), events);
@@ -122,8 +124,9 @@ public class PeaPreCommitHookTest {
 
     final var failure = assertThrows(
         IllegalStateException.class,
-        () -> service
-            .completeTaskPhaseOne("mod", "Process", persistence(), new Object(), "task-gone"));
+        () -> PhaseOperations.phaseOne(service, io.vanillabp.integration.spi.PhaseOperation.COMPLETE_TASK, "mod",
+            "Process", persistence(), new Object(),
+            PhaseOperations.args(io.vanillabp.integration.spi.PhaseTwoCall.ARG_TASK_ID, "task-gone")));
 
     assertTrue(failure.getMessage().contains("task-gone"), failure.getMessage());
 
@@ -142,7 +145,15 @@ public class PeaPreCommitHookTest {
 
     assertThrows(
         IllegalStateException.class,
-        () -> service.completeTaskPhaseOne("mod", "Process", null, new Object(), "task-gone"));
+        () -> PhaseOperations
+            .phaseOne(
+                service,
+                io.vanillabp.integration.spi.PhaseOperation.COMPLETE_TASK,
+                "mod",
+                "Process",
+                null,
+                new Object(),
+                PhaseOperations.args(io.vanillabp.integration.spi.PhaseTwoCall.ARG_TASK_ID, "task-gone")));
 
   }
 

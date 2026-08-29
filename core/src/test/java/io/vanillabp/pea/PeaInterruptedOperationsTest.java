@@ -98,12 +98,20 @@ public class PeaInterruptedOperationsTest {
   @DisplayName("An interrupted task operation fails naming the task, and the interrupt survives")
   public void anInterruptedTaskOperationFailsAndKeepsTheInterrupt() {
 
-    assertFailsNaming("task-1", () -> service.completeTaskPhaseTwo("mod", "Process", null, "42", "task-1"));
-    assertFailsNaming("task-1", () -> service.cancelTaskPhaseTwo("mod", "Process", null, "42", "task-1", "ERR"));
+    assertFailsNaming("task-1",
+        () -> PhaseOperations.phaseTwo(service, io.vanillabp.integration.spi.PhaseOperation.COMPLETE_TASK, "mod",
+            "Process", null, "42",
+            PhaseOperations.args(io.vanillabp.integration.spi.PhaseTwoCall.ARG_TASK_ID, "task-1")));
+    assertFailsNaming("task-1",
+        () -> PhaseOperations.phaseTwo(service, io.vanillabp.integration.spi.PhaseOperation.CANCEL_TASK, "mod",
+            "Process", null, "42", PhaseOperations.args(io.vanillabp.integration.spi.PhaseTwoCall.ARG_TASK_ID, "task-1",
+                io.vanillabp.integration.spi.PhaseTwoCall.ARG_BPMN_ERROR_CODE, "ERR")));
     // phase one only asks whether the task is still there, and it waits as well
     assertFailsNaming(
         "task-1",
-        () -> service.completeTaskPhaseOne("mod", "Process", null, new Object(), "task-1"));
+        () -> PhaseOperations.phaseOne(service, io.vanillabp.integration.spi.PhaseOperation.COMPLETE_TASK, "mod",
+            "Process", null, new Object(),
+            PhaseOperations.args(io.vanillabp.integration.spi.PhaseTwoCall.ARG_TASK_ID, "task-1")));
 
   }
 
@@ -111,13 +119,20 @@ public class PeaInterruptedOperationsTest {
   @DisplayName("An interrupted user-task operation fails naming the task, and the interrupt survives")
   public void anInterruptedUserTaskOperationFailsAndKeepsTheInterrupt() {
 
-    assertFailsNaming("utask-1", () -> service.completeUserTaskPhaseTwo("mod", "Process", null, "42", "utask-1"));
+    assertFailsNaming("utask-1",
+        () -> PhaseOperations.phaseTwo(service, io.vanillabp.integration.spi.PhaseOperation.COMPLETE_USER_TASK, "mod",
+            "Process", null, "42",
+            PhaseOperations.args(io.vanillabp.integration.spi.PhaseTwoCall.ARG_TASK_ID, "utask-1")));
     assertFailsNaming(
         "utask-1",
-        () -> service.cancelUserTaskPhaseTwo("mod", "Process", null, "42", "utask-1", "ERR"));
+        () -> PhaseOperations.phaseTwo(service, io.vanillabp.integration.spi.PhaseOperation.CANCEL_USER_TASK, "mod",
+            "Process", null, "42", PhaseOperations.args(io.vanillabp.integration.spi.PhaseTwoCall.ARG_TASK_ID,
+                "utask-1", io.vanillabp.integration.spi.PhaseTwoCall.ARG_BPMN_ERROR_CODE, "ERR")));
     assertFailsNaming(
         "utask-1",
-        () -> service.completeUserTaskPhaseOne("mod", "Process", null, new Object(), "utask-1"));
+        () -> PhaseOperations.phaseOne(service, io.vanillabp.integration.spi.PhaseOperation.COMPLETE_USER_TASK, "mod",
+            "Process", null, new Object(),
+            PhaseOperations.args(io.vanillabp.integration.spi.PhaseTwoCall.ARG_TASK_ID, "utask-1")));
 
   }
 
@@ -142,7 +157,10 @@ public class PeaInterruptedOperationsTest {
 
     // returning normally would mark the entry done although nothing was broadcast, and
     // a signal nobody receives is a workflow waiting forever
-    assertFailsNaming("OrderCancelled", () -> service.sendSignalPhaseTwo("mod", "Process", "OrderCancelled"));
+    assertFailsNaming("OrderCancelled",
+        () -> PhaseOperations.phaseTwo(service, io.vanillabp.integration.spi.PhaseOperation.SEND_SIGNAL, "mod",
+            "Process", null, null,
+            PhaseOperations.args(io.vanillabp.integration.spi.PhaseTwoCall.ARG_SIGNAL_NAME, "OrderCancelled")));
 
   }
 
@@ -155,7 +173,9 @@ public class PeaInterruptedOperationsTest {
     // started - the most expensive of the interrupts, because nothing is left to notice it
     assertFailsNaming(
         "OrderPlaced",
-        () -> service.startWorkflowByMessagePhaseTwo("mod", "Process", null, "42", "OrderPlaced"));
+        () -> PhaseOperations.phaseTwo(service, io.vanillabp.integration.spi.PhaseOperation.START_WORKFLOW_BY_MESSAGE,
+            "mod", "Process", null, "42",
+            PhaseOperations.args(io.vanillabp.integration.spi.PhaseTwoCall.ARG_MESSAGE_NAME, "OrderPlaced")));
 
   }
 
@@ -165,7 +185,8 @@ public class PeaInterruptedOperationsTest {
 
     assertFailsNaming(
         "Process",
-        () -> service.startWorkflowPhaseTwo("mod", "Process", null, "42"));
+        () -> PhaseOperations.phaseTwo(service, io.vanillabp.integration.spi.PhaseOperation.START_WORKFLOW, "mod",
+            "Process", null, "42", java.util.Map.of()));
 
   }
 
@@ -175,7 +196,9 @@ public class PeaInterruptedOperationsTest {
 
     assertFailsNaming(
         "OrderApproved",
-        () -> service.correlateMessagePhaseTwo("mod", "Process", null, "42", "OrderApproved", "42"));
+        () -> PhaseOperations.phaseTwo(service, io.vanillabp.integration.spi.PhaseOperation.CORRELATE_MESSAGE, "mod",
+            "Process", null, "42", PhaseOperations.args(io.vanillabp.integration.spi.PhaseTwoCall.ARG_MESSAGE_NAME,
+                "OrderApproved", io.vanillabp.integration.spi.PhaseTwoCall.ARG_CORRELATION_ID, "42")));
 
   }
 

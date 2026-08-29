@@ -34,7 +34,9 @@ public class PeaAggregateChangedTest {
 
     final var exception = assertThrows(
         UnsupportedOperationException.class,
-        () -> service().aggregateChangedPhaseOne("mod", "Process", null, new Object(), null));
+        () -> PhaseOperations.phaseOne(service(), io.vanillabp.integration.spi.PhaseOperation.AGGREGATE_CHANGED, "mod",
+            "Process", null, new Object(),
+            PhaseOperations.args(io.vanillabp.integration.spi.PhaseTwoCall.ARG_TASK_ID, null)));
 
     assertTrue(exception.getMessage().contains("Process"));
     assertTrue(exception.getMessage().contains("GAPS.md entry 18"));
@@ -48,7 +50,9 @@ public class PeaAggregateChangedTest {
 
     final var exception = assertThrows(
         UnsupportedOperationException.class,
-        () -> service().aggregateChangedPhaseTwo("mod", "Process", null, "42", "task-1"));
+        () -> PhaseOperations.phaseTwo(service(), io.vanillabp.integration.spi.PhaseOperation.AGGREGATE_CHANGED, "mod",
+            "Process", null, "42",
+            PhaseOperations.args(io.vanillabp.integration.spi.PhaseTwoCall.ARG_TASK_ID, "task-1")));
 
     assertTrue(exception.getMessage().contains("mod"));
 

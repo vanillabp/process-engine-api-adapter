@@ -40,10 +40,12 @@ public class PeaSendSignalTest {
 
     final var service = service();
 
-    service.sendSignalPhaseOne("mod", "Process", "OrderReceived");
+    PhaseOperations.phaseOne(service, io.vanillabp.integration.spi.PhaseOperation.SEND_SIGNAL, "mod", "Process", null,
+        null, PhaseOperations.args(io.vanillabp.integration.spi.PhaseTwoCall.ARG_SIGNAL_NAME, "OrderReceived"));
     assertTrue(engine.getBroadcastSignals().isEmpty(), "a remote engine must not act before the commit");
 
-    service.sendSignalPhaseTwo("mod", "Process", "OrderReceived");
+    PhaseOperations.phaseTwo(service, io.vanillabp.integration.spi.PhaseOperation.SEND_SIGNAL, "mod", "Process", null,
+        null, PhaseOperations.args(io.vanillabp.integration.spi.PhaseTwoCall.ARG_SIGNAL_NAME, "OrderReceived"));
     assertEquals(List.of("OrderReceived"), engine.getBroadcastSignals());
 
   }
@@ -56,7 +58,9 @@ public class PeaSendSignalTest {
 
     final var exception = assertThrows(
         UnsupportedOperationException.class,
-        () -> service.sendSignalPhaseTwo("mod", "Process", "OrderReceived"));
+        () -> PhaseOperations.phaseTwo(service, io.vanillabp.integration.spi.PhaseOperation.SEND_SIGNAL, "mod",
+            "Process", null, null,
+            PhaseOperations.args(io.vanillabp.integration.spi.PhaseTwoCall.ARG_SIGNAL_NAME, "OrderReceived")));
 
     assertTrue(exception.getMessage().contains("OrderReceived"));
     assertTrue(exception.getMessage().contains("SignalApi"));

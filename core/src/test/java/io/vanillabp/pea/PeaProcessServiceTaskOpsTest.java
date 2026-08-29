@@ -54,12 +54,19 @@ public class PeaProcessServiceTaskOpsTest {
 
     engine.getOpenTaskIds().add("task-3");
 
-    assertDoesNotThrow(() -> service.completeTaskPhaseOne("mod", "Process", null, new Object(), "task-3"));
-    assertDoesNotThrow(() -> service.cancelTaskPhaseOne("mod", "Process", null, new Object(), "task-3", "ERR"));
+    assertDoesNotThrow(() -> PhaseOperations.phaseOne(service,
+        io.vanillabp.integration.spi.PhaseOperation.COMPLETE_TASK, "mod", "Process", null, new Object(),
+        PhaseOperations.args(io.vanillabp.integration.spi.PhaseTwoCall.ARG_TASK_ID, "task-3")));
+    assertDoesNotThrow(
+        () -> PhaseOperations.phaseOne(service, io.vanillabp.integration.spi.PhaseOperation.CANCEL_TASK, "mod",
+            "Process", null, new Object(), PhaseOperations.args(io.vanillabp.integration.spi.PhaseTwoCall.ARG_TASK_ID,
+                "task-3", io.vanillabp.integration.spi.PhaseTwoCall.ARG_BPMN_ERROR_CODE, "ERR")));
 
     final var failure = assertThrows(
         IllegalStateException.class,
-        () -> service.completeTaskPhaseOne("mod", "Process", null, new Object(), "task-gone"));
+        () -> PhaseOperations.phaseOne(service, io.vanillabp.integration.spi.PhaseOperation.COMPLETE_TASK, "mod",
+            "Process", null, new Object(),
+            PhaseOperations.args(io.vanillabp.integration.spi.PhaseTwoCall.ARG_TASK_ID, "task-gone")));
     assertTrue(failure.getMessage().contains("task-gone"));
     // the preflight checks never completed anything
     assertTrue(engine.getCompletedTasks().isEmpty());
@@ -76,29 +83,42 @@ public class PeaProcessServiceTaskOpsTest {
     assertEquals(WorkflowAwareness.ACTIVE, service.awarenessOfUserTask(SCOPE, "42", "utask-1"));
     assertEquals(WorkflowAwareness.UNKNOWN_TO_BPMS, service.awarenessOfUserTask(SCOPE, "42", "utask-x"));
 
-    assertDoesNotThrow(() -> service.completeUserTaskPhaseOne("mod", "Process", null, new Object(), "utask-1"));
-    assertDoesNotThrow(() -> service
-        .cancelUserTaskPhaseOne("mod", "Process", null, new Object(), "utask-1", "ERR"));
+    assertDoesNotThrow(() -> PhaseOperations.phaseOne(service,
+        io.vanillabp.integration.spi.PhaseOperation.COMPLETE_USER_TASK, "mod", "Process", null, new Object(),
+        PhaseOperations.args(io.vanillabp.integration.spi.PhaseTwoCall.ARG_TASK_ID, "utask-1")));
+    assertDoesNotThrow(
+        () -> PhaseOperations.phaseOne(service, io.vanillabp.integration.spi.PhaseOperation.CANCEL_USER_TASK, "mod",
+            "Process", null, new Object(), PhaseOperations.args(io.vanillabp.integration.spi.PhaseTwoCall.ARG_TASK_ID,
+                "utask-1", io.vanillabp.integration.spi.PhaseTwoCall.ARG_BPMN_ERROR_CODE, "ERR")));
     final var failure = assertThrows(
         IllegalStateException.class,
-        () -> service.completeUserTaskPhaseOne("mod", "Process", null, new Object(), "utask-gone"));
+        () -> PhaseOperations.phaseOne(service, io.vanillabp.integration.spi.PhaseOperation.COMPLETE_USER_TASK, "mod",
+            "Process", null, new Object(),
+            PhaseOperations.args(io.vanillabp.integration.spi.PhaseTwoCall.ARG_TASK_ID, "utask-gone")));
     assertTrue(failure.getMessage().contains("utask-gone"));
 
-    service.completeUserTaskPhaseTwo("mod", "Process", null, "42", "utask-1");
+    PhaseOperations.phaseTwo(service, io.vanillabp.integration.spi.PhaseOperation.COMPLETE_USER_TASK, "mod", "Process",
+        null, "42", PhaseOperations.args(io.vanillabp.integration.spi.PhaseTwoCall.ARG_TASK_ID, "utask-1"));
     assertEquals(1, engine.getCompletedTasks().size());
 
     engine.getOpenTaskIds().add("utask-2");
-    service.cancelUserTaskPhaseTwo("mod", "Process", null, "42", "utask-2", "APPROVAL_WITHDRAWN");
+    PhaseOperations.phaseTwo(service, io.vanillabp.integration.spi.PhaseOperation.CANCEL_USER_TASK, "mod", "Process",
+        null, "42", PhaseOperations.args(io.vanillabp.integration.spi.PhaseTwoCall.ARG_TASK_ID, "utask-2",
+            io.vanillabp.integration.spi.PhaseTwoCall.ARG_BPMN_ERROR_CODE, "APPROVAL_WITHDRAWN"));
     assertEquals("APPROVAL_WITHDRAWN", engine.getErroredTasks().getFirst().errorCode());
 
     // repeating both fails now: whether the user task was finished meanwhile or
     // the engine is unreachable looks the same to this adapter, so the outbox decides
     assertThrows(
         IllegalStateException.class,
-        () -> service.completeUserTaskPhaseTwo("mod", "Process", null, "42", "utask-1"));
+        () -> PhaseOperations.phaseTwo(service, io.vanillabp.integration.spi.PhaseOperation.COMPLETE_USER_TASK, "mod",
+            "Process", null, "42",
+            PhaseOperations.args(io.vanillabp.integration.spi.PhaseTwoCall.ARG_TASK_ID, "utask-1")));
     assertThrows(
         IllegalStateException.class,
-        () -> service.cancelUserTaskPhaseTwo("mod", "Process", null, "42", "utask-2", "X"));
+        () -> PhaseOperations.phaseTwo(service, io.vanillabp.integration.spi.PhaseOperation.CANCEL_USER_TASK, "mod",
+            "Process", null, "42", PhaseOperations.args(io.vanillabp.integration.spi.PhaseTwoCall.ARG_TASK_ID,
+                "utask-2", io.vanillabp.integration.spi.PhaseTwoCall.ARG_BPMN_ERROR_CODE, "X")));
 
   }
 
@@ -107,11 +127,14 @@ public class PeaProcessServiceTaskOpsTest {
   public void phaseTwoReportsFailuresInsteadOfDroppingThem() {
 
     engine.getOpenTaskIds().add("task-4");
-    service.completeTaskPhaseTwo("mod", "Process", null, "42", "task-4");
+    PhaseOperations.phaseTwo(service, io.vanillabp.integration.spi.PhaseOperation.COMPLETE_TASK, "mod", "Process", null,
+        "42", PhaseOperations.args(io.vanillabp.integration.spi.PhaseTwoCall.ARG_TASK_ID, "task-4"));
     assertEquals(1, engine.getCompletedTasks().size());
 
     engine.getOpenTaskIds().add("task-5");
-    service.cancelTaskPhaseTwo("mod", "Process", null, "42", "task-5", "PAYMENT_FAILED");
+    PhaseOperations.phaseTwo(service, io.vanillabp.integration.spi.PhaseOperation.CANCEL_TASK, "mod", "Process", null,
+        "42", PhaseOperations.args(io.vanillabp.integration.spi.PhaseTwoCall.ARG_TASK_ID, "task-5",
+            io.vanillabp.integration.spi.PhaseTwoCall.ARG_BPMN_ERROR_CODE, "PAYMENT_FAILED"));
     assertEquals(1, engine.getErroredTasks().size());
     assertEquals("PAYMENT_FAILED", engine.getErroredTasks().getFirst().errorCode());
 
@@ -120,14 +143,18 @@ public class PeaProcessServiceTaskOpsTest {
     // assume the harmless case - the outbox repeats and finally blocks the entry
     final var completion = assertThrows(
         IllegalStateException.class,
-        () -> service.completeTaskPhaseTwo("mod", "Process", null, "42", "task-4"));
+        () -> PhaseOperations.phaseTwo(service, io.vanillabp.integration.spi.PhaseOperation.COMPLETE_TASK, "mod",
+            "Process", null, "42",
+            PhaseOperations.args(io.vanillabp.integration.spi.PhaseTwoCall.ARG_TASK_ID, "task-4")));
     assertTrue(completion.getMessage().contains("task-4"), completion.getMessage());
     assertTrue(completion.getMessage().contains("no typed errors"), completion.getMessage());
     assertNotNull(completion.getCause(), "the engine's answer has to stay readable");
 
     assertThrows(
         IllegalStateException.class,
-        () -> service.cancelTaskPhaseTwo("mod", "Process", null, "42", "task-5", "X"));
+        () -> PhaseOperations.phaseTwo(service, io.vanillabp.integration.spi.PhaseOperation.CANCEL_TASK, "mod",
+            "Process", null, "42", PhaseOperations.args(io.vanillabp.integration.spi.PhaseTwoCall.ARG_TASK_ID, "task-5",
+                io.vanillabp.integration.spi.PhaseTwoCall.ARG_BPMN_ERROR_CODE, "X")));
 
     assertEquals(1, engine.getCompletedTasks().size());
     assertEquals(1, engine.getErroredTasks().size());
@@ -143,7 +170,9 @@ public class PeaProcessServiceTaskOpsTest {
 
     final var failure = assertThrows(
         IllegalStateException.class,
-        () -> service.completeTaskPhaseTwo("mod", "Process", null, "42", "task-9"));
+        () -> PhaseOperations.phaseTwo(service, io.vanillabp.integration.spi.PhaseOperation.COMPLETE_TASK, "mod",
+            "Process", null, "42",
+            PhaseOperations.args(io.vanillabp.integration.spi.PhaseTwoCall.ARG_TASK_ID, "task-9")));
 
     assertTrue(failure.getMessage().contains("Phase two of completing task"), failure.getMessage());
     // the task is still open: the completion did not happen, and now somebody knows

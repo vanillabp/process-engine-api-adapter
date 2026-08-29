@@ -267,6 +267,20 @@ The mock engine narrows a delivered payload to what the subscription asked for
 (`InMemoryProcessEngine.ActiveSubscription#narrow`). Without that the derivation would be
 asserted and never exercised.
 
+## Outbound operations: one handler per operation
+
+Everything this adapter sends to the engine is a `PhaseOperationHandler`, contributed per
+operation in `PeaProcessService.phaseOperations()`: `phaseOne` asks inside the caller's
+transaction, `phaseTwo` acts after the commit. The operation itself - its persisted name, what
+deduplicates it, which engine serves it, how a failure is worded - belongs to VanillaBP's
+`PhaseOperation`, so an operation added later costs this adapter one entry in that map.
+
+Two operations are in the map although this adapter cannot always serve them: broadcasting a
+signal needs a `SignalApi`, and pushing a changed aggregate is not possible at all (the API
+updates the payload of a task, not of a running instance - GAPS entry 18). They stay in the map
+because their handler is where the reason lives, and a message which says only "this adapter
+cannot" would leave the reader without the fix.
+
 ## When a phase-one check runs
 
 The phase-one checks of this adapter are `PREFLIGHT_CHECK` completions: they validate that

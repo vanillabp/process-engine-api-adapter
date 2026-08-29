@@ -8,8 +8,12 @@ import dev.bpmcrafters.processengineapi.ExecutionMode;
 import dev.bpmcrafters.processengineapi.process.ProcessInformation;
 import dev.bpmcrafters.processengineapi.process.StartProcessApi;
 import io.vanillabp.integration.adapter.spi.MigratableProcessService;
+import io.vanillabp.integration.adapter.spi.PhaseOneRequest;
+import io.vanillabp.integration.adapter.spi.PhaseOperationHandler;
+import io.vanillabp.integration.adapter.spi.PhaseTwoRequest;
 import io.vanillabp.integration.adapter.spi.WorkflowAwareness;
 import io.vanillabp.integration.spi.AggregatePersistenceAware;
+import io.vanillabp.integration.spi.PhaseOperation;
 import io.vanillabp.pea.PeaAdapter;
 
 /**
@@ -326,6 +330,64 @@ public class PeaProcessService<A> implements MigratableProcessService<A> {
 
   }
 
+  /**
+   * What this adapter does for each operation, in both phases.
+   * <p>
+   * Phase one is a <code>PREFLIGHT_CHECK</code> command wherever the API offers one: it
+   * validates without advancing, and it runs as a pre-commit hook so the window to the
+   * phase-two dispatch stays small. Phase two sends the real command and is idempotent,
+   * because the outbox dispatches at-least-once.
+   * <p>
+   * Two operations are in the map although this adapter cannot serve them: broadcasting
+   * a signal without a <code>SignalApi</code>, and pushing a changed aggregate at all.
+   * They stay because the handler is where the reason lives - which API is missing, or
+   * which entry of GAPS.md names the gap - and a message which says only "this adapter
+   * cannot" would leave the reader without the fix.
+   */
+  @Override
+  public Map<PhaseOperation, PhaseOperationHandler<A>> phaseOperations() {
+
+    return Map
+        .ofEntries(
+            Map
+                .entry(
+                    PhaseOperation.START_WORKFLOW,
+                    PhaseOperationHandler.of(this::preflightStart, this::startWorkflow)),
+            Map
+                .entry(
+                    PhaseOperation.START_WORKFLOW_BY_MESSAGE,
+                    PhaseOperationHandler.of(this::preflightStartByMessage, this::startWorkflowByMessage)),
+            Map
+                .entry(
+                    PhaseOperation.COMPLETE_TASK,
+                    PhaseOperationHandler.of(this::preflightCompleteTask, this::completeTask)),
+            Map
+                .entry(
+                    PhaseOperation.CANCEL_TASK,
+                    PhaseOperationHandler.of(this::preflightCancelTask, this::cancelTask)),
+            Map
+                .entry(
+                    PhaseOperation.COMPLETE_USER_TASK,
+                    PhaseOperationHandler.of(this::preflightCompleteUserTask, this::completeUserTask)),
+            Map
+                .entry(
+                    PhaseOperation.CANCEL_USER_TASK,
+                    PhaseOperationHandler.of(this::preflightCancelUserTask, this::cancelUserTask)),
+            Map
+                .entry(
+                    PhaseOperation.CORRELATE_MESSAGE,
+                    PhaseOperationHandler.of(this::preflightCorrelateMessage, this::correlateMessage)),
+            Map
+                .entry(
+                    PhaseOperation.SEND_SIGNAL,
+                    PhaseOperationHandler.of(this::preflightSendSignal, this::sendSignal)),
+            Map
+                .entry(
+                    PhaseOperation.AGGREGATE_CHANGED,
+                    PhaseOperationHandler.of(this::preflightAggregateChanged, this::pushChangedAggregate)));
+
+  }
+
   @Override
   public boolean deliversTasksAtLeastOnce() {
 
@@ -369,37 +431,28 @@ public class PeaProcessService<A> implements MigratableProcessService<A> {
 
   }
 
-  @Override
-  public void completeTaskPhaseOne(
-      final String workflowModuleId,
-      final String bpmnProcessId,
-      final AggregatePersistenceAware<A> aggregatePersistence,
-      final A workflowAggregate,
-      final String taskId) {
+  private void preflightCompleteTask(
+      final PhaseOneRequest<A> request) {
 
     // the non-advancing phase-one check: a PREFLIGHT_CHECK completion validates the task
     // still exists so the local transaction can abort early - run right before the commit,
     // which keeps the window to the phase-two dispatch small
     beforeCommit(
-        aggregatePersistence,
+        request.aggregatePersistence(),
         () -> preflight(new io.vanillabp.pea.wiring.PeaCompleteTaskCmd(
-            taskId, dev.bpmcrafters.processengineapi.ExecutionMode.PREFLIGHT_CHECK), taskId, "completing"));
+            request.taskId(), dev.bpmcrafters.processengineapi.ExecutionMode.PREFLIGHT_CHECK), request.taskId(),
+            "completing"));
 
   }
 
-  @Override
-  public void cancelTaskPhaseOne(
-      final String workflowModuleId,
-      final String bpmnProcessId,
-      final AggregatePersistenceAware<A> aggregatePersistence,
-      final A workflowAggregate,
-      final String taskId,
-      final String bpmnErrorCode) {
+  private void preflightCancelTask(
+      final PhaseOneRequest<A> request) {
 
     beforeCommit(
-        aggregatePersistence,
+        request.aggregatePersistence(),
         () -> preflight(new io.vanillabp.pea.wiring.PeaCompleteTaskCmd(
-            taskId, dev.bpmcrafters.processengineapi.ExecutionMode.PREFLIGHT_CHECK), taskId, "canceling"));
+            request.taskId(), dev.bpmcrafters.processengineapi.ExecutionMode.PREFLIGHT_CHECK), request.taskId(),
+            "canceling"));
 
   }
 
@@ -449,70 +502,63 @@ public class PeaProcessService<A> implements MigratableProcessService<A> {
 
   }
 
-  @Override
-  public void completeTaskPhaseTwo(
-      final String workflowModuleId,
-      final String bpmnProcessId,
-      final AggregatePersistenceAware<A> aggregatePersistence,
-      final Object workflowAggregateId,
-      final String taskId) {
+  private void completeTask(
+      final PhaseTwoRequest<A> request) {
 
     try {
       serviceTaskCompletionApi
           // The aggregate changed before the task was completed - the
           // engine only sees what the adapter sends
           .completeTask(new io.vanillabp.pea.wiring.PeaCompleteTaskCmd(
-              taskId, payloadOf(aggregatePersistence, workflowAggregateId, null)))
+              request.taskId(), payloadOf(request.aggregatePersistence(), request.workflowAggregateId(), null)))
           .get();
       log.info(
           "PEA[{}]: completed task '{}' of BPMN process '{}' of workflow module '{}'",
           adapterId,
-          taskId,
-          bpmnProcessId,
-          workflowModuleId);
+          request.taskId(),
+          request.bpmnProcessId(),
+          request.workflowModuleId());
     } catch (final InterruptedException e) {
       Thread.currentThread().interrupt();
       throw phaseTwoFailed(
-          "completing task '%s'".formatted(taskId), "task", workflowModuleId, bpmnProcessId, e);
+          "completing task '%s'".formatted(request.taskId()), "task", request.workflowModuleId(),
+          request.bpmnProcessId(), e);
     } catch (final java.util.concurrent.ExecutionException e) {
       throw phaseTwoFailed(
-          "completing task '%s'".formatted(taskId), "task", workflowModuleId, bpmnProcessId, e.getCause());
+          "completing task '%s'".formatted(request.taskId()), "task", request.workflowModuleId(),
+          request.bpmnProcessId(), e.getCause());
     }
 
   }
 
-  @Override
-  public void cancelTaskPhaseTwo(
-      final String workflowModuleId,
-      final String bpmnProcessId,
-      final AggregatePersistenceAware<A> aggregatePersistence,
-      final Object workflowAggregateId,
-      final String taskId,
-      final String bpmnErrorCode) {
+  private void cancelTask(
+      final PhaseTwoRequest<A> request) {
 
     try {
       serviceTaskCompletionApi
           // The error boundary's outgoing path may branch on the
           // aggregate, which the caller changed before canceling the task
           .completeTaskByError(new io.vanillabp.pea.wiring.PeaCompleteTaskByErrorCmd(
-              taskId, scopedIdentifier(workflowModuleId,
-                  bpmnErrorCode), "canceled via ProcessService#cancelTask", payloadOf(
-                      aggregatePersistence, workflowAggregateId, null)))
+              request.taskId(), scopedIdentifier(request.workflowModuleId(),
+                  request.bpmnErrorCode()), "canceled via ProcessService#cancelTask", payloadOf(
+                      request.aggregatePersistence(), request.workflowAggregateId(), null)))
           .get();
       log.info(
           "PEA[{}]: canceled task '{}' (error code '{}') of BPMN process '{}' of workflow module '{}'",
           adapterId,
-          taskId,
-          bpmnErrorCode,
-          bpmnProcessId,
-          workflowModuleId);
+          request.taskId(),
+          request.bpmnErrorCode(),
+          request.bpmnProcessId(),
+          request.workflowModuleId());
     } catch (final InterruptedException e) {
       Thread.currentThread().interrupt();
       throw phaseTwoFailed(
-          "canceling task '%s'".formatted(taskId), "task", workflowModuleId, bpmnProcessId, e);
+          "canceling task '%s'".formatted(request.taskId()), "task", request.workflowModuleId(),
+          request.bpmnProcessId(), e);
     } catch (final java.util.concurrent.ExecutionException e) {
       throw phaseTwoFailed(
-          "canceling task '%s'".formatted(taskId), "task", workflowModuleId, bpmnProcessId, e.getCause());
+          "canceling task '%s'".formatted(request.taskId()), "task", request.workflowModuleId(),
+          request.bpmnProcessId(), e.getCause());
     }
 
   }
@@ -545,28 +591,17 @@ public class PeaProcessService<A> implements MigratableProcessService<A> {
 
   }
 
-  @Override
-  public void completeUserTaskPhaseOne(
-      final String workflowModuleId,
-      final String bpmnProcessId,
-      final AggregatePersistenceAware<A> aggregatePersistence,
-      final A workflowAggregate,
-      final String taskId) {
+  private void preflightCompleteUserTask(
+      final PhaseOneRequest<A> request) {
 
-    beforeCommit(aggregatePersistence, () -> preflightUserTask(taskId, "completing user"));
+    beforeCommit(request.aggregatePersistence(), () -> preflightUserTask(request.taskId(), "completing user"));
 
   }
 
-  @Override
-  public void cancelUserTaskPhaseOne(
-      final String workflowModuleId,
-      final String bpmnProcessId,
-      final AggregatePersistenceAware<A> aggregatePersistence,
-      final A workflowAggregate,
-      final String taskId,
-      final String bpmnErrorCode) {
+  private void preflightCancelUserTask(
+      final PhaseOneRequest<A> request) {
 
-    beforeCommit(aggregatePersistence, () -> preflightUserTask(taskId, "canceling user"));
+    beforeCommit(request.aggregatePersistence(), () -> preflightUserTask(request.taskId(), "canceling user"));
 
   }
 
@@ -592,64 +627,57 @@ public class PeaProcessService<A> implements MigratableProcessService<A> {
 
   }
 
-  @Override
-  public void completeUserTaskPhaseTwo(
-      final String workflowModuleId,
-      final String bpmnProcessId,
-      final AggregatePersistenceAware<A> aggregatePersistence,
-      final Object workflowAggregateId,
-      final String taskId) {
+  private void completeUserTask(
+      final PhaseTwoRequest<A> request) {
 
     try {
       userTaskCompletionApi
           .completeTask(new io.vanillabp.pea.wiring.PeaCompleteTaskCmd(
-              taskId, payloadOf(aggregatePersistence, workflowAggregateId, null)))
+              request.taskId(), payloadOf(request.aggregatePersistence(), request.workflowAggregateId(), null)))
           .get();
       log.info(
           "PEA[{}]: completed user task '{}' of BPMN process '{}' of workflow module '{}'",
           adapterId,
-          taskId,
-          bpmnProcessId,
-          workflowModuleId);
+          request.taskId(),
+          request.bpmnProcessId(),
+          request.workflowModuleId());
     } catch (final InterruptedException e) {
       Thread.currentThread().interrupt();
       throw phaseTwoFailed(
-          "completing user task '%s'".formatted(taskId), "user task", workflowModuleId, bpmnProcessId, e);
+          "completing user task '%s'".formatted(request.taskId()), "user task", request.workflowModuleId(),
+          request.bpmnProcessId(), e);
     } catch (final java.util.concurrent.ExecutionException e) {
       throw phaseTwoFailed(
-          "completing user task '%s'".formatted(taskId), "user task", workflowModuleId, bpmnProcessId, e.getCause());
+          "completing user task '%s'".formatted(request.taskId()), "user task", request.workflowModuleId(),
+          request.bpmnProcessId(), e.getCause());
     }
 
   }
 
-  @Override
-  public void cancelUserTaskPhaseTwo(
-      final String workflowModuleId,
-      final String bpmnProcessId,
-      final AggregatePersistenceAware<A> aggregatePersistence,
-      final Object workflowAggregateId,
-      final String taskId,
-      final String bpmnErrorCode) {
+  private void cancelUserTask(
+      final PhaseTwoRequest<A> request) {
 
     try {
       userTaskCompletionApi
           .completeTaskByError(new io.vanillabp.pea.wiring.PeaCompleteTaskByErrorCmd(
-              taskId, bpmnErrorCode, "canceled via ProcessService#cancelUserTask"))
+              request.taskId(), request.bpmnErrorCode(), "canceled via ProcessService#cancelUserTask"))
           .get();
       log.info(
           "PEA[{}]: canceled user task '{}' (error code '{}') of BPMN process '{}' of workflow module '{}'",
           adapterId,
-          taskId,
-          bpmnErrorCode,
-          bpmnProcessId,
-          workflowModuleId);
+          request.taskId(),
+          request.bpmnErrorCode(),
+          request.bpmnProcessId(),
+          request.workflowModuleId());
     } catch (final InterruptedException e) {
       Thread.currentThread().interrupt();
       throw phaseTwoFailed(
-          "canceling user task '%s'".formatted(taskId), "user task", workflowModuleId, bpmnProcessId, e);
+          "canceling user task '%s'".formatted(request.taskId()), "user task", request.workflowModuleId(),
+          request.bpmnProcessId(), e);
     } catch (final java.util.concurrent.ExecutionException e) {
       throw phaseTwoFailed(
-          "canceling user task '%s'".formatted(taskId), "user task", workflowModuleId, bpmnProcessId, e.getCause());
+          "canceling user task '%s'".formatted(request.taskId()), "user task", request.workflowModuleId(),
+          request.bpmnProcessId(), e.getCause());
     }
 
   }
@@ -786,14 +814,8 @@ public class PeaProcessService<A> implements MigratableProcessService<A> {
 
   }
 
-  @Override
-  public void correlateMessagePhaseOne(
-      final String workflowModuleId,
-      final String bpmnProcessId,
-      final AggregatePersistenceAware<A> aggregatePersistence,
-      final A workflowAggregate,
-      final String messageName,
-      final String correlationId) {
+  private void preflightCorrelateMessage(
+      final PhaseOneRequest<A> request) {
 
     // no phase-one PREFLIGHT_CHECK is possible: CorrelateMessageCmd is FINAL and
     // cannot carry a non-default execution mode (GAPS.md entry 11) - like
@@ -807,27 +829,17 @@ public class PeaProcessService<A> implements MigratableProcessService<A> {
    * running process instance. Phase one already refuses, so an application learns it
    * where it made the call instead of somewhere behind a commit.
    */
-  @Override
-  public void aggregateChangedPhaseOne(
-      final String workflowModuleId,
-      final String bpmnProcessId,
-      final io.vanillabp.integration.spi.AggregatePersistenceAware<A> aggregatePersistence,
-      final A workflowAggregate,
-      final String taskId) {
+  private void preflightAggregateChanged(
+      final PhaseOneRequest<A> request) {
 
-    throw aggregateChangedNotSupported(workflowModuleId, bpmnProcessId);
+    throw aggregateChangedNotSupported(request.workflowModuleId(), request.bpmnProcessId());
 
   }
 
-  @Override
-  public void aggregateChangedPhaseTwo(
-      final String workflowModuleId,
-      final String bpmnProcessId,
-      final io.vanillabp.integration.spi.AggregatePersistenceAware<A> aggregatePersistence,
-      final Object workflowAggregateId,
-      final String taskId) {
+  private void pushChangedAggregate(
+      final PhaseTwoRequest<A> request) {
 
-    throw aggregateChangedNotSupported(workflowModuleId, bpmnProcessId);
+    throw aggregateChangedNotSupported(request.workflowModuleId(), request.bpmnProcessId());
 
   }
 
@@ -855,14 +867,11 @@ public class PeaProcessService<A> implements MigratableProcessService<A> {
    * commit, over and over, until the outbox entry is blocked. The application learns
    * it where it made the call instead.
    */
-  @Override
-  public void sendSignalPhaseOne(
-      final String workflowModuleId,
-      final String bpmnProcessId,
-      final String signalName) {
+  private void preflightSendSignal(
+      final PhaseOneRequest<A> request) {
 
     if (signalApi == null) {
-      throw signalNotSupported(workflowModuleId, signalName);
+      throw signalNotSupported(request.workflowModuleId(), request.signalName());
     }
 
   }
@@ -884,14 +893,11 @@ public class PeaProcessService<A> implements MigratableProcessService<A> {
 
   }
 
-  @Override
-  public void sendSignalPhaseTwo(
-      final String workflowModuleId,
-      final String bpmnProcessId,
-      final String signalName) {
+  private void sendSignal(
+      final PhaseTwoRequest<A> request) {
 
     if (signalApi == null) {
-      throw signalNotSupported(workflowModuleId, signalName);
+      throw signalNotSupported(request.workflowModuleId(), request.signalName());
     }
 
     // no payload travels with a signal: unlike a message it is not addressed to a
@@ -899,50 +905,44 @@ public class PeaProcessService<A> implements MigratableProcessService<A> {
     try {
       signalApi
           .sendSignal(new dev.bpmcrafters.processengineapi.correlation.SendSignalCmd(
-              scopedIdentifier(workflowModuleId, signalName), java.util.Map.of()))
+              scopedIdentifier(request.workflowModuleId(), request.signalName()), java.util.Map.of()))
           .get();
       log.info(
           "PEA[{}]: broadcast signal '{}' of workflow module '{}'",
           adapterId,
-          signalName,
-          workflowModuleId);
+          request.signalName(),
+          request.workflowModuleId());
     } catch (final InterruptedException e) {
       Thread.currentThread().interrupt();
       // returning here would mark the outbox entry done although nothing was
       // broadcast, and a signal nobody receives is a workflow waiting forever
       throw new IllegalStateException(
           "PEA[%s]: broadcasting signal '%s' of workflow module '%s' was interrupted"
-              .formatted(adapterId, signalName, workflowModuleId), e);
+              .formatted(adapterId, request.signalName(), request.workflowModuleId()), e);
     } catch (final java.util.concurrent.ExecutionException e) {
       throw new IllegalStateException(
           "PEA[%s]: broadcasting signal '%s' of workflow module '%s' failed"
-              .formatted(adapterId, signalName, workflowModuleId), e.getCause());
+              .formatted(adapterId, request.signalName(), request.workflowModuleId()), e.getCause());
     }
 
   }
 
-  @Override
-  public void correlateMessagePhaseTwo(
-      final String workflowModuleId,
-      final String bpmnProcessId,
-      final AggregatePersistenceAware<A> aggregatePersistence,
-      final Object workflowAggregateId,
-      final String messageName,
-      final String correlationId) {
+  private void correlateMessage(
+      final PhaseTwoRequest<A> request) {
 
     // no message CONTENT travels - what does travel is the aggregate state shared
     // with the engine (see decision 1 in the repository's DECISIONS.md).
     // CorrelateMessageCmd is FINAL - the command carries the DEFAULT execution
     // mode; the intended SYNC semantics cannot be expressed (GAPS.md entry 11).
-    final var correlationKey = correlationId != null
-        ? correlationId
-        : String.valueOf(workflowAggregateId);
+    final var correlationKey = request.correlationId() != null
+        ? request.correlationId()
+        : String.valueOf(request.workflowAggregateId());
     try {
       correlationApi
           .correlateMessage(new dev.bpmcrafters.processengineapi.correlation.CorrelateMessageCmd(
-              scopedIdentifier(workflowModuleId, messageName), payloadOf(
-                  aggregatePersistence,
-                  workflowAggregateId,
+              scopedIdentifier(request.workflowModuleId(), request.messageName()), payloadOf(
+                  request.aggregatePersistence(),
+                  request.workflowAggregateId(),
                   null), dev.bpmcrafters.processengineapi.correlation.Correlation.Companion
                       .withKey(correlationKey)))
           .get();
@@ -950,30 +950,25 @@ public class PeaProcessService<A> implements MigratableProcessService<A> {
           "PEA[{}]: correlated message '{}' (correlation key '{}') for BPMN process '{}' of "
               + "workflow module '{}'",
           adapterId,
-          messageName,
+          request.messageName(),
           correlationKey,
-          bpmnProcessId,
-          workflowModuleId);
+          request.bpmnProcessId(),
+          request.workflowModuleId());
     } catch (final InterruptedException e) {
       Thread.currentThread().interrupt();
       throw phaseTwoFailed(
-          "correlating message '%s' (correlation key '%s')".formatted(messageName, correlationKey),
-          "message", workflowModuleId, bpmnProcessId, e);
+          "correlating message '%s' (correlation key '%s')".formatted(request.messageName(), correlationKey),
+          "message", request.workflowModuleId(), request.bpmnProcessId(), e);
     } catch (final java.util.concurrent.ExecutionException e) {
       throw phaseTwoFailed(
-          "correlating message '%s' (correlation key '%s')".formatted(messageName, correlationKey),
-          "message", workflowModuleId, bpmnProcessId, e.getCause());
+          "correlating message '%s' (correlation key '%s')".formatted(request.messageName(), correlationKey),
+          "message", request.workflowModuleId(), request.bpmnProcessId(), e.getCause());
     }
 
   }
 
-  @Override
-  public void startWorkflowByMessagePhaseOne(
-      final String workflowModuleId,
-      final String bpmnProcessId,
-      final AggregatePersistenceAware<A> aggregatePersistence,
-      final A workflowAggregate,
-      final String messageName) {
+  private void preflightStartByMessage(
+      final PhaseOneRequest<A> request) {
 
     // start semantics: nothing to check against the engine (the degenerate
     // two-phase case); a PREFLIGHT_CHECK cannot be expressed either -
@@ -981,13 +976,8 @@ public class PeaProcessService<A> implements MigratableProcessService<A> {
 
   }
 
-  @Override
-  public void startWorkflowByMessagePhaseTwo(
-      final String workflowModuleId,
-      final String bpmnProcessId,
-      final AggregatePersistenceAware<A> aggregatePersistence,
-      final Object workflowAggregateId,
-      final String messageName) {
+  private void startWorkflowByMessage(
+      final PhaseTwoRequest<A> request) {
 
     // no message CONTENT travels - what travels is the aggregate state shared with
     // the engine plus the technical aggregate-ID variable;
@@ -997,36 +987,32 @@ public class PeaProcessService<A> implements MigratableProcessService<A> {
     try {
       startProcessApi
           .startProcess(new dev.bpmcrafters.processengineapi.process.StartProcessByMessageCmd(
-              scopedIdentifier(workflowModuleId, messageName), payloadOf(
-                  aggregatePersistence, workflowAggregateId, null), java.util.Map.of()))
+              scopedIdentifier(request.workflowModuleId(), request.messageName()), payloadOf(
+                  request.aggregatePersistence(), request.workflowAggregateId(), null), java.util.Map.of()))
           .get();
       log.info(
           "PEA[{}]: started workflow by message '{}' for BPMN process '{}' of workflow module "
               + "'{}' (aggregate '{}')",
           adapterId,
-          messageName,
-          bpmnProcessId,
-          workflowModuleId,
-          workflowAggregateId);
+          request.messageName(),
+          request.bpmnProcessId(),
+          request.workflowModuleId(),
+          request.workflowAggregateId());
     } catch (final InterruptedException e) {
       Thread.currentThread().interrupt();
       // returning here would mark the outbox entry done although no workflow was
       // started, and the application's database would carry an aggregate no engine knows
       throw new IllegalStateException(
-          "Phase two of starting a workflow by message '%s' was interrupted".formatted(messageName), e);
+          "Phase two of starting a workflow by message '%s' was interrupted".formatted(request.messageName()), e);
     } catch (final java.util.concurrent.ExecutionException e) {
       throw new IllegalStateException(
-          "Phase two of starting a workflow by message '%s' failed".formatted(messageName), e.getCause());
+          "Phase two of starting a workflow by message '%s' failed".formatted(request.messageName()), e.getCause());
     }
 
   }
 
-  @Override
-  public void startWorkflowPhaseOne(
-      final String workflowModuleId,
-      final String bpmnProcessId,
-      final AggregatePersistenceAware<A> aggregatePersistence,
-      final A workflowAggregate) {
+  private void preflightStart(
+      final PhaseOneRequest<A> request) {
 
     // Phase one runs inside the caller's local transaction: only validate optimistically
     // (PREFLIGHT_CHECK). The Process-Engine-API is remote, so the instance itself must not
@@ -1034,24 +1020,21 @@ public class PeaProcessService<A> implements MigratableProcessService<A> {
     // a rolled-back transaction would leave a ghost workflow behind. A failed check throws
     // and thereby rolls the caller's transaction back (fail fast instead of committing an
     // outbox entry which cannot be dispatched).
-    final var aggregateId = aggregatePersistence.getAggregateId(workflowAggregate);
+    final var aggregateId = request.aggregatePersistence().getAggregateId(request.workflowAggregate());
     await(
         startProcessApi.startProcess(
             new PeaStartProcessCommand(
-                scopedProcessId(workflowModuleId, bpmnProcessId), payloadOf(
-                    aggregatePersistence, aggregateId, workflowAggregate), ExecutionMode.PREFLIGHT_CHECK)),
+                scopedProcessId(request.workflowModuleId(), request.bpmnProcessId()), payloadOf(
+                    request.aggregatePersistence(), aggregateId,
+                    request.workflowAggregate()), ExecutionMode.PREFLIGHT_CHECK)),
         "Preflight check (phase one)",
-        bpmnProcessId,
-        workflowModuleId);
+        request.bpmnProcessId(),
+        request.workflowModuleId());
 
   }
 
-  @Override
-  public void startWorkflowPhaseTwo(
-      final String workflowModuleId,
-      final String bpmnProcessId,
-      final AggregatePersistenceAware<A> aggregatePersistence,
-      final Object workflowAggregateId) {
+  private void startWorkflow(
+      final PhaseTwoRequest<A> request) {
 
     // Phase two runs after the local transaction was committed, dispatched via the outbox:
     // actually create the process instance (SYNC). The aggregate id travels as a payload
@@ -1064,11 +1047,11 @@ public class PeaProcessService<A> implements MigratableProcessService<A> {
     await(
         startProcessApi.startProcess(
             new PeaStartProcessCommand(
-                scopedProcessId(workflowModuleId, bpmnProcessId), payloadOf(
-                    aggregatePersistence, workflowAggregateId, null), ExecutionMode.SYNC)),
+                scopedProcessId(request.workflowModuleId(), request.bpmnProcessId()), payloadOf(
+                    request.aggregatePersistence(), request.workflowAggregateId(), null), ExecutionMode.SYNC)),
         "Starting the workflow (phase two)",
-        bpmnProcessId,
-        workflowModuleId);
+        request.bpmnProcessId(),
+        request.workflowModuleId());
 
   }
 

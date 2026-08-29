@@ -120,8 +120,8 @@ public class PeaSharedValuesTest {
 
     final var sharesNothing = new RecordingSync(Map.of());
 
-    serviceSharing(sharesNothing)
-        .startWorkflowPhaseTwo("loan-approval", "LoanApproval", persistence(), "loan-4711");
+    PhaseOperations.phaseTwo(serviceSharing(sharesNothing), io.vanillabp.integration.spi.PhaseOperation.START_WORKFLOW,
+        "loan-approval", "LoanApproval", persistence(), "loan-4711", java.util.Map.of());
 
     final var started = engine.getStartedInstances();
     assertEquals(1, started.size(), "the workflow has to be started");
@@ -138,8 +138,8 @@ public class PeaSharedValuesTest {
 
     final var sharesTwo = new RecordingSync(Map.of("amount", 4711, "approved", Boolean.FALSE));
 
-    serviceSharing(sharesTwo)
-        .startWorkflowPhaseTwo("loan-approval", "LoanApproval", persistence(), "loan-4712");
+    PhaseOperations.phaseTwo(serviceSharing(sharesTwo), io.vanillabp.integration.spi.PhaseOperation.START_WORKFLOW,
+        "loan-approval", "LoanApproval", persistence(), "loan-4712", java.util.Map.of());
 
     final var variables = engine.getStartedInstances().getFirst().variables();
     assertEquals(3, variables.size(), "the shared values plus the ID variable");
@@ -155,8 +155,8 @@ public class PeaSharedValuesTest {
 
     final var recording = new RecordingSync(Map.of());
 
-    serviceSharing(recording)
-        .startWorkflowPhaseTwo("loan-approval", "LoanApproval", persistence(), "loan-4713");
+    PhaseOperations.phaseTwo(serviceSharing(recording), io.vanillabp.integration.spi.PhaseOperation.START_WORKFLOW,
+        "loan-approval", "LoanApproval", persistence(), "loan-4713", java.util.Map.of());
 
     assertNotNull(recording.askedWith, "the sync model has to be asked at all");
     assertEquals(AggregateSyncMode.FULL, recording.askedWith);

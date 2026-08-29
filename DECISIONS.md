@@ -104,3 +104,19 @@ The core is the source rather than a scan of the model, because a model declares
 reads and misses names no model carries. The mock engine trims its payload to what the
 subscription asked for, so the derivation is exercised rather than asserted.
 See [What a subscription asks the engine for](./README.md#what-a-subscription-asks-the-engine-for).
+
+### 8. What this adapter does per operation is a handler, not a pair of methods
+
+VanillaBP's adapter SPI used to ask for two methods per outbound operation, and this adapter
+had eighteen of them. It answers a map now: one `PhaseOperationHandler` per `PhaseOperation`,
+each of them the pair of "ask" and "act" for this engine. What the handlers do is unchanged -
+the same preflight commands, the same completions, the same messages - only the shape moved.
+
+The map is what states which operations this adapter serves, and two of its entries are there
+although the answer they give is "not here": a signal needs a `SignalApi` the adapter may have
+been built without, and a changed aggregate cannot be pushed at all because the API updates the
+payload of a TASK rather than of a running instance (GAPS entry 18). VanillaBP would say "this
+adapter cannot serve the operation" for a missing entry, which is true but useless: which API
+is missing, and what to model instead, is knowledge only this adapter has. So the entries stay
+and the handlers throw with a message which names the fix - the core's message is the fallback
+for an adapter which has nothing to add, not the better answer.
