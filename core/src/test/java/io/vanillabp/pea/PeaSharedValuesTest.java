@@ -107,7 +107,10 @@ public class PeaSharedValuesTest {
       final WorkflowAggregateSync aggregateSync) {
 
     return new PeaProcessService<>(
-        "pea", engine, engine, engine, engine, new io.vanillabp.pea.deployment.PeaDeployedProcesses(), aggregateSync);
+        "pea", engine, engine, engine, engine, new io.vanillabp.pea.deployment.PeaDeployedProcesses(), io.vanillabp.pea.TestCollaborators
+            .builder(new PeaDeploymentServiceTest.PermissiveInvoker())
+            .workflowAggregateSync(aggregateSync)
+            .build());
 
   }
 

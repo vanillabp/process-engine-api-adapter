@@ -85,19 +85,14 @@ public class PeaProcessService<A> implements MigratableProcessService<A> {
    * calls, which is what this adapter did before - correct, with a wider window between the
    * check and the phase-two dispatch.
    */
-  private io.vanillabp.integration.adapter.spi.PreCommitRegistrar preCommitRegistrar;
+  private final io.vanillabp.integration.adapter.spi.PreCommitRegistrar preCommitRegistrar;
 
   /**
-   * Hands over the platform's pre-commit hook.
-   *
-   * @param preCommitRegistrar The hook or <code>null</code>
+   * Everything the platform hands over. An adapter which is registered incompletely does
+   * not come into existence (see
+   * {@link io.vanillabp.integration.adapter.spi.AdapterCollaborators}).
    */
-  public void setPreCommitRegistrar(
-      final io.vanillabp.integration.adapter.spi.PreCommitRegistrar preCommitRegistrar) {
-
-    this.preCommitRegistrar = preCommitRegistrar;
-
-  }
+  private final io.vanillabp.integration.adapter.spi.AdapterCollaborators collaborators;
 
   public PeaProcessService(
       final String adapterId,
@@ -143,20 +138,7 @@ public class PeaProcessService<A> implements MigratableProcessService<A> {
    * names and error codes into what the engine knows. May be <code>null</code>
    * (tests): identifiers are passed through then.
    */
-  private io.vanillabp.integration.adapter.spi.NameClashAvoidanceSupport scoping;
-
-  /**
-   * Sets the name-clash-avoidance support (the platform modules inject it after
-   * construction).
-   *
-   * @param scoping The name-clash-avoidance support
-   */
-  public void setScoping(
-      final io.vanillabp.integration.adapter.spi.NameClashAvoidanceSupport scoping) {
-
-    this.scoping = scoping;
-
-  }
+  private final io.vanillabp.integration.adapter.spi.NameClashAvoidanceSupport scoping;
 
   /**
    * The BPMN process id as the engine knows it.
@@ -222,9 +204,18 @@ public class PeaProcessService<A> implements MigratableProcessService<A> {
       final dev.bpmcrafters.processengineapi.task.UserTaskCompletionApi userTaskCompletionApi,
       final dev.bpmcrafters.processengineapi.correlation.CorrelationApi correlationApi,
       final io.vanillabp.pea.deployment.PeaDeployedProcesses deployedProcesses,
-      final io.vanillabp.integration.adapter.spi.WorkflowAggregateSync aggregateSync) {
+      final io.vanillabp.integration.adapter.spi.AdapterCollaborators collaborators) {
 
-    this.aggregateSync = aggregateSync;
+    this.collaborators = collaborators;
+    this.aggregateSync = collaborators == null
+        ? null
+        : collaborators.workflowAggregateSync();
+    this.scoping = collaborators == null
+        ? null
+        : collaborators.scoping();
+    this.preCommitRegistrar = collaborators == null
+        ? null
+        : collaborators.preCommitRegistrar();
     this.adapterId = adapterId;
     this.startProcessApi = startProcessApi;
     this.serviceTaskCompletionApi = serviceTaskCompletionApi;
@@ -425,7 +416,9 @@ public class PeaProcessService<A> implements MigratableProcessService<A> {
       final AggregatePersistenceAware<A> aggregatePersistence,
       final Runnable check) {
 
-    if ((preCommitRegistrar == null) || (aggregatePersistence == null)) {
+    // the registrar always arrives with the collaborators, so the only reason left to run
+    // the check here and now is a caller which brought no persistence to name
+    if (aggregatePersistence == null) {
       check.run();
       return;
     }

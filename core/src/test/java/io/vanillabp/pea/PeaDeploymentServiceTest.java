@@ -22,7 +22,20 @@ public class PeaDeploymentServiceTest {
 
   private final InMemoryProcessEngine engine = new InMemoryProcessEngine();
 
-  private final PeaDeploymentService service = new PeaDeploymentService("pea", engine, new PermissiveInvoker(), new PermissiveInvoker(), engine, engine);
+  private final PeaDeploymentService service = new PeaDeploymentService(
+      "pea", engine, io.vanillabp.pea.TestCollaborators.of(new PermissiveInvoker()), engine, engine);
+
+  /**
+   * The service under test with a core which avoids name clashes the given way - what it
+   * deploys under which name is decided while it is built, not afterwards.
+   */
+  private PeaDeploymentService serviceScopedBy(
+      final io.vanillabp.integration.adapter.spi.NameClashAvoidanceSupport scoping) {
+
+    return new PeaDeploymentService(
+        "pea", engine, io.vanillabp.pea.TestCollaborators.of(new PermissiveInvoker(), scoping), engine, engine);
+
+  }
 
   private static ByteArrayInputStream bpmn(
       final String xml) {
@@ -279,7 +292,7 @@ public class PeaDeploymentServiceTest {
 
     };
     final var failingService = new PeaDeploymentService(
-        "pea", failingDeploy, new PermissiveInvoker(), new PermissiveInvoker(), engine, engine);
+        "pea", failingDeploy, io.vanillabp.pea.TestCollaborators.of(new PermissiveInvoker()), engine, engine);
 
     final var xml = """
         <?xml version="1.0" encoding="UTF-8"?>
@@ -331,7 +344,7 @@ public class PeaDeploymentServiceTest {
 
     };
     final var failingService = new PeaDeploymentService(
-        "pea", engine, new PermissiveInvoker(), new PermissiveInvoker(), failingSubscribe, engine);
+        "pea", engine, io.vanillabp.pea.TestCollaborators.of(new PermissiveInvoker()), failingSubscribe, engine);
 
     final var context = contextWithOneTask(failingService);
 
@@ -548,7 +561,8 @@ public class PeaDeploymentServiceTest {
     @Test
     public void byAdapterIsRejectedWhileDeploying() {
 
-      service.setScoping(scopingWith(io.vanillabp.integration.adapter.spi.NameClashAvoidance.BY_ADAPTER));
+      final var service = serviceScopedBy(
+          scopingWith(io.vanillabp.integration.adapter.spi.NameClashAvoidance.BY_ADAPTER));
 
       final var context = service.prepareBpmn(
           "loan-approval", null, "risk.bpmn", "RiskAssessment", new PeaBpmnModel(
@@ -568,7 +582,8 @@ public class PeaDeploymentServiceTest {
     @Test
     public void usePrefixRewritesTheDeployedBpmn() {
 
-      service.setScoping(scopingWith(io.vanillabp.integration.adapter.spi.NameClashAvoidance.USE_PREFIX));
+      final var service = serviceScopedBy(
+          scopingWith(io.vanillabp.integration.adapter.spi.NameClashAvoidance.USE_PREFIX));
 
       final var context = service.prepareBpmn(
           "loan-approval", null, "risk.bpmn", "RiskAssessment", new PeaBpmnModel(
@@ -595,7 +610,7 @@ public class PeaDeploymentServiceTest {
     @Test
     public void noneChangesNothing() {
 
-      service.setScoping(scopingWith(io.vanillabp.integration.adapter.spi.NameClashAvoidance.NONE));
+      final var service = serviceScopedBy(scopingWith(io.vanillabp.integration.adapter.spi.NameClashAvoidance.NONE));
 
       final var context = service.prepareBpmn(
           "loan-approval", null, "risk.bpmn", "RiskAssessment", new PeaBpmnModel(

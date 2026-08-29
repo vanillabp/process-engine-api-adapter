@@ -56,14 +56,8 @@ public class PeaAdapterBeanRegistrar implements BeanRegistrar {
                                 .bean(
                                     dev.bpmcrafters.processengineapi.correlation.CorrelationApi.class), supplierContext
                                         .bean(io.vanillabp.pea.deployment.PeaDeployedProcessesRegistry.class)
-                                        .forAdapter(adapterId), supplierContext
-                                            .bean(io.vanillabp.integration.adapter.spi.WorkflowAggregateSync.class));
-                processService.setScoping(
-                    supplierContext.bean(io.vanillabp.integration.adapter.spi.NameClashAvoidanceSupport.class));
-                // Phase-one checks run right before the transaction of the
-                // aggregate commits, in whatever unit of work that is
-                processService.setPreCommitRegistrar(
-                    supplierContext.bean(io.vanillabp.integration.adapter.spi.PreCommitRegistrar.class));
+                                        .forAdapter(adapterId), AdapterBeanRegistrarSupport
+                                            .collaborators(supplierContext, adapterId));
                 // optional: an engine implementation without a SignalApi leaves
                 // signals unsupported, which the process service says when asked
                 processService.setSignalApi(
@@ -78,20 +72,15 @@ public class PeaAdapterBeanRegistrar implements BeanRegistrar {
               PeaDeploymentService.class,
               spec -> spec.supplier(supplierContext -> {
                 final var deploymentService = new PeaDeploymentService(
-                    adapterId, supplierContext.bean(DeploymentApi.class), supplierContext
-                        .bean(
-                            io.vanillabp.integration.adapter.spi.workflowtask.WorkflowTaskWiring.class), supplierContext
-                                .bean(
-                                    io.vanillabp.integration.adapter.spi.workflowtask.WorkflowTaskInvoker.class), supplierContext
-                                        .bean(
-                                            dev.bpmcrafters.processengineapi.task.TaskSubscriptionApi.class), supplierContext
-                                                .bean(
-                                                    dev.bpmcrafters.processengineapi.task.ServiceTaskCompletionApi.class), supplierContext
-                                                        .bean(
-                                                            io.vanillabp.pea.deployment.PeaDeployedProcessesRegistry.class)
-                                                        .forAdapter(adapterId));
-                deploymentService.setScoping(
-                    supplierContext.bean(io.vanillabp.integration.adapter.spi.NameClashAvoidanceSupport.class));
+                    adapterId, supplierContext.bean(DeploymentApi.class), AdapterBeanRegistrarSupport
+                        .collaborators(supplierContext, adapterId), supplierContext
+                            .bean(
+                                dev.bpmcrafters.processengineapi.task.TaskSubscriptionApi.class), supplierContext
+                                    .bean(
+                                        dev.bpmcrafters.processengineapi.task.ServiceTaskCompletionApi.class), supplierContext
+                                            .bean(
+                                                io.vanillabp.pea.deployment.PeaDeployedProcessesRegistry.class)
+                                            .forAdapter(adapterId));
                 // What each subscription asks the engine for, resolvable down
                 // to task level
                 final var overlay = supplierContext.bean(VanillaBpPeaProperties.class);
@@ -100,11 +89,6 @@ public class PeaAdapterBeanRegistrar implements BeanRegistrar {
                     bpmnProcessId,
                     taskDefinition) -> overlay.fetchVariablesFor(
                         workflowModuleId, bpmnProcessId, taskDefinition, adapterId));
-                deploymentService.setWorkflowEndedInvoker(
-                    supplierContext
-                        .beanProvider(
-                            io.vanillabp.integration.adapter.spi.workflowend.WorkflowEndedInvoker.class)
-                        .getIfAvailable());
                 return deploymentService;
               }));
 

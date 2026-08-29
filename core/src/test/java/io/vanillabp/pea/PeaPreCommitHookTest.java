@@ -3,6 +3,7 @@ package io.vanillabp.pea;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.mock;
 
 import java.util.LinkedList;
 import java.util.List;
@@ -61,7 +62,22 @@ public class PeaPreCommitHookTest {
 
   private PeaProcessService<Object> service() {
 
-    return new PeaProcessService<>("pea", engine, engine, engine, engine);
+    return serviceHandingChecksTo(mock(io.vanillabp.integration.adapter.spi.PreCommitRegistrar.class));
+
+  }
+
+  /**
+   * The service with the hook this test wants to observe: where a check is handed over is
+   * decided while the service is built, like every other collaborator.
+   */
+  private PeaProcessService<Object> serviceHandingChecksTo(
+      final io.vanillabp.integration.adapter.spi.PreCommitRegistrar preCommitRegistrar) {
+
+    return new PeaProcessService<>(
+        "pea", engine, engine, engine, engine, new io.vanillabp.pea.deployment.PeaDeployedProcesses(), io.vanillabp.pea.TestCollaborators
+            .builder(new PeaDeploymentServiceTest.PermissiveInvoker())
+            .preCommitRegistrar(preCommitRegistrar)
+            .build());
 
   }
 
@@ -70,9 +86,8 @@ public class PeaPreCommitHookTest {
   public void theCheckIsHandedToTheHook() {
 
     engine.getOpenTaskIds().add("task-1");
-    final var service = service();
     final var deferred = new LinkedList<Runnable>();
-    service.setPreCommitRegistrar((
+    final var service = serviceHandingChecksTo((
         aggregateClass,
         check) -> {
       events.add("handed over for "
@@ -100,9 +115,8 @@ public class PeaPreCommitHookTest {
   @DisplayName("A failing check still reaches the caller, so the transaction can be aborted")
   public void aFailingCheckReachesTheCaller() {
 
-    final var service = service();
     // a hook which runs the check right away, like the platform runners do at commit time
-    service.setPreCommitRegistrar((
+    final var service = serviceHandingChecksTo((
         aggregateClass,
         check) -> check.run());
 
@@ -116,15 +130,19 @@ public class PeaPreCommitHookTest {
   }
 
   @Test
-  @DisplayName("Without a hook the check runs immediately")
-  public void withoutAHookTheCheckRunsImmediately() {
+  @DisplayName("Without an aggregate persistence the check runs immediately")
+  public void withoutAPersistenceTheCheckRunsImmediately() {
 
-    final var service = service();
+    // a hook which never runs what it is handed: the check still has to reach the caller,
+    // because there is no aggregate class to hang it on
+    final var service = serviceHandingChecksTo((
+        aggregateClass,
+        check) -> {
+    });
 
     assertThrows(
         IllegalStateException.class,
-        () -> service
-            .completeTaskPhaseOne("mod", "Process", persistence(), new Object(), "task-gone"));
+        () -> service.completeTaskPhaseOne("mod", "Process", null, new Object(), "task-gone"));
 
   }
 

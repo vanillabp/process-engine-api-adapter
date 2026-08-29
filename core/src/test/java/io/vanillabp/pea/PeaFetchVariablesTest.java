@@ -81,7 +81,7 @@ public class PeaFetchVariablesTest {
   private PeaDeploymentService deploymentService(
       final PeaDeploymentServiceTest.PermissiveInvoker core) {
 
-    return new PeaDeploymentService("pea", engine, core, core, engine, engine);
+    return new PeaDeploymentService("pea", engine, io.vanillabp.pea.TestCollaborators.of(core), engine, engine);
 
   }
 
