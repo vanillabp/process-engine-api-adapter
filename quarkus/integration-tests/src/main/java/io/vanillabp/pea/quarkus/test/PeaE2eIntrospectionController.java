@@ -203,10 +203,7 @@ public class PeaE2eIntrospectionController {
       @PathParam("method") final String method,
       @PathParam("taskId") final String taskId) {
 
-    return modesOf(method, taskId)
-        .stream()
-        .map(Enum::name)
-        .toList();
+    return namesOf(modesOf(method, taskId));
 
   }
 
@@ -643,24 +640,22 @@ public class PeaE2eIntrospectionController {
   }
 
   /**
-   * Runs one {@code ProcessService} call inside a transaction of its own and reports
-   * both the exception it may have raised and the execution modes recorded while the
-   * transaction was still open.
+   * Runs one {@code ProcessService} call inside a transaction of its own and reports the
+   * exception it may have raised plus the execution modes recorded at the two moments the
+   * adapter's promise is about: while the transaction was still open, and the instant its
+   * commit returned. The adapter hands its phase-one check to the platform's pre-commit
+   * hook, so the check happens between those two reads and the first one can never see it.
    */
   private Map<String, Object> inTransaction(
       final Consumer<PeaE2eAggregate> operation,
       final String aggregateId,
-      final Supplier<List<ExecutionMode>> modesInsideTransaction) throws Exception {
+      final Supplier<List<ExecutionMode>> recordedModes) throws Exception {
 
     final var report = new LinkedHashMap<String, Object>();
     userTransaction.begin();
     try {
       operation.accept(repository.findById(aggregateId));
-      report.put("modesInsideTransaction", modesInsideTransaction
-          .get()
-          .stream()
-          .map(Enum::name)
-          .toList());
+      report.put("modesWhileTheTransactionWasOpen", namesOf(recordedModes.get()));
       report.put("correlationsInsideTransaction", engine
           .getCorrelatedMessages()
           .size());
@@ -673,7 +668,18 @@ public class PeaE2eIntrospectionController {
       return report;
     }
     userTransaction.commit();
+    report.put("modesWhenTheCommitReturned", namesOf(recordedModes.get()));
     return report;
+
+  }
+
+  private static List<String> namesOf(
+      final List<ExecutionMode> modes) {
+
+    return modes
+        .stream()
+        .map(Enum::name)
+        .toList();
 
   }
 

@@ -167,17 +167,40 @@ public class PeaWorkflowLifecycleTest {
   }
 
   @SuppressWarnings("unchecked")
-  private static void assertOnlyPreflightRanInside(
+  private static List<String> modes(
+      final Map<String, Object> reported,
+      final String moment) {
+
+    return (List<String>) reported.get(moment);
+
+  }
+
+  /**
+   * What the adapter promises about a task operation names two moments of the caller's
+   * transaction: while it is open nothing may advance the process, and by the time its
+   * commit returned the check which can still abort it has run. The check is registered
+   * with the platform's pre-commit hook and therefore runs during the commit, so neither
+   * moment on its own carries the promise.
+   * <p>
+   * A probe of the engine before that check is deliberately not asserted: the platform
+   * routes a task operation by the delivery record of that task where it has one, so the
+   * awareness probe this adapter offers may never be called at all.
+   */
+  private static void assertThePreflightRanBeforeTheCommitReturned(
       final Map<String, Object> reported) {
 
-    final var modes = (List<String>) reported.get("modesInsideTransaction");
-    assertFalse(modes.isEmpty(), "phase one has to run inside the caller's transaction");
+    final var whileOpen = modes(reported, "modesWhileTheTransactionWasOpen");
+    assertFalse(
+        whileOpen.contains("SYNC"),
+        "nothing may advance the process while the caller's transaction is open but got: "
+            + whileOpen);
+
+    final var whenCommitted = modes(reported, "modesWhenTheCommitReturned");
     assertTrue(
-        modes
-            .stream()
-            .allMatch("PREFLIGHT_CHECK"::equals),
-        "before the commit only PREFLIGHT_CHECK commands may run but got: "
-            + modes);
+        whenCommitted.contains("PREFLIGHT_CHECK"),
+        "the PREFLIGHT_CHECK has to have run by the time the commit returned, later it has "
+            + "nothing left to abort, but got: "
+            + whenCommitted);
 
   }
 
@@ -375,7 +398,7 @@ public class PeaWorkflowLifecycleTest {
     assertTrue(strings("introspect/open-tasks").contains("task-4"));
     assertTrue(strings("introspect/completed-tasks").isEmpty());
 
-    assertOnlyPreflightRanInside(post("introspect/tasks/task-4/complete/q-task-4"));
+    assertThePreflightRanBeforeTheCommitReturned(post("introspect/tasks/task-4/complete/q-task-4"));
 
     await(
         () -> strings("introspect/completed-tasks").contains("task-4"),
@@ -430,7 +453,7 @@ public class PeaWorkflowLifecycleTest {
     assertEquals("utask-1", aggregate.get("taskId"));
     assertTrue(strings("introspect/completed-tasks").isEmpty(), "a notification must not complete the task");
 
-    assertOnlyPreflightRanInside(post("introspect/user-tasks/utask-1/complete/q-user-1"));
+    assertThePreflightRanBeforeTheCommitReturned(post("introspect/user-tasks/utask-1/complete/q-user-1"));
 
     await(
         () -> strings("introspect/completed-tasks").contains("utask-1"),
