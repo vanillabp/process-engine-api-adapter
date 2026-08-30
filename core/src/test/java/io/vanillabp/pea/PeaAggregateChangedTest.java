@@ -7,6 +7,8 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 
+import io.vanillabp.integration.spi.PhaseOperation;
+import io.vanillabp.integration.spi.PhaseTwoCall;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 import io.vanillabp.pea.mock.InMemoryProcessEngine;
 import io.vanillabp.pea.processservice.PeaProcessService;
@@ -34,9 +36,9 @@ public class PeaAggregateChangedTest {
 
     final var exception = assertThrows(
         UnsupportedOperationException.class,
-        () -> PhaseOperations.phaseOne(service(), io.vanillabp.integration.spi.PhaseOperation.AGGREGATE_CHANGED, "mod",
+        () -> PhaseOperations.phaseOne(service(), PhaseOperation.AGGREGATE_CHANGED, "mod",
             "Process", null, new Object(),
-            PhaseOperations.args(io.vanillabp.integration.spi.PhaseTwoCall.ARG_TASK_ID, null)));
+            PhaseOperations.args(PhaseTwoCall.ARG_TASK_ID, null)));
 
     assertTrue(exception.getMessage().contains("Process"));
     assertTrue(exception.getMessage().contains("GAPS.md entry 18"));
@@ -50,9 +52,9 @@ public class PeaAggregateChangedTest {
 
     final var exception = assertThrows(
         UnsupportedOperationException.class,
-        () -> PhaseOperations.phaseTwo(service(), io.vanillabp.integration.spi.PhaseOperation.AGGREGATE_CHANGED, "mod",
+        () -> PhaseOperations.phaseTwo(service(), PhaseOperation.AGGREGATE_CHANGED, "mod",
             "Process", null, "42",
-            PhaseOperations.args(io.vanillabp.integration.spi.PhaseTwoCall.ARG_TASK_ID, "task-1")));
+            PhaseOperations.args(PhaseTwoCall.ARG_TASK_ID, "task-1")));
 
     assertTrue(exception.getMessage().contains("mod"));
 

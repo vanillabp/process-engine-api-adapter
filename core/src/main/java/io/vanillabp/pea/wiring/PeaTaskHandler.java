@@ -1,5 +1,6 @@
 package io.vanillabp.pea.wiring;
 
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ExecutionException;
@@ -7,9 +8,12 @@ import java.util.concurrent.ExecutionException;
 import dev.bpmcrafters.processengineapi.task.ServiceTaskCompletionApi;
 import dev.bpmcrafters.processengineapi.task.TaskHandler;
 import dev.bpmcrafters.processengineapi.task.TaskInformation;
+import io.vanillabp.integration.adapter.spi.NameClashAvoidanceSupport;
 import io.vanillabp.integration.adapter.spi.workflowtask.TaskInvocationContext;
 import io.vanillabp.integration.adapter.spi.workflowtask.WorkflowTaskInvoker;
 import io.vanillabp.integration.adapter.spi.workflowtask.WorkflowTaskOutcome;
+import io.vanillabp.pea.processservice.PeaProcessService;
+import lombok.Builder;
 import lombok.extern.slf4j.Slf4j;
 
 /**
@@ -76,7 +80,7 @@ public class PeaTaskHandler implements TaskHandler {
    * Translates the identifiers the engine knows back into the plain ones
    * - a no-op unless the module uses prefixes. May be <code>null</code>.
    */
-  private final io.vanillabp.integration.adapter.spi.NameClashAvoidanceSupport scoping;
+  private final NameClashAvoidanceSupport scoping;
 
   /**
    * What this subscription asked the engine for - the payload of a delivery
@@ -85,31 +89,21 @@ public class PeaTaskHandler implements TaskHandler {
    */
   private final PeaFetchVariables.Selection fetchVariables;
 
-  public PeaTaskHandler(
-      final String adapterId,
-      final String workflowModuleId,
-      final String taskDefinition,
-      final List<String> bpmnProcessIds,
-      final WorkflowTaskInvoker workflowTaskInvoker,
-      final ServiceTaskCompletionApi serviceTaskCompletionApi) {
-
-    this(adapterId, workflowModuleId, taskDefinition, bpmnProcessIds, workflowTaskInvoker, serviceTaskCompletionApi, null);
-
-  }
-
-  public PeaTaskHandler(
-      final String adapterId,
-      final String workflowModuleId,
-      final String taskDefinition,
-      final List<String> bpmnProcessIds,
-      final WorkflowTaskInvoker workflowTaskInvoker,
-      final ServiceTaskCompletionApi serviceTaskCompletionApi,
-      final io.vanillabp.integration.adapter.spi.NameClashAvoidanceSupport scoping) {
-
-    this(adapterId, workflowModuleId, taskDefinition, bpmnProcessIds, workflowTaskInvoker, serviceTaskCompletionApi, scoping, null);
-
-  }
-
+  /**
+   * The subscription this handler serves. Built through the generated
+   * <code>PeaTaskHandler.builder()</code>: three of these seven values may be left out and a
+   * positional list of that length no longer says which is which.
+   *
+   * @param adapterId The adapter whose subscription delivers here
+   * @param workflowModuleId The workflow module the subscribed tasks belong to
+   * @param taskDefinition The task definition as the engine knows it
+   * @param bpmnProcessIds The BPMN processes this subscription may deliver from
+   * @param workflowTaskInvoker The core's runtime entry point
+   * @param serviceTaskCompletionApi Where the outcome of a delivery is reported
+   * @param scoping Translates the engine's identifiers back, or <code>null</code>
+   * @param fetchVariables What the subscription asked for, or <code>null</code> for everything
+   */
+  @Builder
   public PeaTaskHandler(
       final String adapterId,
       final String workflowModuleId,
@@ -117,7 +111,7 @@ public class PeaTaskHandler implements TaskHandler {
       final List<String> bpmnProcessIds,
       final WorkflowTaskInvoker workflowTaskInvoker,
       final ServiceTaskCompletionApi serviceTaskCompletionApi,
-      final io.vanillabp.integration.adapter.spi.NameClashAvoidanceSupport scoping,
+      final NameClashAvoidanceSupport scoping,
       final PeaFetchVariables.Selection fetchVariables) {
 
     this.adapterId = adapterId;
@@ -241,12 +235,12 @@ public class PeaTaskHandler implements TaskHandler {
       final String aggregateIdName,
       final Object aggregateId) {
 
-    final var completionPayload = new java.util.LinkedHashMap<String, Object>(
+    final var completionPayload = new LinkedHashMap<String, Object>(
         workflowTaskInvoker.syncedWorkflowAggregateValues(
             workflowModuleId,
             bpmnProcessId,
             String.valueOf(aggregateId),
-            io.vanillabp.pea.processservice.PeaProcessService.SYNC_MODE));
+            PeaProcessService.SYNC_MODE));
     completionPayload.put(aggregateIdName, aggregateId);
     return completionPayload;
 
@@ -362,19 +356,6 @@ public class PeaTaskHandler implements TaskHandler {
      * {@link #getTaskParameter(String)}.
      */
     private final PeaFetchVariables.Selection fetchVariables;
-
-    PeaTaskInvocationContext(
-        final String adapterId,
-        final String taskDefinition,
-        final String workflowAggregateId,
-        final String taskId,
-        final Map<String, ?> payload,
-        final String processVersion) {
-
-      this(adapterId, taskDefinition, workflowAggregateId, taskId, payload, processVersion, PeaFetchVariables.Selection
-          .everything());
-
-    }
 
     PeaTaskInvocationContext(
         final String adapterId,

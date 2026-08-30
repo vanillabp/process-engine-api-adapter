@@ -1,6 +1,7 @@
 package io.vanillabp.pea.mock;
 
 import java.time.Instant;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -17,18 +18,23 @@ import dev.bpmcrafters.processengineapi.MetaInfo;
 import dev.bpmcrafters.processengineapi.MetaInfoAware;
 import dev.bpmcrafters.processengineapi.correlation.CorrelateMessageCmd;
 import dev.bpmcrafters.processengineapi.correlation.CorrelationApi;
+import dev.bpmcrafters.processengineapi.correlation.SendSignalCmd;
+import dev.bpmcrafters.processengineapi.correlation.SignalApi;
 import dev.bpmcrafters.processengineapi.deploy.DeployBundleCommand;
 import dev.bpmcrafters.processengineapi.deploy.DeploymentApi;
 import dev.bpmcrafters.processengineapi.deploy.DeploymentInformation;
 import dev.bpmcrafters.processengineapi.deploy.NamedResource;
 import dev.bpmcrafters.processengineapi.process.ProcessInformation;
 import dev.bpmcrafters.processengineapi.process.StartProcessApi;
+import dev.bpmcrafters.processengineapi.process.StartProcessByMessageCmd;
 import dev.bpmcrafters.processengineapi.process.StartProcessCommand;
 import dev.bpmcrafters.processengineapi.task.CompleteTaskByErrorCmd;
 import dev.bpmcrafters.processengineapi.task.CompleteTaskCmd;
 import dev.bpmcrafters.processengineapi.task.FailTaskCmd;
 import dev.bpmcrafters.processengineapi.task.ServiceTaskCompletionApi;
 import dev.bpmcrafters.processengineapi.task.SubscribeForTaskCmd;
+import dev.bpmcrafters.processengineapi.task.TaskHandler;
+import dev.bpmcrafters.processengineapi.task.TaskInformation;
 import dev.bpmcrafters.processengineapi.task.TaskSubscription;
 import dev.bpmcrafters.processengineapi.task.TaskSubscriptionApi;
 import dev.bpmcrafters.processengineapi.task.UnsubscribeFromTaskCmd;
@@ -55,7 +61,7 @@ import dev.bpmcrafters.processengineapi.task.UserTaskCompletionApi;
  * A single instance implements all Process-Engine-API interfaces the adapter needs, so the
  * platform modules can inject the same bean wherever any of these interfaces is required.
  */
-public class InMemoryProcessEngine implements DeploymentApi, StartProcessApi, CorrelationApi, dev.bpmcrafters.processengineapi.correlation.SignalApi, TaskSubscriptionApi, ServiceTaskCompletionApi, UserTaskCompletionApi {
+public class InMemoryProcessEngine implements DeploymentApi, StartProcessApi, CorrelationApi, SignalApi, TaskSubscriptionApi, ServiceTaskCompletionApi, UserTaskCompletionApi {
 
   /**
    * A single recorded API invocation.
@@ -297,7 +303,7 @@ public class InMemoryProcessEngine implements DeploymentApi, StartProcessApi, Co
       return CompletableFuture.completedFuture(new ProcessInformation("mock-no-instance", Map.of()));
     }
     if ((cmd
-        .executionMode() != ExecutionMode.SYNC) && !(cmd instanceof dev.bpmcrafters.processengineapi.process.StartProcessByMessageCmd)) {
+        .executionMode() != ExecutionMode.SYNC) && !(cmd instanceof StartProcessByMessageCmd)) {
       // StartProcessByMessageCmd is FINAL and cannot carry a non-default
       // execution mode (GAPS.md entry 11) - its DEFAULT-mode command is the
       // phase-two start and creates an instance like a SYNC one
@@ -342,7 +348,7 @@ public class InMemoryProcessEngine implements DeploymentApi, StartProcessApi, Co
 
   @Override
   public CompletableFuture<Empty> sendSignal(
-      final dev.bpmcrafters.processengineapi.correlation.SendSignalCmd cmd) {
+      final SendSignalCmd cmd) {
 
     record("SignalApi", "sendSignal", cmd);
     broadcastSignals.add(cmd.getSignalName());
@@ -355,13 +361,13 @@ public class InMemoryProcessEngine implements DeploymentApi, StartProcessApi, Co
    *
    * @return The signal names, in the order they were broadcast
    */
-  public java.util.List<String> getBroadcastSignals() {
+  public List<String> getBroadcastSignals() {
 
-    return java.util.List.copyOf(broadcastSignals);
+    return List.copyOf(broadcastSignals);
 
   }
 
-  private final java.util.List<String> broadcastSignals = new java.util.concurrent.CopyOnWriteArrayList<>();
+  private final List<String> broadcastSignals = new CopyOnWriteArrayList<>();
 
   /**
    * A correlated message - inspectable by tests.
@@ -393,8 +399,8 @@ public class InMemoryProcessEngine implements DeploymentApi, StartProcessApi, Co
    */
   public record ActiveSubscription(
                                    String taskDescriptionKey,
-                                   java.util.Set<String> payloadDescription,
-                                   dev.bpmcrafters.processengineapi.task.TaskHandler handler) implements TaskSubscription {
+                                   Set<String> payloadDescription,
+                                   TaskHandler handler) implements TaskSubscription {
 
     /**
      * Narrows a delivered payload the way an engine does: a subscription naming
@@ -409,7 +415,7 @@ public class InMemoryProcessEngine implements DeploymentApi, StartProcessApi, Co
       if (payloadDescription.isEmpty()) {
         return payload;
       }
-      final var narrowed = new java.util.LinkedHashMap<String, Object>();
+      final var narrowed = new LinkedHashMap<String, Object>();
       payload.forEach((
           name,
           value) -> {
@@ -466,7 +472,7 @@ public class InMemoryProcessEngine implements DeploymentApi, StartProcessApi, Co
     subscription
         .handler()
         .accept(
-            new dev.bpmcrafters.processengineapi.task.TaskInformation(
+            new TaskInformation(
                 taskId, Map.of("bpmnProcessId", bpmnProcessId)),
             // an engine hands the subscriber what the subscription asked for, and the
             // adapter's derivation is only worth anything if the mock does the same
@@ -526,7 +532,7 @@ public class InMemoryProcessEngine implements DeploymentApi, StartProcessApi, Co
    * Kept beside {@link #completedTasks} so tests asserting the completion itself
    * stay unaffected.
    */
-  private final java.util.Map<String, Map<String, Object>> completionPayloads = new ConcurrentHashMap<>();
+  private final Map<String, Map<String, Object>> completionPayloads = new ConcurrentHashMap<>();
 
   /**
    * @param taskId The completed (or by-error completed) task
@@ -655,7 +661,7 @@ public class InMemoryProcessEngine implements DeploymentApi, StartProcessApi, Co
 
     return payload == null
         ? Map.of()
-        : java.util.Collections.unmodifiableMap(new LinkedHashMap<String, Object>(payload));
+        : Collections.unmodifiableMap(new LinkedHashMap<String, Object>(payload));
 
   }
 

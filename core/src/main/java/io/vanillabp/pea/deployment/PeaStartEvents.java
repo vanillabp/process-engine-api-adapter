@@ -3,6 +3,7 @@ package io.vanillabp.pea.deployment;
 import java.io.ByteArrayInputStream;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Optional;
 
 import javax.xml.parsers.DocumentBuilderFactory;
 
@@ -62,19 +63,19 @@ public final class PeaStartEvents {
 
   }
 
-  private static java.util.Optional<String> describe(
+  private static Optional<String> describe(
       final Element startEvent) {
 
     if (startEvent.getElementsByTagNameNS("*", "timerEventDefinition").getLength() > 0) {
-      return java.util.Optional.of("timer start event");
+      return Optional.of("timer start event");
     }
     if (startEvent.getElementsByTagNameNS("*", "signalEventDefinition").getLength() > 0) {
-      return java.util.Optional.of("signal start event");
+      return Optional.of("signal start event");
     }
     if (startEvent.getElementsByTagNameNS("*", "conditionalEventDefinition").getLength() > 0) {
-      return java.util.Optional.of("conditional start event");
+      return Optional.of("conditional start event");
     }
-    return java.util.Optional.empty();
+    return Optional.empty();
 
   }
 

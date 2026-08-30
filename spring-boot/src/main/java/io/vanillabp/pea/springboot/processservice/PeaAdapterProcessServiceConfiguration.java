@@ -10,6 +10,7 @@ import org.springframework.context.annotation.Import;
 import io.vanillabp.integration.adapter.spi.MigratableProcessService;
 import io.vanillabp.pea.mock.InMemoryProcessEngine;
 import io.vanillabp.pea.springboot.PeaAdapterBeanRegistrar;
+import io.vanillabp.pea.springboot.VanillaBpPeaProperties;
 import lombok.extern.slf4j.Slf4j;
 
 /**
@@ -26,7 +27,7 @@ import lombok.extern.slf4j.Slf4j;
 @AutoConfiguration
 @Slf4j
 @Import(PeaAdapterBeanRegistrar.class)
-@EnableConfigurationProperties(io.vanillabp.pea.springboot.VanillaBpPeaProperties.class)
+@EnableConfigurationProperties(VanillaBpPeaProperties.class)
 public class PeaAdapterProcessServiceConfiguration {
 
   /**

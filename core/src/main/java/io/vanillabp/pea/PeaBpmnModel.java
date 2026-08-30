@@ -1,5 +1,9 @@
 package io.vanillabp.pea;
 
+import java.util.List;
+
+import io.vanillabp.integration.adapter.spi.workflowtask.BpmnTaskSpec;
+
 /**
  * The adapter's BPMN model type ({@code BPMN} type parameter of
  * {@link io.vanillabp.integration.adapter.spi.AdapterDeploymentService}).
@@ -26,8 +30,8 @@ public record PeaBpmnModel(
                            String filename,
                            byte[] resource,
                            String bpmnProcessId,
-                           java.util.List<io.vanillabp.integration.adapter.spi.workflowtask.BpmnTaskSpec> tasks,
-                           java.util.List<io.vanillabp.integration.adapter.spi.workflowtask.BpmnTaskSpec> userTasks) {
+                           List<BpmnTaskSpec> tasks,
+                           List<BpmnTaskSpec> userTasks) {
 
   /**
    * Convenience constructor for a process without user tasks.
@@ -36,9 +40,9 @@ public record PeaBpmnModel(
       final String filename,
       final byte[] resource,
       final String bpmnProcessId,
-      final java.util.List<io.vanillabp.integration.adapter.spi.workflowtask.BpmnTaskSpec> tasks) {
+      final List<BpmnTaskSpec> tasks) {
 
-    this(filename, resource, bpmnProcessId, tasks, java.util.List.of());
+    this(filename, resource, bpmnProcessId, tasks, List.of());
 
   }
 

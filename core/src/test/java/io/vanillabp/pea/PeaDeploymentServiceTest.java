@@ -1,13 +1,44 @@
 package io.vanillabp.pea;
 
 import java.io.ByteArrayInputStream;
+import java.io.IOException;
+import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
+import java.util.Collection;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.CompletableFuture;
 
 import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 
+import dev.bpmcrafters.processengineapi.Empty;
+import dev.bpmcrafters.processengineapi.MetaInfo;
+import dev.bpmcrafters.processengineapi.MetaInfoAware;
+import dev.bpmcrafters.processengineapi.deploy.DeployBundleCommand;
+import dev.bpmcrafters.processengineapi.deploy.DeploymentApi;
+import dev.bpmcrafters.processengineapi.deploy.DeploymentInformation;
+import dev.bpmcrafters.processengineapi.task.SubscribeForTaskCmd;
+import dev.bpmcrafters.processengineapi.task.TaskSubscription;
+import dev.bpmcrafters.processengineapi.task.TaskSubscriptionApi;
+import dev.bpmcrafters.processengineapi.task.UnsubscribeFromTaskCmd;
+import io.vanillabp.integration.adapter.migration.config.AdapterConfigProperties;
+import io.vanillabp.integration.adapter.migration.config.MigrationAdapterProperties;
+import io.vanillabp.integration.adapter.migration.config.WorkflowModuleAdapterProperties;
+import io.vanillabp.integration.adapter.migration.scoping.NameClashAvoidanceService;
+import io.vanillabp.integration.adapter.spi.AggregateSyncMode;
 import io.vanillabp.integration.adapter.spi.BpmnParseException;
+import io.vanillabp.integration.adapter.spi.NameClashAvoidance;
+import io.vanillabp.integration.adapter.spi.NameClashAvoidanceSupport;
+import io.vanillabp.integration.adapter.spi.workflowtask.BpmnTaskSpec;
+import io.vanillabp.integration.adapter.spi.workflowtask.TaskInvocationContext;
+import io.vanillabp.integration.adapter.spi.workflowtask.WorkflowTaskInvoker;
+import io.vanillabp.integration.adapter.spi.workflowtask.WorkflowTaskOutcome;
+import io.vanillabp.integration.adapter.spi.workflowtask.WorkflowTaskWiring;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 import io.vanillabp.pea.deployment.PeaDeploymentService;
 import io.vanillabp.pea.mock.InMemoryProcessEngine;
@@ -23,17 +54,17 @@ public class PeaDeploymentServiceTest {
   private final InMemoryProcessEngine engine = new InMemoryProcessEngine();
 
   private final PeaDeploymentService service = new PeaDeploymentService(
-      "pea", engine, io.vanillabp.pea.TestCollaborators.of(new PermissiveInvoker()), engine, engine);
+      "pea", engine, TestCollaborators.of(new PermissiveInvoker()), engine, engine);
 
   /**
    * The service under test with a core which avoids name clashes the given way - what it
    * deploys under which name is decided while it is built, not afterwards.
    */
   private PeaDeploymentService serviceScopedBy(
-      final io.vanillabp.integration.adapter.spi.NameClashAvoidanceSupport scoping) {
+      final NameClashAvoidanceSupport scoping) {
 
     return new PeaDeploymentService(
-        "pea", engine, io.vanillabp.pea.TestCollaborators.of(new PermissiveInvoker(), scoping), engine, engine);
+        "pea", engine, TestCollaborators.of(new PermissiveInvoker(), scoping), engine, engine);
 
   }
 
@@ -117,12 +148,12 @@ public class PeaDeploymentServiceTest {
     final var context = new PeaProcessingContext("mod");
     // two executable processes in the same file must be deployed as ONE resource...
     context.getModels()
-        .add(new PeaBpmnModel("a.bpmn", "a-bytes".getBytes(StandardCharsets.UTF_8), "P1", java.util.List.of()));
+        .add(new PeaBpmnModel("a.bpmn", "a-bytes".getBytes(StandardCharsets.UTF_8), "P1", List.of()));
     context.getModels()
-        .add(new PeaBpmnModel("a.bpmn", "a-bytes".getBytes(StandardCharsets.UTF_8), "P2", java.util.List.of()));
+        .add(new PeaBpmnModel("a.bpmn", "a-bytes".getBytes(StandardCharsets.UTF_8), "P2", List.of()));
     // ...and a second file as another resource
     context.getModels()
-        .add(new PeaBpmnModel("b.bpmn", "b-bytes".getBytes(StandardCharsets.UTF_8), "P3", java.util.List.of()));
+        .add(new PeaBpmnModel("b.bpmn", "b-bytes".getBytes(StandardCharsets.UTF_8), "P3", List.of()));
 
     service.deployResources("mod", context);
 
@@ -223,7 +254,7 @@ public class PeaDeploymentServiceTest {
     // 'shared' is used by both processes but subscribed ONCE
     Assertions.assertEquals(2, engine.getSubscriptions().size());
     Assertions.assertEquals(
-        java.util.List.of("shared", "own"),
+        List.of("shared", "own"),
         engine
             .getSubscriptions()
             .stream()
@@ -257,17 +288,17 @@ public class PeaDeploymentServiceTest {
   @Test
   public void readBpmnWrapsIoErrorsInBpmnParseException() {
 
-    final var failing = new java.io.InputStream() {
+    final var failing = new InputStream() {
 
       @Override
-      public int read() throws java.io.IOException {
-        throw new java.io.IOException("boom");
+      public int read() throws IOException {
+        throw new IOException("boom");
       }
 
     };
 
     Assertions.assertThrows(
-        io.vanillabp.integration.adapter.spi.BpmnParseException.class,
+        BpmnParseException.class,
         () -> service.readBpmn("mod", "broken.bpmn", failing, true));
 
   }
@@ -275,24 +306,24 @@ public class PeaDeploymentServiceTest {
   @Test
   public void failingDeploymentYieldsGuidingIllegalState() {
 
-    final var failingDeploy = new dev.bpmcrafters.processengineapi.deploy.DeploymentApi() {
+    final var failingDeploy = new DeploymentApi() {
 
       @Override
-      public java.util.concurrent.CompletableFuture<dev.bpmcrafters.processengineapi.deploy.DeploymentInformation> deploy(
-          final dev.bpmcrafters.processengineapi.deploy.DeployBundleCommand command) {
-        return java.util.concurrent.CompletableFuture.failedFuture(new IllegalStateException("engine down"));
+      public CompletableFuture<DeploymentInformation> deploy(
+          final DeployBundleCommand command) {
+        return CompletableFuture.failedFuture(new IllegalStateException("engine down"));
       }
 
       @Override
-      public dev.bpmcrafters.processengineapi.MetaInfo meta(
-          final dev.bpmcrafters.processengineapi.MetaInfoAware instance) {
-        return new dev.bpmcrafters.processengineapi.MetaInfo() {
+      public MetaInfo meta(
+          final MetaInfoAware instance) {
+        return new MetaInfo() {
         };
       }
 
     };
     final var failingService = new PeaDeploymentService(
-        "pea", failingDeploy, io.vanillabp.pea.TestCollaborators.of(new PermissiveInvoker()), engine, engine);
+        "pea", failingDeploy, TestCollaborators.of(new PermissiveInvoker()), engine, engine);
 
     final var xml = """
         <?xml version="1.0" encoding="UTF-8"?>
@@ -316,35 +347,35 @@ public class PeaDeploymentServiceTest {
   @Test
   public void failingSubscriptionYieldsGuidingIllegalState() {
 
-    final var failingSubscribe = new dev.bpmcrafters.processengineapi.task.TaskSubscriptionApi() {
+    final var failingSubscribe = new TaskSubscriptionApi() {
 
       @Override
-      public java.util.concurrent.CompletableFuture<dev.bpmcrafters.processengineapi.task.TaskSubscription> subscribeForTask(
-          final dev.bpmcrafters.processengineapi.task.SubscribeForTaskCmd cmd) {
-        return java.util.concurrent.CompletableFuture.failedFuture(new IllegalStateException("engine down"));
+      public CompletableFuture<TaskSubscription> subscribeForTask(
+          final SubscribeForTaskCmd cmd) {
+        return CompletableFuture.failedFuture(new IllegalStateException("engine down"));
       }
 
       @Override
-      public java.util.concurrent.CompletableFuture<dev.bpmcrafters.processengineapi.Empty> unsubscribe(
-          final dev.bpmcrafters.processengineapi.task.UnsubscribeFromTaskCmd cmd) {
-        return java.util.concurrent.CompletableFuture.failedFuture(new IllegalStateException("engine down"));
+      public CompletableFuture<Empty> unsubscribe(
+          final UnsubscribeFromTaskCmd cmd) {
+        return CompletableFuture.failedFuture(new IllegalStateException("engine down"));
       }
 
       @Override
-      public dev.bpmcrafters.processengineapi.MetaInfo meta(
-          final dev.bpmcrafters.processengineapi.MetaInfoAware instance) {
-        return new dev.bpmcrafters.processengineapi.MetaInfo() {
+      public MetaInfo meta(
+          final MetaInfoAware instance) {
+        return new MetaInfo() {
         };
       }
 
       @Override
-      public java.util.Set<String> getSupportedRestrictions() {
-        return java.util.Set.of();
+      public Set<String> getSupportedRestrictions() {
+        return Set.of();
       }
 
     };
     final var failingService = new PeaDeploymentService(
-        "pea", engine, io.vanillabp.pea.TestCollaborators.of(new PermissiveInvoker()), failingSubscribe, engine);
+        "pea", engine, TestCollaborators.of(new PermissiveInvoker()), failingSubscribe, engine);
 
     final var context = contextWithOneTask(failingService);
 
@@ -386,7 +417,7 @@ public class PeaDeploymentServiceTest {
     // a failing UNsubscribe on stop is only logged (graceful shutdown)
     context
         .getSubscriptions()
-        .add(new dev.bpmcrafters.processengineapi.task.TaskSubscription() {
+        .add(new TaskSubscription() {
         });
     Assertions.assertDoesNotThrow(() -> failingService.stopWorkflowProcessing("mod", context));
 
@@ -420,13 +451,13 @@ public class PeaDeploymentServiceTest {
    * {@code WorkflowTaskWiring} and opens its task subscriptions with
    * {@code WorkflowTaskInvoker}, so a double standing in for the core answers both.
    */
-  static class PermissiveInvoker implements io.vanillabp.integration.adapter.spi.workflowtask.WorkflowTaskWiring, io.vanillabp.integration.adapter.spi.workflowtask.WorkflowTaskInvoker {
+  static class PermissiveInvoker implements WorkflowTaskWiring, WorkflowTaskInvoker {
 
     @Override
     public void validateTaskWiring(
         final String workflowModuleId,
         final String bpmnProcessId,
-        final java.util.Collection<io.vanillabp.integration.adapter.spi.workflowtask.BpmnTaskSpec> tasks) {
+        final Collection<BpmnTaskSpec> tasks) {
     }
 
     @Override
@@ -435,10 +466,10 @@ public class PeaDeploymentServiceTest {
     }
 
     @Override
-    public io.vanillabp.integration.adapter.spi.workflowtask.WorkflowTaskOutcome invokeWorkflowTask(
+    public WorkflowTaskOutcome invokeWorkflowTask(
         final String workflowModuleId,
         final String bpmnProcessId,
-        final io.vanillabp.integration.adapter.spi.workflowtask.TaskInvocationContext context) {
+        final TaskInvocationContext context) {
       throw new UnsupportedOperationException();
     }
 
@@ -474,13 +505,13 @@ public class PeaDeploymentServiceTest {
 
 
     @Override
-    public java.util.Map<String, Object> syncedWorkflowAggregateValues(
+    public Map<String, Object> syncedWorkflowAggregateValues(
         final String workflowModuleId,
         final String bpmnProcessId,
         final String workflowAggregateId,
-        final io.vanillabp.integration.adapter.spi.AggregateSyncMode adapterDefault) {
+        final AggregateSyncMode adapterDefault) {
 
-      return java.util.Map.of();
+      return Map.of();
 
     }
 
@@ -494,22 +525,22 @@ public class PeaDeploymentServiceTest {
   }
 
 
-  @org.junit.jupiter.api.Test
-  @org.junit.jupiter.api.DisplayName("Two adapter ids of this type cannot address different engines - the boot fails guiding")
+  @Test
+  @DisplayName("Two adapter ids of this type cannot address different engines - the boot fails guiding")
   public void twoAdapterIdsOfThisTypeAreRejected() {
 
     // The Process-Engine-API is provided by the application as beans and
     // carries no per-adapter-id connection configuration (GAPS.md, entry 14)
     final var exception = Assertions.assertThrows(
         IllegalStateException.class,
-        () -> service.validateDistinctAdapterInstances(java.util.List.of("pea-old", "pea-new")));
+        () -> service.validateDistinctAdapterInstances(List.of("pea-old", "pea-new")));
 
     Assertions.assertTrue(exception.getMessage().contains("pea-old"), exception::getMessage);
     Assertions.assertTrue(exception.getMessage().contains("pea-new"), exception::getMessage);
     Assertions.assertTrue(exception.getMessage().contains("process-engine-api"), exception::getMessage);
 
     // a single id is the normal case and never complains
-    Assertions.assertDoesNotThrow(() -> service.validateDistinctAdapterInstances(java.util.List.of("pea")));
+    Assertions.assertDoesNotThrow(() -> service.validateDistinctAdapterInstances(List.of("pea")));
     Assertions.assertDoesNotThrow(() -> service.validateDistinctAdapterInstances(null));
 
   }
@@ -520,8 +551,8 @@ public class PeaDeploymentServiceTest {
    * {@code by-adapter} cannot be served - and {@code use-prefix} rewrites the raw
    * BPMN (the API has no model type).
    */
-  @org.junit.jupiter.api.Nested
-  class NameClashAvoidance {
+  @Nested
+  class NameClashAvoidanceModes {
 
     private static final String XML = """
         <?xml version="1.0" encoding="UTF-8"?>
@@ -538,23 +569,23 @@ public class PeaDeploymentServiceTest {
         </bpmn:definitions>
         """;
 
-    private io.vanillabp.integration.adapter.migration.scoping.NameClashAvoidanceService scopingWith(
-        final io.vanillabp.integration.adapter.spi.NameClashAvoidance mode) {
+    private NameClashAvoidanceService scopingWith(
+        final NameClashAvoidance mode) {
 
-      final var adapter = io.vanillabp.integration.adapter.migration.config.AdapterConfigProperties
+      final var adapter = AdapterConfigProperties
           .ofType("process-engine-api");
       adapter.setNameClashAvoidance(mode);
-      final var properties = io.vanillabp.integration.adapter.migration.config.MigrationAdapterProperties
+      final var properties = MigrationAdapterProperties
           .builder()
-          .adapters(java.util.Map.of("pea", adapter))
-          .prioritizedAdapters(java.util.List.of("pea"))
+          .adapters(Map.of("pea", adapter))
+          .prioritizedAdapters(List.of("pea"))
           .workflowModules(
-              java.util.Map.of(
+              Map.of(
                   "loan-approval",
-                  new io.vanillabp.integration.adapter.migration.config.WorkflowModuleAdapterProperties()))
+                  new WorkflowModuleAdapterProperties()))
           .build();
       properties.validateAndLink();
-      return new io.vanillabp.integration.adapter.migration.scoping.NameClashAvoidanceService(properties);
+      return new NameClashAvoidanceService(properties);
 
     }
 
@@ -562,11 +593,11 @@ public class PeaDeploymentServiceTest {
     public void byAdapterIsRejectedWhileDeploying() {
 
       final var service = serviceScopedBy(
-          scopingWith(io.vanillabp.integration.adapter.spi.NameClashAvoidance.BY_ADAPTER));
+          scopingWith(NameClashAvoidance.BY_ADAPTER));
 
       final var context = service.prepareBpmn(
           "loan-approval", null, "risk.bpmn", "RiskAssessment", new PeaBpmnModel(
-              "risk.bpmn", XML.getBytes(StandardCharsets.UTF_8), "RiskAssessment", java.util.List.of()));
+              "risk.bpmn", XML.getBytes(StandardCharsets.UTF_8), "RiskAssessment", List.of()));
 
       final var exception = Assertions.assertThrows(
           IllegalStateException.class,
@@ -583,11 +614,11 @@ public class PeaDeploymentServiceTest {
     public void usePrefixRewritesTheDeployedBpmn() {
 
       final var service = serviceScopedBy(
-          scopingWith(io.vanillabp.integration.adapter.spi.NameClashAvoidance.USE_PREFIX));
+          scopingWith(NameClashAvoidance.USE_PREFIX));
 
       final var context = service.prepareBpmn(
           "loan-approval", null, "risk.bpmn", "RiskAssessment", new PeaBpmnModel(
-              "risk.bpmn", XML.getBytes(StandardCharsets.UTF_8), "RiskAssessment", java.util.List.of()));
+              "risk.bpmn", XML.getBytes(StandardCharsets.UTF_8), "RiskAssessment", List.of()));
 
       // the record keeps the PLAIN identifiers - they key the core's registries ...
       Assertions.assertEquals("RiskAssessment", context.getModels().getFirst().bpmnProcessId());
@@ -610,11 +641,11 @@ public class PeaDeploymentServiceTest {
     @Test
     public void noneChangesNothing() {
 
-      final var service = serviceScopedBy(scopingWith(io.vanillabp.integration.adapter.spi.NameClashAvoidance.NONE));
+      final var service = serviceScopedBy(scopingWith(NameClashAvoidance.NONE));
 
       final var context = service.prepareBpmn(
           "loan-approval", null, "risk.bpmn", "RiskAssessment", new PeaBpmnModel(
-              "risk.bpmn", XML.getBytes(StandardCharsets.UTF_8), "RiskAssessment", java.util.List.of()));
+              "risk.bpmn", XML.getBytes(StandardCharsets.UTF_8), "RiskAssessment", List.of()));
 
       Assertions.assertEquals(
           XML,

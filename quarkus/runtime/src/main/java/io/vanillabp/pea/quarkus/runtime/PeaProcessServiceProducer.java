@@ -3,12 +3,27 @@ package io.vanillabp.pea.quarkus.runtime;
 import java.util.List;
 import java.util.Map;
 
+import dev.bpmcrafters.processengineapi.correlation.CorrelationApi;
+import dev.bpmcrafters.processengineapi.correlation.SignalApi;
 import dev.bpmcrafters.processengineapi.process.StartProcessApi;
+import dev.bpmcrafters.processengineapi.task.ServiceTaskCompletionApi;
+import dev.bpmcrafters.processengineapi.task.UserTaskCompletionApi;
 import io.vanillabp.integration.adapter.migration.config.MigrationAdapterProperties;
+import io.vanillabp.integration.adapter.migration.workflowtask.WorkflowTaskRegistry;
+import io.vanillabp.integration.adapter.spi.AdapterCollaborators;
 import io.vanillabp.integration.adapter.spi.MigratableProcessService;
+import io.vanillabp.integration.adapter.spi.NameClashAvoidanceSupport;
+import io.vanillabp.integration.adapter.spi.PreCommitRegistrar;
+import io.vanillabp.integration.adapter.spi.WorkflowAggregateSync;
+import io.vanillabp.integration.adapter.spi.workflowend.WorkflowEndedInvoker;
+import io.vanillabp.integration.adapter.spi.workflowstart.BpmsInitiatedStartInvoker;
+import io.vanillabp.integration.runtime.support.AdapterCollaboratorsSupport;
 import io.vanillabp.pea.PeaAdapter;
+import io.vanillabp.pea.deployment.PeaDeployedProcessesRegistry;
 import io.vanillabp.pea.processservice.PeaProcessService;
 import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.enterprise.inject.Any;
+import jakarta.enterprise.inject.Instance;
 import jakarta.enterprise.inject.Produces;
 
 /**
@@ -31,16 +46,16 @@ public class PeaProcessServiceProducer {
    * What the platform hands the adapter, built the same way for both services of an
    * adapter id.
    */
-  static io.vanillabp.integration.adapter.spi.AdapterCollaborators collaboratorsOf(
+  static AdapterCollaborators collaboratorsOf(
       final String adapterId,
-      final io.vanillabp.integration.adapter.migration.workflowtask.WorkflowTaskRegistry workflowTaskRegistry,
-      final io.vanillabp.integration.adapter.spi.NameClashAvoidanceSupport scoping,
-      final io.vanillabp.integration.adapter.spi.WorkflowAggregateSync aggregateSync,
-      final io.vanillabp.integration.adapter.spi.PreCommitRegistrar preCommitRegistrar,
-      final jakarta.enterprise.inject.Instance<io.vanillabp.integration.adapter.spi.workflowend.WorkflowEndedInvoker> workflowEndedInvoker,
-      final jakarta.enterprise.inject.Instance<io.vanillabp.integration.adapter.spi.workflowstart.BpmsInitiatedStartInvoker> bpmsInitiatedStartInvoker) {
+      final WorkflowTaskRegistry workflowTaskRegistry,
+      final NameClashAvoidanceSupport scoping,
+      final WorkflowAggregateSync aggregateSync,
+      final PreCommitRegistrar preCommitRegistrar,
+      final Instance<WorkflowEndedInvoker> workflowEndedInvoker,
+      final Instance<BpmsInitiatedStartInvoker> bpmsInitiatedStartInvoker) {
 
-    return io.vanillabp.integration.runtime.support.AdapterCollaboratorsSupport
+    return AdapterCollaboratorsSupport
         .collaborators(
             adapterId, workflowTaskRegistry, workflowTaskRegistry, scoping, aggregateSync, preCommitRegistrar,
             workflowEndedInvoker, bpmsInitiatedStartInvoker);
@@ -51,17 +66,17 @@ public class PeaProcessServiceProducer {
   public List<MigratableProcessService<Object>> peaMigratableProcessServices(
       final MigrationAdapterProperties properties,
       final StartProcessApi startProcessApi,
-      final dev.bpmcrafters.processengineapi.task.ServiceTaskCompletionApi serviceTaskCompletionApi,
-      final dev.bpmcrafters.processengineapi.task.UserTaskCompletionApi userTaskCompletionApi,
-      final dev.bpmcrafters.processengineapi.correlation.CorrelationApi correlationApi,
-      @jakarta.enterprise.inject.Any final jakarta.enterprise.inject.Instance<dev.bpmcrafters.processengineapi.correlation.SignalApi> signalApi,
-      final io.vanillabp.pea.deployment.PeaDeployedProcessesRegistry deployedProcessesRegistry,
-      final io.vanillabp.integration.adapter.spi.WorkflowAggregateSync aggregateSync,
-      final io.vanillabp.integration.adapter.spi.NameClashAvoidanceSupport scoping,
-      final io.vanillabp.integration.adapter.spi.PreCommitRegistrar preCommitRegistrar,
-      final io.vanillabp.integration.adapter.migration.workflowtask.WorkflowTaskRegistry workflowTaskRegistry,
-      @jakarta.enterprise.inject.Any final jakarta.enterprise.inject.Instance<io.vanillabp.integration.adapter.spi.workflowend.WorkflowEndedInvoker> workflowEndedInvoker,
-      @jakarta.enterprise.inject.Any final jakarta.enterprise.inject.Instance<io.vanillabp.integration.adapter.spi.workflowstart.BpmsInitiatedStartInvoker> bpmsInitiatedStartInvoker) {
+      final ServiceTaskCompletionApi serviceTaskCompletionApi,
+      final UserTaskCompletionApi userTaskCompletionApi,
+      final CorrelationApi correlationApi,
+      @Any final Instance<SignalApi> signalApi,
+      final PeaDeployedProcessesRegistry deployedProcessesRegistry,
+      final WorkflowAggregateSync aggregateSync,
+      final NameClashAvoidanceSupport scoping,
+      final PreCommitRegistrar preCommitRegistrar,
+      final WorkflowTaskRegistry workflowTaskRegistry,
+      @Any final Instance<WorkflowEndedInvoker> workflowEndedInvoker,
+      @Any final Instance<BpmsInitiatedStartInvoker> bpmsInitiatedStartInvoker) {
 
     // ONE bean of type List with one instance PER configured adapter id of this
     // adapter's type (a CDI producer cannot yield N element beans for N

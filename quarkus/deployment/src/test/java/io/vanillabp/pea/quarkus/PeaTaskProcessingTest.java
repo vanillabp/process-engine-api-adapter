@@ -1,6 +1,8 @@
 package io.vanillabp.pea.quarkus;
 
+import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import org.jboss.shrinkwrap.api.ShrinkWrap;
 import org.jboss.shrinkwrap.api.spec.JavaArchive;
@@ -59,7 +61,7 @@ public class PeaTaskProcessingTest {
         .map(InMemoryProcessEngine.ActiveSubscription::taskDescriptionKey)
         .toList();
     Assertions.assertEquals(
-        java.util.List.of("quarkusHappy"),
+        List.of("quarkusHappy"),
         subscribed,
         "expected one subscription per task definition of the deployed BPMN");
 
@@ -68,7 +70,7 @@ public class PeaTaskProcessingTest {
     // 'fetch-variables: all' of the yaml belongs to another task definition and must
     // not reach this subscription
     Assertions.assertEquals(
-        java.util.Set.of("id"),
+        Set.of("id"),
         inMemoryProcessEngine
             .getSubscriptions()
             .getFirst()
@@ -94,7 +96,7 @@ public class PeaTaskProcessingTest {
     Assertions.assertEquals("happy", TaskWorkflowService.AGGREGATES.get("q-4711").results);
     // ... and the task was completed afterwards
     Assertions.assertEquals(
-        java.util.List.of(new InMemoryProcessEngine.CompletedTask("task-q-1")),
+        List.of(new InMemoryProcessEngine.CompletedTask("task-q-1")),
         inMemoryProcessEngine.getCompletedTasks());
 
   }

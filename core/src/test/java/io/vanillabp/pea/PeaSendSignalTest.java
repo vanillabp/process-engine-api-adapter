@@ -10,6 +10,8 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 
+import io.vanillabp.integration.spi.PhaseOperation;
+import io.vanillabp.integration.spi.PhaseTwoCall;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 import io.vanillabp.pea.mock.InMemoryProcessEngine;
 import io.vanillabp.pea.processservice.PeaProcessService;
@@ -40,12 +42,12 @@ public class PeaSendSignalTest {
 
     final var service = service();
 
-    PhaseOperations.phaseOne(service, io.vanillabp.integration.spi.PhaseOperation.SEND_SIGNAL, "mod", "Process", null,
-        null, PhaseOperations.args(io.vanillabp.integration.spi.PhaseTwoCall.ARG_SIGNAL_NAME, "OrderReceived"));
+    PhaseOperations.phaseOne(service, PhaseOperation.SEND_SIGNAL, "mod", "Process", null,
+        null, PhaseOperations.args(PhaseTwoCall.ARG_SIGNAL_NAME, "OrderReceived"));
     assertTrue(engine.getBroadcastSignals().isEmpty(), "a remote engine must not act before the commit");
 
-    PhaseOperations.phaseTwo(service, io.vanillabp.integration.spi.PhaseOperation.SEND_SIGNAL, "mod", "Process", null,
-        null, PhaseOperations.args(io.vanillabp.integration.spi.PhaseTwoCall.ARG_SIGNAL_NAME, "OrderReceived"));
+    PhaseOperations.phaseTwo(service, PhaseOperation.SEND_SIGNAL, "mod", "Process", null,
+        null, PhaseOperations.args(PhaseTwoCall.ARG_SIGNAL_NAME, "OrderReceived"));
     assertEquals(List.of("OrderReceived"), engine.getBroadcastSignals());
 
   }
@@ -58,9 +60,9 @@ public class PeaSendSignalTest {
 
     final var exception = assertThrows(
         UnsupportedOperationException.class,
-        () -> PhaseOperations.phaseTwo(service, io.vanillabp.integration.spi.PhaseOperation.SEND_SIGNAL, "mod",
+        () -> PhaseOperations.phaseTwo(service, PhaseOperation.SEND_SIGNAL, "mod",
             "Process", null, null,
-            PhaseOperations.args(io.vanillabp.integration.spi.PhaseTwoCall.ARG_SIGNAL_NAME, "OrderReceived")));
+            PhaseOperations.args(PhaseTwoCall.ARG_SIGNAL_NAME, "OrderReceived")));
 
     assertTrue(exception.getMessage().contains("OrderReceived"));
     assertTrue(exception.getMessage().contains("SignalApi"));

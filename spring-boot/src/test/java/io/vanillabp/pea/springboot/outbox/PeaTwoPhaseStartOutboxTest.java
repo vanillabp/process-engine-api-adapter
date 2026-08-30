@@ -156,7 +156,7 @@ public class PeaTwoPhaseStartOutboxTest {
 
     // BOTH phases carry the same payload: the preflight validates what phase two
     // will send
-    for (final var command : java.util.List.of(
+    for (final var command : List.of(
         startsWithMode(ExecutionMode.PREFLIGHT_CHECK).getFirst().command(), sync.command())) {
       final var payload = assertInstanceOf(PeaStartProcessCommand.class, command).get();
       assertEquals(attached.getId(), payload.get(AGGREGATE_ID_VARIABLE));

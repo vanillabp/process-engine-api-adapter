@@ -2,9 +2,12 @@ package io.vanillabp.pea;
 
 import java.io.ByteArrayInputStream;
 import java.nio.charset.StandardCharsets;
+import java.util.Collection;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.Function;
 
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.DisplayName;
@@ -81,13 +84,13 @@ public class PeaFetchVariablesTest {
   private PeaDeploymentService deploymentService(
       final PeaDeploymentServiceTest.PermissiveInvoker core) {
 
-    return new PeaDeploymentService("pea", engine, io.vanillabp.pea.TestCollaborators.of(core), engine, engine);
+    return new PeaDeploymentService("pea", engine, TestCollaborators.of(core), engine, engine);
 
   }
 
   private static PeaDeploymentServiceTest.PermissiveInvoker invoker(
-      final java.util.function.Function<String, String> aggregateIdNames,
-      final java.util.function.Function<String, List<String>> taskParameters) {
+      final Function<String, String> aggregateIdNames,
+      final Function<String, List<String>> taskParameters) {
 
     return new PeaDeploymentServiceTest.PermissiveInvoker() {
 
@@ -105,7 +108,7 @@ public class PeaFetchVariablesTest {
       }
 
       @Override
-      public java.util.Collection<String> taskParameterNames(
+      public Collection<String> taskParameterNames(
           final String workflowModuleId,
           final String bpmnProcessId,
           final String taskDefinitionOrActivityId) {
@@ -319,7 +322,7 @@ public class PeaFetchVariablesTest {
 
     Assertions.assertEquals(
         Map.of("id", "4711"),
-        subscription.narrow(new java.util.LinkedHashMap<>(Map.of("id", "4711", "bigPayload", "x"))),
+        subscription.narrow(new LinkedHashMap<>(Map.of("id", "4711", "bigPayload", "x"))),
         "the whole point of naming the variables is that the rest never travels");
 
   }

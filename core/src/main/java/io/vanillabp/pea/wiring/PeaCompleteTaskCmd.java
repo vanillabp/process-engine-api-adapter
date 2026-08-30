@@ -1,5 +1,7 @@
 package io.vanillabp.pea.wiring;
 
+import java.util.Map;
+
 import dev.bpmcrafters.processengineapi.ExecutionMode;
 import dev.bpmcrafters.processengineapi.task.CompleteTaskCmd;
 
@@ -35,7 +37,7 @@ public class PeaCompleteTaskCmd extends CompleteTaskCmd {
    */
   public PeaCompleteTaskCmd(
       final String taskId,
-      final java.util.Map<String, Object> payload) {
+      final Map<String, Object> payload) {
 
     super(taskId, payload);
     this.executionMode = ExecutionMode.SYNC;

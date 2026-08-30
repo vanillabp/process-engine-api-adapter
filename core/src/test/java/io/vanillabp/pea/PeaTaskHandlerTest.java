@@ -10,14 +10,21 @@ import java.util.concurrent.CompletableFuture;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mockito;
+import org.slf4j.LoggerFactory;
 
+import ch.qos.logback.classic.Level;
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
 import dev.bpmcrafters.processengineapi.task.ServiceTaskCompletionApi;
 import dev.bpmcrafters.processengineapi.task.TaskInformation;
+import io.vanillabp.integration.adapter.spi.AggregateSyncMode;
 import io.vanillabp.integration.adapter.spi.workflowtask.TaskInvocationContext;
 import io.vanillabp.integration.adapter.spi.workflowtask.WorkflowTaskInvoker;
 import io.vanillabp.integration.adapter.spi.workflowtask.WorkflowTaskOutcome;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 import io.vanillabp.pea.mock.InMemoryProcessEngine;
+import io.vanillabp.pea.wiring.PeaFetchVariables;
 import io.vanillabp.pea.wiring.PeaTaskHandler;
 
 /**
@@ -100,14 +107,14 @@ public class PeaTaskHandlerTest {
     /**
      * What the completion payload carries beside the ID variable.
      */
-    java.util.Map<String, Object> syncedValues = java.util.Map.of();
+    Map<String, Object> syncedValues = Map.of();
 
     @Override
-    public java.util.Map<String, Object> syncedWorkflowAggregateValues(
+    public Map<String, Object> syncedWorkflowAggregateValues(
         final String workflowModuleId,
         final String bpmnProcessId,
         final String workflowAggregateId,
-        final io.vanillabp.integration.adapter.spi.AggregateSyncMode adapterDefault) {
+        final AggregateSyncMode adapterDefault) {
 
       return syncedValues;
 
@@ -131,17 +138,32 @@ public class PeaTaskHandlerTest {
   private PeaTaskHandler handler(
       final List<String> bpmnProcessIds) {
 
-    return new PeaTaskHandler(
-        "pea", "test-module", "someTask", bpmnProcessIds, invoker, engine);
+    return PeaTaskHandler
+        .builder()
+        .adapterId("pea")
+        .workflowModuleId("test-module")
+        .taskDefinition("someTask")
+        .bpmnProcessIds(bpmnProcessIds)
+        .workflowTaskInvoker(invoker)
+        .serviceTaskCompletionApi(engine)
+        .build();
 
   }
 
   private PeaTaskHandler handler(
       final List<String> bpmnProcessIds,
-      final io.vanillabp.pea.wiring.PeaFetchVariables.Selection fetchVariables) {
+      final PeaFetchVariables.Selection fetchVariables) {
 
-    return new PeaTaskHandler(
-        "pea", "test-module", "someTask", bpmnProcessIds, invoker, engine, null, fetchVariables);
+    return PeaTaskHandler
+        .builder()
+        .adapterId("pea")
+        .workflowModuleId("test-module")
+        .taskDefinition("someTask")
+        .bpmnProcessIds(bpmnProcessIds)
+        .workflowTaskInvoker(invoker)
+        .serviceTaskCompletionApi(engine)
+        .fetchVariables(fetchVariables)
+        .build();
 
   }
 
@@ -254,7 +276,7 @@ public class PeaTaskHandlerTest {
     invoker.readParameter = "region";
     handler(
         List.of("OnlyProcess"),
-        io.vanillabp.pea.wiring.PeaFetchVariables.Selection.of(List.of("id", "region")))
+        PeaFetchVariables.Selection.of(List.of("id", "region")))
         .accept(
             new TaskInformation("task-6", Map.of()),
             Map.of("id", "4711", "region", "east"));
@@ -269,7 +291,7 @@ public class PeaTaskHandlerTest {
     // a name no @TaskParam declares cannot have reached the subscription, and handing
     // the method a null would look exactly like a variable which is genuinely absent
     invoker.readParameter = "bigPayload";
-    handler(List.of("OnlyProcess"), io.vanillabp.pea.wiring.PeaFetchVariables.Selection.of(List.of("id")))
+    handler(List.of("OnlyProcess"), PeaFetchVariables.Selection.of(List.of("id")))
         .accept(
             new TaskInformation("task-7", Map.of()),
             Map.of("id", "4711"));
@@ -292,8 +314,15 @@ public class PeaTaskHandlerTest {
     final var engineWhichNeverAnswers = Mockito.mock(
         ServiceTaskCompletionApi.class,
         Mockito.withSettings().defaultAnswer(invocation -> new CompletableFuture<>()));
-    final var testee = new PeaTaskHandler(
-        "pea", "test-module", "someTask", List.of("OnlyProcess"), invoker, engineWhichNeverAnswers);
+    final var testee = PeaTaskHandler
+        .builder()
+        .adapterId("pea")
+        .workflowModuleId("test-module")
+        .taskDefinition("someTask")
+        .bpmnProcessIds(List.of("OnlyProcess"))
+        .workflowTaskInvoker(invoker)
+        .serviceTaskCompletionApi(engineWhichNeverAnswers)
+        .build();
 
     Thread.currentThread().interrupt();
     final var warnings = warningsOf(
@@ -316,9 +345,9 @@ public class PeaTaskHandlerTest {
   private List<String> warningsOf(
       final Runnable work) {
 
-    final var logWatcher = new ch.qos.logback.core.read.ListAppender<ch.qos.logback.classic.spi.ILoggingEvent>();
+    final var logWatcher = new ListAppender<ILoggingEvent>();
     logWatcher.start();
-    final var logger = (ch.qos.logback.classic.Logger) org.slf4j.LoggerFactory
+    final var logger = (Logger) LoggerFactory
         .getLogger(PeaTaskHandler.class);
     logger.addAppender(logWatcher);
     try {
@@ -329,8 +358,8 @@ public class PeaTaskHandlerTest {
     }
     return logWatcher.list
         .stream()
-        .filter(event -> event.getLevel().isGreaterOrEqual(ch.qos.logback.classic.Level.WARN))
-        .map(ch.qos.logback.classic.spi.ILoggingEvent::getFormattedMessage)
+        .filter(event -> event.getLevel().isGreaterOrEqual(Level.WARN))
+        .map(ILoggingEvent::getFormattedMessage)
         .toList();
 
   }

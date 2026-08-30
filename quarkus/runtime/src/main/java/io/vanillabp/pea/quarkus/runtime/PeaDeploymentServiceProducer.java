@@ -3,12 +3,26 @@ package io.vanillabp.pea.quarkus.runtime;
 import java.util.List;
 import java.util.Map;
 
+import org.eclipse.microprofile.config.ConfigProvider;
+
 import dev.bpmcrafters.processengineapi.deploy.DeploymentApi;
+import dev.bpmcrafters.processengineapi.task.ServiceTaskCompletionApi;
+import dev.bpmcrafters.processengineapi.task.TaskSubscriptionApi;
+import io.smallrye.config.SmallRyeConfig;
 import io.vanillabp.integration.adapter.migration.config.MigrationAdapterProperties;
+import io.vanillabp.integration.adapter.migration.workflowtask.WorkflowTaskRegistry;
 import io.vanillabp.integration.adapter.spi.AdapterDeploymentService;
+import io.vanillabp.integration.adapter.spi.NameClashAvoidanceSupport;
+import io.vanillabp.integration.adapter.spi.PreCommitRegistrar;
+import io.vanillabp.integration.adapter.spi.WorkflowAggregateSync;
+import io.vanillabp.integration.adapter.spi.workflowend.WorkflowEndedInvoker;
+import io.vanillabp.integration.adapter.spi.workflowstart.BpmsInitiatedStartInvoker;
 import io.vanillabp.pea.PeaAdapter;
+import io.vanillabp.pea.deployment.PeaDeployedProcessesRegistry;
 import io.vanillabp.pea.deployment.PeaDeploymentService;
 import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.enterprise.inject.Any;
+import jakarta.enterprise.inject.Instance;
 import jakarta.enterprise.inject.Produces;
 import jakarta.inject.Singleton;
 
@@ -41,19 +55,19 @@ public class PeaDeploymentServiceProducer {
   public List<AdapterDeploymentService<Object, Object>> peaAdapterDeploymentServices(
       final MigrationAdapterProperties properties,
       final DeploymentApi deploymentApi,
-      final io.vanillabp.integration.adapter.migration.workflowtask.WorkflowTaskRegistry workflowTaskRegistry,
-      final dev.bpmcrafters.processengineapi.task.TaskSubscriptionApi taskSubscriptionApi,
-      final dev.bpmcrafters.processengineapi.task.ServiceTaskCompletionApi serviceTaskCompletionApi,
-      final io.vanillabp.pea.deployment.PeaDeployedProcessesRegistry deployedProcessesRegistry,
-      final io.vanillabp.integration.adapter.spi.NameClashAvoidanceSupport scoping,
-      final io.vanillabp.integration.adapter.spi.WorkflowAggregateSync aggregateSync,
-      final io.vanillabp.integration.adapter.spi.PreCommitRegistrar preCommitRegistrar,
-      @jakarta.enterprise.inject.Any final jakarta.enterprise.inject.Instance<io.vanillabp.integration.adapter.spi.workflowend.WorkflowEndedInvoker> workflowEndedInvoker,
-      @jakarta.enterprise.inject.Any final jakarta.enterprise.inject.Instance<io.vanillabp.integration.adapter.spi.workflowstart.BpmsInitiatedStartInvoker> bpmsInitiatedStartInvoker) {
+      final WorkflowTaskRegistry workflowTaskRegistry,
+      final TaskSubscriptionApi taskSubscriptionApi,
+      final ServiceTaskCompletionApi serviceTaskCompletionApi,
+      final PeaDeployedProcessesRegistry deployedProcessesRegistry,
+      final NameClashAvoidanceSupport scoping,
+      final WorkflowAggregateSync aggregateSync,
+      final PreCommitRegistrar preCommitRegistrar,
+      @Any final Instance<WorkflowEndedInvoker> workflowEndedInvoker,
+      @Any final Instance<BpmsInitiatedStartInvoker> bpmsInitiatedStartInvoker) {
 
-    final var overlay = org.eclipse.microprofile.config.ConfigProvider
+    final var overlay = ConfigProvider
         .getConfig()
-        .unwrap(io.smallrye.config.SmallRyeConfig.class)
+        .unwrap(SmallRyeConfig.class)
         .getConfigMapping(VanillaBpPeaProperties.class);
 
     return (List) properties

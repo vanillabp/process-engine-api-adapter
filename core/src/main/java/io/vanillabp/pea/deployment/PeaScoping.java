@@ -2,6 +2,7 @@ package io.vanillabp.pea.deployment;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
+import java.util.function.UnaryOperator;
 
 import javax.xml.parsers.DocumentBuilderFactory;
 import javax.xml.transform.OutputKeys;
@@ -130,7 +131,7 @@ public final class PeaScoping {
       final Document document,
       final String localName,
       final String attributeName,
-      final java.util.function.UnaryOperator<String> rewriter) {
+      final UnaryOperator<String> rewriter) {
 
     final var elements = document.getElementsByTagNameNS("*", localName);
     for (var index = 0; index < elements.getLength(); ++index) {

@@ -4,12 +4,16 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.time.Duration;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.Supplier;
 
 import javax.sql.DataSource;
 
+import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -25,14 +29,20 @@ import org.springframework.jdbc.datasource.embedded.EmbeddedDatabaseBuilder;
 import org.springframework.jdbc.datasource.embedded.EmbeddedDatabaseType;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import dev.bpmcrafters.processengineapi.ExecutionMode;
+import dev.bpmcrafters.processengineapi.task.CompleteTaskByErrorCmd;
+import dev.bpmcrafters.processengineapi.task.CompleteTaskCmd;
 import io.vanillabp.integration.spi.AggregatePersistenceAware;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 import io.vanillabp.pea.mock.InMemoryProcessEngine;
 import io.vanillabp.pea.springboot.TestPersistenceConfiguration;
 import io.vanillabp.spi.process.ProcessService;
+import io.vanillabp.spi.process.TaskNotFoundException;
 import io.vanillabp.spi.service.BpmnProcess;
+import io.vanillabp.spi.service.NoSyncWithBPMS;
+import io.vanillabp.spi.service.TaskEvent;
 import io.vanillabp.spi.service.TaskException;
 import io.vanillabp.spi.service.TaskId;
 import io.vanillabp.spi.service.WorkflowService;
@@ -85,7 +95,7 @@ public class TaskProcessingIntegrationTest {
      * Never sent to the engine - which also derives the class' mode
      * "share everything else" (opt-out).
      */
-    @io.vanillabp.spi.service.NoSyncWithBPMS
+    @NoSyncWithBPMS
     @Getter
     String secret;
 
@@ -304,7 +314,7 @@ public class TaskProcessingIntegrationTest {
     public void peaApproveNotification(
         final PeaTaskAggregate aggregate,
         @TaskId final String taskId,
-        @io.vanillabp.spi.service.TaskEvent final io.vanillabp.spi.service.TaskEvent.Event event) {
+        @TaskEvent final TaskEvent.Event event) {
 
       aggregate.taskId = taskId;
       aggregate.appendResult("usertask-"
@@ -473,9 +483,9 @@ public class TaskProcessingIntegrationTest {
   private PeaTaskWorkflowService taskWorkflowService;
 
   @Autowired
-  private org.springframework.transaction.support.TransactionTemplate transactionTemplate;
+  private TransactionTemplate transactionTemplate;
 
-  private java.util.List<ExecutionMode> completionModes(
+  private List<ExecutionMode> completionModes(
       final String method,
       final String taskId) {
 
@@ -484,9 +494,9 @@ public class TaskProcessingIntegrationTest {
         .filter(invocation -> method.equals(invocation.method()))
         .filter(invocation -> {
           final var command = invocation.command();
-          return (command instanceof dev.bpmcrafters.processengineapi.task.CompleteTaskCmd complete && taskId
+          return (command instanceof CompleteTaskCmd complete && taskId
               .equals(complete
-                  .getTaskId())) || (command instanceof dev.bpmcrafters.processengineapi.task.CompleteTaskByErrorCmd byError && taskId
+                  .getTaskId())) || (command instanceof CompleteTaskByErrorCmd byError && taskId
                       .equals(byError.getTaskId()));
         })
         .map(InMemoryProcessEngine.Invocation::executionMode)
@@ -495,7 +505,7 @@ public class TaskProcessingIntegrationTest {
   }
 
   private void awaitUntil(
-      final java.util.function.Supplier<Boolean> condition,
+      final Supplier<Boolean> condition,
       final String description) throws InterruptedException {
 
     final var deadline = System.currentTimeMillis() + 15000;
@@ -549,7 +559,7 @@ public class TaskProcessingIntegrationTest {
     seed("4722");
     engine.deliverTask("task-c2", "peaAsync", PROCESS, Map.of("id", "4722"));
 
-    org.junit.jupiter.api.Assertions.assertThrows(
+    Assertions.assertThrows(
         RuntimeException.class,
         () -> transactionTemplate.executeWithoutResult(status -> {
           taskWorkflowService.completeAsyncTask(stored("4722"), "task-c2");
@@ -595,11 +605,11 @@ public class TaskProcessingIntegrationTest {
     seed("4724");
 
     final var startedAt = System.nanoTime();
-    final var exception = org.junit.jupiter.api.Assertions.assertThrows(
-        io.vanillabp.spi.process.TaskNotFoundException.class,
+    final var exception = Assertions.assertThrows(
+        TaskNotFoundException.class,
         () -> transactionTemplate.executeWithoutResult(status -> taskWorkflowService
             .completeAsyncTask(stored("4724"), "no-such-task")));
-    final var elapsed = java.time.Duration.ofNanos(System.nanoTime() - startedAt);
+    final var elapsed = Duration.ofNanos(System.nanoTime() - startedAt);
 
     assertTrue(exception.getMessage().contains("no-such-task"));
     // the preflight completion answers exactly, and this runs in the caller's
@@ -681,8 +691,8 @@ public class TaskProcessingIntegrationTest {
 
     seed("4733");
 
-    final var exception = org.junit.jupiter.api.Assertions.assertThrows(
-        io.vanillabp.spi.process.TaskNotFoundException.class,
+    final var exception = Assertions.assertThrows(
+        TaskNotFoundException.class,
         () -> transactionTemplate.executeWithoutResult(status -> taskWorkflowService
             .completeUserTask(stored("4733"), "utask-unknown")));
     assertTrue(exception.getMessage().contains("utask-unknown"));
@@ -725,7 +735,7 @@ public class TaskProcessingIntegrationTest {
         "the correlation-id correlation to be dispatched");
 
     final var before = engine.getCorrelatedMessages().size();
-    org.junit.jupiter.api.Assertions.assertThrows(
+    Assertions.assertThrows(
         RuntimeException.class,
         () -> transactionTemplate.executeWithoutResult(status -> {
           taskWorkflowService.correlate(stored("4742"), "PeaNeverSent");
@@ -763,7 +773,7 @@ public class TaskProcessingIntegrationTest {
     // variable plus the shared aggregate state (see decision 1 in the repository's DECISIONS.md)
     // ('results' is still null on a freshly started workflow, and the
     // @NoSyncWithBPMS attribute is absent as always)
-    final var variables = new java.util.HashMap<>(instance.variables());
+    final var variables = new HashMap<>(instance.variables());
     assertEquals("4743", variables.remove("id"));
     assertTrue(variables.containsKey("results") && (variables.get("results") == null));
     variables.remove("results");

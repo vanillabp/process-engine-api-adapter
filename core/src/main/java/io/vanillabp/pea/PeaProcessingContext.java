@@ -3,6 +3,8 @@ package io.vanillabp.pea;
 import java.util.ArrayList;
 import java.util.List;
 
+import dev.bpmcrafters.processengineapi.task.TaskSubscription;
+
 /**
  * The adapter's processing context ({@code PC} type parameter of
  * {@link io.vanillabp.integration.adapter.spi.AdapterDeploymentService}).
@@ -45,9 +47,9 @@ public class PeaProcessingContext {
    * The task subscriptions opened by startWorkflowProcessing, closed by
    * stopWorkflowProcessing (reverse order).
    */
-  private final List<dev.bpmcrafters.processengineapi.task.TaskSubscription> subscriptions = new ArrayList<>();
+  private final List<TaskSubscription> subscriptions = new ArrayList<>();
 
-  public List<dev.bpmcrafters.processengineapi.task.TaskSubscription> getSubscriptions() {
+  public List<TaskSubscription> getSubscriptions() {
 
     return subscriptions;
 
