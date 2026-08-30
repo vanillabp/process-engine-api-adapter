@@ -1,6 +1,7 @@
 package io.vanillabp.pea.springboot.it;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -531,14 +532,18 @@ public class TaskProcessingIntegrationTest {
       final var aggregate = stored("4721");
       aggregate.appendResult("completing");
       taskWorkflowService.completeAsyncTask(aggregate, "task-c1");
-      // INSIDE the transaction: probes/preflight ran (PREFLIGHT_CHECK, never
-      // advancing), but NO SYNC completion happened yet
-      assertTrue(
-          completionModes("completeTask", "task-c1")
-              .stream()
-              .allMatch(mode -> mode == ExecutionMode.PREFLIGHT_CHECK),
-          "before the commit only PREFLIGHT_CHECK commands may run");
+      // the completion must not have advanced the process yet - the adapter's
+      // PREFLIGHT_CHECK is registered with the pre-commit hook and runs during the commit,
+      // which is why it cannot be read here
+      assertFalse(
+          completionModes("completeTask", "task-c1").contains(ExecutionMode.SYNC),
+          "nothing may advance the process while the caller's transaction is open");
     });
+
+    // by now the commit has returned, so the check which could still have aborted it ran
+    assertTrue(
+        completionModes("completeTask", "task-c1").contains(ExecutionMode.PREFLIGHT_CHECK),
+        "the PREFLIGHT_CHECK has to have run by the time the commit returned");
 
     // the SYNC completion is dispatched through the outbox AFTER the commit
     awaitUntil(
@@ -647,12 +652,14 @@ public class TaskProcessingIntegrationTest {
       final var aggregate = stored("4731");
       aggregate.appendResult("approving");
       taskWorkflowService.completeUserTask(aggregate, "utask-1");
-      assertTrue(
-          completionModes("completeTask", "utask-1")
-              .stream()
-              .allMatch(mode -> mode == ExecutionMode.PREFLIGHT_CHECK),
-          "before the commit only PREFLIGHT_CHECK commands may run");
+      assertFalse(
+          completionModes("completeTask", "utask-1").contains(ExecutionMode.SYNC),
+          "nothing may advance the process while the caller's transaction is open");
     });
+
+    assertTrue(
+        completionModes("completeTask", "utask-1").contains(ExecutionMode.PREFLIGHT_CHECK),
+        "the PREFLIGHT_CHECK has to have run by the time the commit returned");
 
     awaitUntil(
         () -> completionModes("completeTask", "utask-1").contains(ExecutionMode.SYNC),
