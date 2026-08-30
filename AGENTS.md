@@ -5,6 +5,12 @@ The VanillaBP adapter for the Process-Engine-API, on Spring Boot and on Quarkus.
 Read [`README.md`](./README.md) first, together with [`GAPS.md`](./GAPS.md): the gaps are what this
 API cannot do, and most of the adapter's shape follows from them.
 
+What this adapter implements is described once, for every adapter, in
+[`ADAPTER-AUTHORS.md`](https://github.com/vanillabp/adapter-platform-integration/blob/main/migration-adapter/ADAPTER-AUTHORS.md)
+of the platform repository: the two interfaces, the calls the core expects back, what an answer
+promises and what a wrong one costs. Read it before changing anything on the SPI boundary. Where
+this adapter cannot keep a promise the document makes, that is a gap and belongs in `GAPS.md`.
+
 ## The decision log is binding
 
 [`DECISIONS.md`](./DECISIONS.md) holds the decisions several places in this repository rely on. It
