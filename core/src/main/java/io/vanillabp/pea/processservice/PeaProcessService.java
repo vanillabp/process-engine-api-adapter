@@ -1,20 +1,46 @@
 package io.vanillabp.pea.processservice;
 
+import java.io.ByteArrayInputStream;
+import java.io.InputStream;
+import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import dev.bpmcrafters.processengineapi.ExecutionMode;
+import dev.bpmcrafters.processengineapi.correlation.CorrelateMessageCmd;
+import dev.bpmcrafters.processengineapi.correlation.Correlation;
+import dev.bpmcrafters.processengineapi.correlation.CorrelationApi;
+import dev.bpmcrafters.processengineapi.correlation.SendSignalCmd;
+import dev.bpmcrafters.processengineapi.correlation.SignalApi;
 import dev.bpmcrafters.processengineapi.process.ProcessInformation;
 import dev.bpmcrafters.processengineapi.process.StartProcessApi;
+import dev.bpmcrafters.processengineapi.process.StartProcessByMessageCmd;
+import dev.bpmcrafters.processengineapi.task.CompleteTaskCmd;
+import dev.bpmcrafters.processengineapi.task.ServiceTaskCompletionApi;
+import dev.bpmcrafters.processengineapi.task.UserTaskCompletionApi;
+import io.vanillabp.integration.adapter.spi.AdapterCollaborators;
+import io.vanillabp.integration.adapter.spi.AggregateSyncMode;
 import io.vanillabp.integration.adapter.spi.MigratableProcessService;
+import io.vanillabp.integration.adapter.spi.NameClashAvoidanceSupport;
 import io.vanillabp.integration.adapter.spi.PhaseOneRequest;
 import io.vanillabp.integration.adapter.spi.PhaseOperationHandler;
 import io.vanillabp.integration.adapter.spi.PhaseTwoRequest;
+import io.vanillabp.integration.adapter.spi.PreCommitRegistrar;
+import io.vanillabp.integration.adapter.spi.WorkflowAggregateSync;
 import io.vanillabp.integration.adapter.spi.WorkflowAwareness;
+import io.vanillabp.integration.adapter.spi.WorkflowScope;
 import io.vanillabp.integration.spi.AggregatePersistenceAware;
 import io.vanillabp.integration.spi.PhaseOperation;
 import io.vanillabp.pea.PeaAdapter;
+import io.vanillabp.pea.deployment.PeaDeployedProcesses;
+import io.vanillabp.pea.wiring.PeaCompleteTaskByErrorCmd;
+import io.vanillabp.pea.wiring.PeaCompleteTaskCmd;
+import io.vanillabp.spi.process.ProcessDefinition;
+import io.vanillabp.spi.process.WorkflowHistory;
+import lombok.extern.slf4j.Slf4j;
 
 /**
  * The Process-Engine-API adapter's per-adapter runtime the migration adapter delegates
@@ -50,7 +76,7 @@ import io.vanillabp.pea.PeaAdapter;
  *
  * @param <A> The workflow aggregate type
  */
-@lombok.extern.slf4j.Slf4j
+@Slf4j
 // see decision 3 in the repository's DECISIONS.md
 @SuppressWarnings("LombokSetterMayBeUsed")
 public class PeaProcessService<A> implements MigratableProcessService<A> {
@@ -59,17 +85,17 @@ public class PeaProcessService<A> implements MigratableProcessService<A> {
 
   private final StartProcessApi startProcessApi;
 
-  private final dev.bpmcrafters.processengineapi.task.ServiceTaskCompletionApi serviceTaskCompletionApi;
+  private final ServiceTaskCompletionApi serviceTaskCompletionApi;
 
-  private final dev.bpmcrafters.processengineapi.task.UserTaskCompletionApi userTaskCompletionApi;
+  private final UserTaskCompletionApi userTaskCompletionApi;
 
-  private final dev.bpmcrafters.processengineapi.correlation.CorrelationApi correlationApi;
+  private final CorrelationApi correlationApi;
 
   /**
    * The engine's signal API. Optional: an engine implementation without
    * it leaves signals unsupported, which {@link #sendSignalPhaseTwo} says.
    */
-  private dev.bpmcrafters.processengineapi.correlation.SignalApi signalApi;
+  private SignalApi signalApi;
 
   /**
    * Hands over the engine's signal API.
@@ -77,7 +103,7 @@ public class PeaProcessService<A> implements MigratableProcessService<A> {
    * @param signalApi The signal API or <code>null</code>
    */
   public void setSignalApi(
-      final dev.bpmcrafters.processengineapi.correlation.SignalApi signalApi) {
+      final SignalApi signalApi) {
 
     this.signalApi = signalApi;
 
@@ -89,33 +115,32 @@ public class PeaProcessService<A> implements MigratableProcessService<A> {
    * calls, which is what this adapter did before - correct, with a wider window between the
    * check and the phase-two dispatch.
    */
-  private final io.vanillabp.integration.adapter.spi.PreCommitRegistrar preCommitRegistrar;
+  private final PreCommitRegistrar preCommitRegistrar;
 
   /**
    * Everything the platform hands over. An adapter which is registered incompletely does
-   * not come into existence (see
-   * {@link io.vanillabp.integration.adapter.spi.AdapterCollaborators}).
+   * not come into existence (see {@link AdapterCollaborators}).
    */
-  private final io.vanillabp.integration.adapter.spi.AdapterCollaborators collaborators;
+  private final AdapterCollaborators collaborators;
 
   public PeaProcessService(
       final String adapterId,
       final StartProcessApi startProcessApi,
-      final dev.bpmcrafters.processengineapi.task.ServiceTaskCompletionApi serviceTaskCompletionApi,
-      final dev.bpmcrafters.processengineapi.task.UserTaskCompletionApi userTaskCompletionApi,
-      final dev.bpmcrafters.processengineapi.correlation.CorrelationApi correlationApi) {
+      final ServiceTaskCompletionApi serviceTaskCompletionApi,
+      final UserTaskCompletionApi userTaskCompletionApi,
+      final CorrelationApi correlationApi) {
 
-    this(adapterId, startProcessApi, serviceTaskCompletionApi, userTaskCompletionApi, correlationApi, new io.vanillabp.pea.deployment.PeaDeployedProcesses());
+    this(adapterId, startProcessApi, serviceTaskCompletionApi, userTaskCompletionApi, correlationApi, new PeaDeployedProcesses());
 
   }
 
   public PeaProcessService(
       final String adapterId,
       final StartProcessApi startProcessApi,
-      final dev.bpmcrafters.processengineapi.task.ServiceTaskCompletionApi serviceTaskCompletionApi,
-      final dev.bpmcrafters.processengineapi.task.UserTaskCompletionApi userTaskCompletionApi,
-      final dev.bpmcrafters.processengineapi.correlation.CorrelationApi correlationApi,
-      final io.vanillabp.pea.deployment.PeaDeployedProcesses deployedProcesses) {
+      final ServiceTaskCompletionApi serviceTaskCompletionApi,
+      final UserTaskCompletionApi userTaskCompletionApi,
+      final CorrelationApi correlationApi,
+      final PeaDeployedProcesses deployedProcesses) {
 
     this(adapterId, startProcessApi, serviceTaskCompletionApi, userTaskCompletionApi, correlationApi, deployedProcesses, null);
 
@@ -124,25 +149,23 @@ public class PeaProcessService<A> implements MigratableProcessService<A> {
   /**
    * The core's sync model. The Process-Engine-API is treated as a
    * REMOTE BPMS - it can only evaluate what VanillaBP puts into the payload - so
-   * the adapter's default is
-   * {@link io.vanillabp.integration.adapter.spi.AggregateSyncMode#FULL}. May be
-   * <code>null</code> (tests): only the technical aggregate-ID variable travels
-   * then.
+   * the adapter's default is {@link AggregateSyncMode#FULL}. May be <code>null</code>
+   * (tests): only the technical aggregate-ID variable travels then.
    */
-  private final io.vanillabp.integration.adapter.spi.WorkflowAggregateSync aggregateSync;
+  private final WorkflowAggregateSync aggregateSync;
 
   /**
    * The default of this adapter: everything is shared unless the application
    * excludes it ({@code @NoSyncWithBPMS}).
    */
-  public static final io.vanillabp.integration.adapter.spi.AggregateSyncMode SYNC_MODE = io.vanillabp.integration.adapter.spi.AggregateSyncMode.FULL;
+  public static final AggregateSyncMode SYNC_MODE = AggregateSyncMode.FULL;
 
   /**
    * The core's name-clash-avoidance model: translates process ids, message
    * names and error codes into what the engine knows. May be <code>null</code>
    * (tests): identifiers are passed through then.
    */
-  private final io.vanillabp.integration.adapter.spi.NameClashAvoidanceSupport scoping;
+  private final NameClashAvoidanceSupport scoping;
 
   /**
    * The BPMN process id as the engine knows it.
@@ -184,7 +207,7 @@ public class PeaProcessService<A> implements MigratableProcessService<A> {
       final Object workflowAggregateId,
       final A workflowAggregate) {
 
-    final var payload = new java.util.LinkedHashMap<String, Object>();
+    final var payload = new LinkedHashMap<String, Object>();
     if (aggregatePersistence == null) {
       // no persistence at hand (e.g. a test driving the SPI directly): neither the
       // shared attributes nor the technical ID variable can be determined
@@ -204,11 +227,11 @@ public class PeaProcessService<A> implements MigratableProcessService<A> {
   public PeaProcessService(
       final String adapterId,
       final StartProcessApi startProcessApi,
-      final dev.bpmcrafters.processengineapi.task.ServiceTaskCompletionApi serviceTaskCompletionApi,
-      final dev.bpmcrafters.processengineapi.task.UserTaskCompletionApi userTaskCompletionApi,
-      final dev.bpmcrafters.processengineapi.correlation.CorrelationApi correlationApi,
-      final io.vanillabp.pea.deployment.PeaDeployedProcesses deployedProcesses,
-      final io.vanillabp.integration.adapter.spi.AdapterCollaborators collaborators) {
+      final ServiceTaskCompletionApi serviceTaskCompletionApi,
+      final UserTaskCompletionApi userTaskCompletionApi,
+      final CorrelationApi correlationApi,
+      final PeaDeployedProcesses deployedProcesses,
+      final AdapterCollaborators collaborators) {
 
     this.collaborators = collaborators;
     this.aggregateSync = collaborators == null
@@ -234,7 +257,7 @@ public class PeaProcessService<A> implements MigratableProcessService<A> {
    * definitions and BPMN XML (the Process-Engine-API has no repository API, see
    * {@code GAPS.md}).
    */
-  private final io.vanillabp.pea.deployment.PeaDeployedProcesses deployedProcesses;
+  private final PeaDeployedProcesses deployedProcesses;
 
   /**
    * The viewer API's process definitions. The Process-Engine-API knows neither
@@ -245,7 +268,7 @@ public class PeaProcessService<A> implements MigratableProcessService<A> {
    * BPMS-dialect-specific.
    */
   @Override
-  public java.util.List<io.vanillabp.spi.process.ProcessDefinition> getProcessDefinitions(
+  public List<ProcessDefinition> getProcessDefinitions(
       final String workflowModuleId,
       final String bpmnProcessId,
       final AggregatePersistenceAware<A> aggregatePersistence,
@@ -260,22 +283,22 @@ public class PeaProcessService<A> implements MigratableProcessService<A> {
               + "reports no element history and therefore no secondary contexts (see GAPS.md)",
           adapterId,
           historyContext);
-      return java.util.List.of();
+      return List.of();
     }
 
     final var deployed = deployedProcesses.deployedVersionOf(workflowModuleId, bpmnProcessId);
     if (deployed == null) {
-      return java.util.List.of();
+      return List.of();
     }
-    return java.util.List.of(
-        new io.vanillabp.spi.process.ProcessDefinition(
-            io.vanillabp.pea.deployment.PeaDeployedProcesses.definitionId(workflowModuleId,
+    return List.of(
+        new ProcessDefinition(
+            PeaDeployedProcesses.definitionId(workflowModuleId,
                 bpmnProcessId), bpmnProcessId, deployed.deploymentKey(), null));
 
   }
 
   @Override
-  public java.io.InputStream getBpmnXml(
+  public InputStream getBpmnXml(
       final String workflowModuleId,
       final String bpmnProcessId,
       final String processDefinitionId) {
@@ -283,7 +306,7 @@ public class PeaProcessService<A> implements MigratableProcessService<A> {
     final var deployed = deployedProcesses.byDefinitionId(processDefinitionId);
     return deployed == null
         ? null
-        : new java.io.ByteArrayInputStream(
+        : new ByteArrayInputStream(
             deployed
                 .model()
                 .resource());
@@ -297,7 +320,7 @@ public class PeaProcessService<A> implements MigratableProcessService<A> {
    * definition the workflow was deployed with.
    */
   @Override
-  public io.vanillabp.spi.process.WorkflowHistory getWorkflowHistory(
+  public WorkflowHistory getWorkflowHistory(
       final String workflowModuleId,
       final String bpmnProcessId,
       final AggregatePersistenceAware<A> aggregatePersistence,
@@ -311,8 +334,8 @@ public class PeaProcessService<A> implements MigratableProcessService<A> {
     if (deployed == null) {
       return null;
     }
-    return new io.vanillabp.spi.process.WorkflowHistory(
-        io.vanillabp.pea.deployment.PeaDeployedProcesses.definitionId(workflowModuleId,
+    return new WorkflowHistory(
+        PeaDeployedProcesses.definitionId(workflowModuleId,
             bpmnProcessId), null, null, null);
 
   }
@@ -401,7 +424,7 @@ public class PeaProcessService<A> implements MigratableProcessService<A> {
 
   @Override
   public WorkflowAwareness awarenessOfTask(
-      final io.vanillabp.integration.adapter.spi.WorkflowScope scope,
+      final WorkflowScope scope,
       final Object workflowAggregateId,
       final String taskId) {
 
@@ -413,14 +436,14 @@ public class PeaProcessService<A> implements MigratableProcessService<A> {
     // need typed errors).
     try {
       serviceTaskCompletionApi
-          .completeTask(new io.vanillabp.pea.wiring.PeaCompleteTaskCmd(
-              taskId, dev.bpmcrafters.processengineapi.ExecutionMode.PREFLIGHT_CHECK))
+          .completeTask(new PeaCompleteTaskCmd(
+              taskId, ExecutionMode.PREFLIGHT_CHECK))
           .get();
       return WorkflowAwareness.ACTIVE;
     } catch (final InterruptedException e) {
       Thread.currentThread().interrupt();
       return WorkflowAwareness.BPMS_UNAVAILABLE;
-    } catch (final java.util.concurrent.ExecutionException e) {
+    } catch (final ExecutionException e) {
       log.debug(
           "PEA[{}]: preflight probe of task '{}' failed - reporting UNKNOWN_TO_BPMS",
           adapterId,
@@ -439,8 +462,8 @@ public class PeaProcessService<A> implements MigratableProcessService<A> {
     // which keeps the window to the phase-two dispatch small
     beforeCommit(
         request.aggregatePersistence(),
-        () -> preflight(new io.vanillabp.pea.wiring.PeaCompleteTaskCmd(
-            request.taskId(), dev.bpmcrafters.processengineapi.ExecutionMode.PREFLIGHT_CHECK), request.taskId(),
+        () -> preflight(new PeaCompleteTaskCmd(
+            request.taskId(), ExecutionMode.PREFLIGHT_CHECK), request.taskId(),
             "completing"));
 
   }
@@ -450,8 +473,8 @@ public class PeaProcessService<A> implements MigratableProcessService<A> {
 
     beforeCommit(
         request.aggregatePersistence(),
-        () -> preflight(new io.vanillabp.pea.wiring.PeaCompleteTaskCmd(
-            request.taskId(), dev.bpmcrafters.processengineapi.ExecutionMode.PREFLIGHT_CHECK), request.taskId(),
+        () -> preflight(new PeaCompleteTaskCmd(
+            request.taskId(), ExecutionMode.PREFLIGHT_CHECK), request.taskId(),
             "canceling"));
 
   }
@@ -480,7 +503,7 @@ public class PeaProcessService<A> implements MigratableProcessService<A> {
   }
 
   private void preflight(
-      final dev.bpmcrafters.processengineapi.task.CompleteTaskCmd command,
+      final CompleteTaskCmd command,
       final String taskId,
       final String operationDescription) {
 
@@ -492,7 +515,7 @@ public class PeaProcessService<A> implements MigratableProcessService<A> {
       Thread.currentThread().interrupt();
       throw new IllegalStateException(
           "Interrupted while %s task '%s'".formatted(operationDescription, taskId), e);
-    } catch (final java.util.concurrent.ExecutionException e) {
+    } catch (final ExecutionException e) {
       throw new IllegalStateException(
           ("The task '%s' is gone (completed or canceled meanwhile) - aborting the transaction "
               + "%s it! If this task was completed by a concurrent redelivery, retrying the "
@@ -509,7 +532,7 @@ public class PeaProcessService<A> implements MigratableProcessService<A> {
       serviceTaskCompletionApi
           // The aggregate changed before the task was completed - the
           // engine only sees what the adapter sends
-          .completeTask(new io.vanillabp.pea.wiring.PeaCompleteTaskCmd(
+          .completeTask(new PeaCompleteTaskCmd(
               request.taskId(), payloadOf(request.aggregatePersistence(), request.workflowAggregateId(), null)))
           .get();
       log.info(
@@ -523,7 +546,7 @@ public class PeaProcessService<A> implements MigratableProcessService<A> {
       throw phaseTwoFailed(
           "completing task '%s'".formatted(request.taskId()), "task", request.workflowModuleId(),
           request.bpmnProcessId(), e);
-    } catch (final java.util.concurrent.ExecutionException e) {
+    } catch (final ExecutionException e) {
       throw phaseTwoFailed(
           "completing task '%s'".formatted(request.taskId()), "task", request.workflowModuleId(),
           request.bpmnProcessId(), e.getCause());
@@ -538,7 +561,7 @@ public class PeaProcessService<A> implements MigratableProcessService<A> {
       serviceTaskCompletionApi
           // The error boundary's outgoing path may branch on the
           // aggregate, which the caller changed before canceling the task
-          .completeTaskByError(new io.vanillabp.pea.wiring.PeaCompleteTaskByErrorCmd(
+          .completeTaskByError(new PeaCompleteTaskByErrorCmd(
               request.taskId(), scopedIdentifier(request.workflowModuleId(),
                   request.bpmnErrorCode()), "canceled via ProcessService#cancelTask", payloadOf(
                       request.aggregatePersistence(), request.workflowAggregateId(), null)))
@@ -555,7 +578,7 @@ public class PeaProcessService<A> implements MigratableProcessService<A> {
       throw phaseTwoFailed(
           "canceling task '%s'".formatted(request.taskId()), "task", request.workflowModuleId(),
           request.bpmnProcessId(), e);
-    } catch (final java.util.concurrent.ExecutionException e) {
+    } catch (final ExecutionException e) {
       throw phaseTwoFailed(
           "canceling task '%s'".formatted(request.taskId()), "task", request.workflowModuleId(),
           request.bpmnProcessId(), e.getCause());
@@ -565,7 +588,7 @@ public class PeaProcessService<A> implements MigratableProcessService<A> {
 
   @Override
   public WorkflowAwareness awarenessOfUserTask(
-      final io.vanillabp.integration.adapter.spi.WorkflowScope scope,
+      final WorkflowScope scope,
       final Object workflowAggregateId,
       final String taskId) {
 
@@ -573,14 +596,14 @@ public class PeaProcessService<A> implements MigratableProcessService<A> {
     // USER-task completion API (untyped failures map to UNKNOWN - GAPS.md)
     try {
       userTaskCompletionApi
-          .completeTask(new io.vanillabp.pea.wiring.PeaCompleteTaskCmd(
-              taskId, dev.bpmcrafters.processengineapi.ExecutionMode.PREFLIGHT_CHECK))
+          .completeTask(new PeaCompleteTaskCmd(
+              taskId, ExecutionMode.PREFLIGHT_CHECK))
           .get();
       return WorkflowAwareness.ACTIVE;
     } catch (final InterruptedException e) {
       Thread.currentThread().interrupt();
       return WorkflowAwareness.BPMS_UNAVAILABLE;
-    } catch (final java.util.concurrent.ExecutionException e) {
+    } catch (final ExecutionException e) {
       log.debug(
           "PEA[{}]: preflight probe of user task '{}' failed - reporting UNKNOWN_TO_BPMS",
           adapterId,
@@ -611,14 +634,14 @@ public class PeaProcessService<A> implements MigratableProcessService<A> {
 
     try {
       userTaskCompletionApi
-          .completeTask(new io.vanillabp.pea.wiring.PeaCompleteTaskCmd(
-              taskId, dev.bpmcrafters.processengineapi.ExecutionMode.PREFLIGHT_CHECK))
+          .completeTask(new PeaCompleteTaskCmd(
+              taskId, ExecutionMode.PREFLIGHT_CHECK))
           .get();
     } catch (final InterruptedException e) {
       Thread.currentThread().interrupt();
       throw new IllegalStateException(
           "Interrupted while %s task '%s'".formatted(operationDescription, taskId), e);
-    } catch (final java.util.concurrent.ExecutionException e) {
+    } catch (final ExecutionException e) {
       throw new IllegalStateException(
           ("The user task '%s' is gone (completed or canceled meanwhile) - aborting the "
               + "transaction %s it!")
@@ -632,7 +655,7 @@ public class PeaProcessService<A> implements MigratableProcessService<A> {
 
     try {
       userTaskCompletionApi
-          .completeTask(new io.vanillabp.pea.wiring.PeaCompleteTaskCmd(
+          .completeTask(new PeaCompleteTaskCmd(
               request.taskId(), payloadOf(request.aggregatePersistence(), request.workflowAggregateId(), null)))
           .get();
       log.info(
@@ -646,7 +669,7 @@ public class PeaProcessService<A> implements MigratableProcessService<A> {
       throw phaseTwoFailed(
           "completing user task '%s'".formatted(request.taskId()), "user task", request.workflowModuleId(),
           request.bpmnProcessId(), e);
-    } catch (final java.util.concurrent.ExecutionException e) {
+    } catch (final ExecutionException e) {
       throw phaseTwoFailed(
           "completing user task '%s'".formatted(request.taskId()), "user task", request.workflowModuleId(),
           request.bpmnProcessId(), e.getCause());
@@ -659,7 +682,7 @@ public class PeaProcessService<A> implements MigratableProcessService<A> {
 
     try {
       userTaskCompletionApi
-          .completeTaskByError(new io.vanillabp.pea.wiring.PeaCompleteTaskByErrorCmd(
+          .completeTaskByError(new PeaCompleteTaskByErrorCmd(
               request.taskId(), request.bpmnErrorCode(), "canceled via ProcessService#cancelUserTask"))
           .get();
       log.info(
@@ -674,7 +697,7 @@ public class PeaProcessService<A> implements MigratableProcessService<A> {
       throw phaseTwoFailed(
           "canceling user task '%s'".formatted(request.taskId()), "user task", request.workflowModuleId(),
           request.bpmnProcessId(), e);
-    } catch (final java.util.concurrent.ExecutionException e) {
+    } catch (final ExecutionException e) {
       throw phaseTwoFailed(
           "canceling user task '%s'".formatted(request.taskId()), "user task", request.workflowModuleId(),
           request.bpmnProcessId(), e.getCause());
@@ -684,8 +707,8 @@ public class PeaProcessService<A> implements MigratableProcessService<A> {
 
   @Override
   public WorkflowAwareness awarenessOfWorkflow(
-      final io.vanillabp.integration.adapter.spi.WorkflowScope scope,
-      final io.vanillabp.integration.spi.AggregatePersistenceAware<A> aggregatePersistence,
+      final WorkflowScope scope,
+      final AggregatePersistenceAware<A> aggregatePersistence,
       final Object workflowAggregateId) {
 
     // the Process-Engine-API offers NO way to probe a workflow's existence: there
@@ -704,7 +727,7 @@ public class PeaProcessService<A> implements MigratableProcessService<A> {
 
   }
 
-  private final java.util.concurrent.atomic.AtomicBoolean noWorkflowAwarenessWarned = new java.util.concurrent.atomic.AtomicBoolean();
+  private final AtomicBoolean noWorkflowAwarenessWarned = new AtomicBoolean();
 
   /**
    * Always <code>false</code>: the Process-Engine-API has no query API, and its command
@@ -735,8 +758,8 @@ public class PeaProcessService<A> implements MigratableProcessService<A> {
    */
   @Override
   public WorkflowAwareness awarenessOfWorkflowForRedispatch(
-      final io.vanillabp.integration.adapter.spi.WorkflowScope scope,
-      final io.vanillabp.integration.spi.AggregatePersistenceAware<A> aggregatePersistence,
+      final WorkflowScope scope,
+      final AggregatePersistenceAware<A> aggregatePersistence,
       final Object workflowAggregateId) {
 
     return WorkflowAwareness.UNKNOWN_TO_BPMS;
@@ -785,7 +808,7 @@ public class PeaProcessService<A> implements MigratableProcessService<A> {
    * Whether repeating a failed phase-two operation may succeed.
    * <p>
    * The Process-Engine-API declares no typed exceptions: whatever an engine
-   * implementation throws arrives wrapped in an {@link java.util.concurrent.ExecutionException},
+   * implementation throws arrives wrapped in an {@link ExecutionException},
    * and "the engine is unreachable" looks exactly like "the engine refused". So only one
    * family can be classified, and it is the one this adapter throws itself: where the API
    * cannot do what VanillaBP asks - a signal without a {@code SignalApi}, pushing a changed
@@ -904,8 +927,8 @@ public class PeaProcessService<A> implements MigratableProcessService<A> {
     // workflow, so there is no aggregate whose state could be meant
     try {
       signalApi
-          .sendSignal(new dev.bpmcrafters.processengineapi.correlation.SendSignalCmd(
-              scopedIdentifier(request.workflowModuleId(), request.signalName()), java.util.Map.of()))
+          .sendSignal(new SendSignalCmd(
+              scopedIdentifier(request.workflowModuleId(), request.signalName()), Map.of()))
           .get();
       log.info(
           "PEA[{}]: broadcast signal '{}' of workflow module '{}'",
@@ -919,7 +942,7 @@ public class PeaProcessService<A> implements MigratableProcessService<A> {
       throw new IllegalStateException(
           "PEA[%s]: broadcasting signal '%s' of workflow module '%s' was interrupted"
               .formatted(adapterId, request.signalName(), request.workflowModuleId()), e);
-    } catch (final java.util.concurrent.ExecutionException e) {
+    } catch (final ExecutionException e) {
       throw new IllegalStateException(
           "PEA[%s]: broadcasting signal '%s' of workflow module '%s' failed"
               .formatted(adapterId, request.signalName(), request.workflowModuleId()), e.getCause());
@@ -939,11 +962,11 @@ public class PeaProcessService<A> implements MigratableProcessService<A> {
         : String.valueOf(request.workflowAggregateId());
     try {
       correlationApi
-          .correlateMessage(new dev.bpmcrafters.processengineapi.correlation.CorrelateMessageCmd(
+          .correlateMessage(new CorrelateMessageCmd(
               scopedIdentifier(request.workflowModuleId(), request.messageName()), payloadOf(
                   request.aggregatePersistence(),
                   request.workflowAggregateId(),
-                  null), dev.bpmcrafters.processengineapi.correlation.Correlation.Companion
+                  null), Correlation.Companion
                       .withKey(correlationKey)))
           .get();
       log.info(
@@ -959,7 +982,7 @@ public class PeaProcessService<A> implements MigratableProcessService<A> {
       throw phaseTwoFailed(
           "correlating message '%s' (correlation key '%s')".formatted(request.messageName(), correlationKey),
           "message", request.workflowModuleId(), request.bpmnProcessId(), e);
-    } catch (final java.util.concurrent.ExecutionException e) {
+    } catch (final ExecutionException e) {
       throw phaseTwoFailed(
           "correlating message '%s' (correlation key '%s')".formatted(request.messageName(), correlationKey),
           "message", request.workflowModuleId(), request.bpmnProcessId(), e.getCause());
@@ -986,9 +1009,9 @@ public class PeaProcessService<A> implements MigratableProcessService<A> {
     // 'module|process|aggregateId'
     try {
       startProcessApi
-          .startProcess(new dev.bpmcrafters.processengineapi.process.StartProcessByMessageCmd(
+          .startProcess(new StartProcessByMessageCmd(
               scopedIdentifier(request.workflowModuleId(), request.messageName()), payloadOf(
-                  request.aggregatePersistence(), request.workflowAggregateId(), null), java.util.Map.of()))
+                  request.aggregatePersistence(), request.workflowAggregateId(), null), Map.of()))
           .get();
       log.info(
           "PEA[{}]: started workflow by message '{}' for BPMN process '{}' of workflow module "
@@ -1004,7 +1027,7 @@ public class PeaProcessService<A> implements MigratableProcessService<A> {
       // started, and the application's database would carry an aggregate no engine knows
       throw new IllegalStateException(
           "Phase two of starting a workflow by message '%s' was interrupted".formatted(request.messageName()), e);
-    } catch (final java.util.concurrent.ExecutionException e) {
+    } catch (final ExecutionException e) {
       throw new IllegalStateException(
           "Phase two of starting a workflow by message '%s' failed".formatted(request.messageName()), e.getCause());
     }

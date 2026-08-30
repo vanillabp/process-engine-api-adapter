@@ -4,6 +4,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.data.repository.CrudRepository;
 
+import io.vanillabp.integration.spi.AggregatePersistenceAware;
 import io.vanillabp.integration.utils.SpringDataUtil;
 
 /**
@@ -23,9 +24,9 @@ import io.vanillabp.integration.utils.SpringDataUtil;
 public class TestPersistenceConfiguration {
 
   @Bean
-  public io.vanillabp.integration.spi.AggregatePersistenceAware<Object> noPersistenceForUnclaimedAggregates() {
+  public AggregatePersistenceAware<Object> noPersistenceForUnclaimedAggregates() {
 
-    return new io.vanillabp.integration.spi.AggregatePersistenceAware<>() {
+    return new AggregatePersistenceAware<>() {
 
       @Override
       public Class<Object> getAggregateClass() {

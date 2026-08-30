@@ -3,6 +3,8 @@ package io.vanillabp.pea.quarkus.test;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Consumer;
+import java.util.function.Supplier;
 
 import dev.bpmcrafters.processengineapi.ExecutionMode;
 import dev.bpmcrafters.processengineapi.task.CompleteTaskByErrorCmd;
@@ -646,9 +648,9 @@ public class PeaE2eIntrospectionController {
    * transaction was still open.
    */
   private Map<String, Object> inTransaction(
-      final java.util.function.Consumer<PeaE2eAggregate> operation,
+      final Consumer<PeaE2eAggregate> operation,
       final String aggregateId,
-      final java.util.function.Supplier<List<ExecutionMode>> modesInsideTransaction) throws Exception {
+      final Supplier<List<ExecutionMode>> modesInsideTransaction) throws Exception {
 
     final var report = new LinkedHashMap<String, Object>();
     userTransaction.begin();

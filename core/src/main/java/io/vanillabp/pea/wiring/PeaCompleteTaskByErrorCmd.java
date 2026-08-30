@@ -1,5 +1,7 @@
 package io.vanillabp.pea.wiring;
 
+import java.util.Map;
+
 import dev.bpmcrafters.processengineapi.ExecutionMode;
 import dev.bpmcrafters.processengineapi.task.CompleteTaskByErrorCmd;
 
@@ -36,7 +38,7 @@ public class PeaCompleteTaskByErrorCmd extends CompleteTaskByErrorCmd {
       final String taskId,
       final String errorCode,
       final String errorMessage,
-      final java.util.Map<String, Object> payload) {
+      final Map<String, Object> payload) {
 
     super(taskId, errorCode, errorMessage, payload);
     this.executionMode = ExecutionMode.SYNC;

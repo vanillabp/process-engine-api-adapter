@@ -1,6 +1,9 @@
 package io.vanillabp.pea.springboot;
 
+import java.util.LinkedList;
 import java.util.Map;
+import java.util.Objects;
+import java.util.stream.Stream;
 
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
@@ -58,7 +61,7 @@ public class VanillaBpPeaProperties {
 
     final var scoped = scopedKeysMostSpecificFirst(workflowModuleId, bpmnProcessId, taskDefinition, adapterId)
         .map(PeaScopedKeys::getFetchVariables)
-        .filter(java.util.Objects::nonNull)
+        .filter(Objects::nonNull)
         .findFirst();
     if (scoped.isPresent()) {
       return scoped.get();
@@ -74,7 +77,7 @@ public class VanillaBpPeaProperties {
    * The <code>adapters.&lt;id&gt;</code> sections of the three levels below the adapter,
    * most specific first.
    */
-  private java.util.stream.Stream<PeaScopedKeys> scopedKeysMostSpecificFirst(
+  private Stream<PeaScopedKeys> scopedKeysMostSpecificFirst(
       final String workflowModuleId,
       final String bpmnProcessId,
       final String taskDefinition,
@@ -90,7 +93,7 @@ public class VanillaBpPeaProperties {
         ? workflow.getTasks().get(taskDefinition)
         : null;
 
-    final var levelsMostSpecificFirst = new java.util.LinkedList<Map<String, PeaScopedKeys>>();
+    final var levelsMostSpecificFirst = new LinkedList<Map<String, PeaScopedKeys>>();
     if (task != null) {
       levelsMostSpecificFirst.add(task.getAdapters());
     }
@@ -103,7 +106,7 @@ public class VanillaBpPeaProperties {
     return levelsMostSpecificFirst
         .stream()
         .map(level -> level.get(adapterId))
-        .filter(java.util.Objects::nonNull);
+        .filter(Objects::nonNull);
 
   }
 

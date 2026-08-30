@@ -12,8 +12,12 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 
+import io.vanillabp.integration.adapter.spi.PreCommitRegistrar;
 import io.vanillabp.integration.spi.AggregatePersistenceAware;
+import io.vanillabp.integration.spi.PhaseOperation;
+import io.vanillabp.integration.spi.PhaseTwoCall;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
+import io.vanillabp.pea.deployment.PeaDeployedProcesses;
 import io.vanillabp.pea.mock.InMemoryProcessEngine;
 import io.vanillabp.pea.processservice.PeaProcessService;
 
@@ -62,7 +66,7 @@ public class PeaPreCommitHookTest {
 
   private PeaProcessService<Object> service() {
 
-    return serviceHandingChecksTo(mock(io.vanillabp.integration.adapter.spi.PreCommitRegistrar.class));
+    return serviceHandingChecksTo(mock(PreCommitRegistrar.class));
 
   }
 
@@ -71,10 +75,10 @@ public class PeaPreCommitHookTest {
    * decided while the service is built, like every other collaborator.
    */
   private PeaProcessService<Object> serviceHandingChecksTo(
-      final io.vanillabp.integration.adapter.spi.PreCommitRegistrar preCommitRegistrar) {
+      final PreCommitRegistrar preCommitRegistrar) {
 
     return new PeaProcessService<>(
-        "pea", engine, engine, engine, engine, new io.vanillabp.pea.deployment.PeaDeployedProcesses(), io.vanillabp.pea.TestCollaborators
+        "pea", engine, engine, engine, engine, new PeaDeployedProcesses(), TestCollaborators
             .builder(new PeaDeploymentServiceTest.PermissiveInvoker())
             .preCommitRegistrar(preCommitRegistrar)
             .build());
@@ -95,9 +99,9 @@ public class PeaPreCommitHookTest {
       deferred.add(check);
     });
 
-    PhaseOperations.phaseOne(service, io.vanillabp.integration.spi.PhaseOperation.COMPLETE_TASK, "mod", "Process",
+    PhaseOperations.phaseOne(service, PhaseOperation.COMPLETE_TASK, "mod", "Process",
         persistence(), new Object(),
-        PhaseOperations.args(io.vanillabp.integration.spi.PhaseTwoCall.ARG_TASK_ID, "task-1"));
+        PhaseOperations.args(PhaseTwoCall.ARG_TASK_ID, "task-1"));
 
     // nothing was asked of the engine yet - the check waits for the commit
     assertEquals(List.of("handed over for OrderAggregate"), events);
@@ -124,9 +128,9 @@ public class PeaPreCommitHookTest {
 
     final var failure = assertThrows(
         IllegalStateException.class,
-        () -> PhaseOperations.phaseOne(service, io.vanillabp.integration.spi.PhaseOperation.COMPLETE_TASK, "mod",
+        () -> PhaseOperations.phaseOne(service, PhaseOperation.COMPLETE_TASK, "mod",
             "Process", persistence(), new Object(),
-            PhaseOperations.args(io.vanillabp.integration.spi.PhaseTwoCall.ARG_TASK_ID, "task-gone")));
+            PhaseOperations.args(PhaseTwoCall.ARG_TASK_ID, "task-gone")));
 
     assertTrue(failure.getMessage().contains("task-gone"), failure.getMessage());
 
@@ -148,12 +152,12 @@ public class PeaPreCommitHookTest {
         () -> PhaseOperations
             .phaseOne(
                 service,
-                io.vanillabp.integration.spi.PhaseOperation.COMPLETE_TASK,
+                PhaseOperation.COMPLETE_TASK,
                 "mod",
                 "Process",
                 null,
                 new Object(),
-                PhaseOperations.args(io.vanillabp.integration.spi.PhaseTwoCall.ARG_TASK_ID, "task-gone")));
+                PhaseOperations.args(PhaseTwoCall.ARG_TASK_ID, "task-gone")));
 
   }
 

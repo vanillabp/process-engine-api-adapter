@@ -3,6 +3,9 @@ package io.vanillabp.pea;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.io.IOException;
+import java.util.concurrent.CompletionException;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -53,7 +56,7 @@ public class PeaPhaseTwoClassificationTest {
 
     assertTrue(
         service.isPhaseTwoFailureRepeatable(
-            new java.util.concurrent.CompletionException(new java.io.IOException("connection refused"))));
+            new CompletionException(new IOException("connection refused"))));
     assertTrue(service.isPhaseTwoFailureRepeatable(new IllegalStateException("the task is gone")));
     assertTrue(service.isPhaseTwoFailureRepeatable(null));
 

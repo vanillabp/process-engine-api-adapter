@@ -69,7 +69,7 @@ public class PeaViewerApiTest {
   private final PeaDeployedProcesses deployedProcesses = new PeaDeployedProcesses();
 
   private final PeaDeploymentService deploymentService = new PeaDeploymentService(
-      "pea", engine, io.vanillabp.pea.TestCollaborators
+      "pea", engine, TestCollaborators
           .of(new PeaDeploymentServiceTest.PermissiveInvoker()), engine, engine, deployedProcesses);
 
   private final PeaProcessService<Aggregate> processService = new PeaProcessService<>(
@@ -79,7 +79,7 @@ public class PeaViewerApiTest {
 
     final var models = deploymentService.readBpmn(
         "test-module", "viewed.bpmn", new ByteArrayInputStream(BPMN.getBytes(StandardCharsets.UTF_8)), true);
-    var context = (io.vanillabp.pea.PeaProcessingContext) null;
+    var context = (PeaProcessingContext) null;
     for (final var model : models) {
       context = deploymentService.prepareBpmn(
           "test-module", context, "viewed.bpmn", model.getKey(), model.getValue());

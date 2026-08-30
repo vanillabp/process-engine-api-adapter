@@ -1,7 +1,10 @@
 package io.vanillabp.pea.quarkus.runtime;
 
+import java.util.LinkedList;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
+import java.util.stream.Stream;
 
 import io.quarkus.runtime.annotations.ConfigPhase;
 import io.quarkus.runtime.annotations.ConfigRoot;
@@ -86,7 +89,7 @@ public interface VanillaBpPeaProperties {
    * The <code>adapters.&lt;id&gt;</code> sections of the three levels below the adapter,
    * most specific first.
    */
-  private java.util.stream.Stream<PeaScopedKeys> scopedKeysMostSpecificFirst(
+  private Stream<PeaScopedKeys> scopedKeysMostSpecificFirst(
       final String workflowModuleId,
       final String bpmnProcessId,
       final String taskDefinition,
@@ -102,7 +105,7 @@ public interface VanillaBpPeaProperties {
         ? workflow.tasks().get(taskDefinition)
         : null;
 
-    final var levelsMostSpecificFirst = new java.util.LinkedList<Map<String, PeaScopedKeys>>();
+    final var levelsMostSpecificFirst = new LinkedList<Map<String, PeaScopedKeys>>();
     if (task != null) {
       levelsMostSpecificFirst.add(task.adapters());
     }
@@ -115,7 +118,7 @@ public interface VanillaBpPeaProperties {
     return levelsMostSpecificFirst
         .stream()
         .map(level -> level.get(adapterId))
-        .filter(java.util.Objects::nonNull);
+        .filter(Objects::nonNull);
 
   }
 

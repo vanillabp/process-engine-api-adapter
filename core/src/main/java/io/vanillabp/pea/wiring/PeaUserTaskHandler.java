@@ -5,10 +5,12 @@ import java.util.Map;
 
 import dev.bpmcrafters.processengineapi.task.TaskHandler;
 import dev.bpmcrafters.processengineapi.task.TaskInformation;
+import io.vanillabp.integration.adapter.spi.NameClashAvoidanceSupport;
 import io.vanillabp.integration.adapter.spi.workflowtask.TaskInvocationContext;
 import io.vanillabp.integration.adapter.spi.workflowtask.WorkflowTaskInvoker;
 import io.vanillabp.integration.adapter.spi.workflowtask.WorkflowTaskOutcome;
 import io.vanillabp.spi.service.TaskEvent;
+import lombok.Builder;
 import lombok.extern.slf4j.Slf4j;
 
 /**
@@ -29,7 +31,7 @@ public class PeaUserTaskHandler implements TaskHandler {
    * Translates the scoped task definition of this subscription back into
    * the plain one. May be <code>null</code>.
    */
-  private final io.vanillabp.integration.adapter.spi.NameClashAvoidanceSupport scoping;
+  private final NameClashAvoidanceSupport scoping;
 
   private final String adapterId;
 
@@ -47,39 +49,27 @@ public class PeaUserTaskHandler implements TaskHandler {
    */
   private final PeaFetchVariables.Selection fetchVariables;
 
-  public PeaUserTaskHandler(
-      final String adapterId,
-      final String workflowModuleId,
-      final String externalFormReference,
-      final List<String> bpmnProcessIds,
-      final WorkflowTaskInvoker workflowTaskInvoker) {
-
-    this(adapterId, workflowModuleId, externalFormReference, bpmnProcessIds, workflowTaskInvoker, null);
-
-  }
-
   /**
-   * Translates the identifiers the engine knows back into the plain ones.
+   * The user-task subscription this handler serves. Built through the generated
+   * <code>PeaUserTaskHandler.builder()</code>: two of these six values may be left out and a
+   * positional list of that length no longer says which is which.
+   *
+   * @param adapterId The adapter whose subscription delivers here
+   * @param workflowModuleId The workflow module the subscribed user tasks belong to
+   * @param externalFormReference The form reference the engine delivers under
+   * @param bpmnProcessIds The BPMN processes this subscription may deliver from
+   * @param workflowTaskInvoker The core's runtime entry point
+   * @param scoping Translates the engine's identifiers back, or <code>null</code>
+   * @param fetchVariables What the subscription asked for, or <code>null</code> for everything
    */
+  @Builder
   public PeaUserTaskHandler(
       final String adapterId,
       final String workflowModuleId,
       final String externalFormReference,
       final List<String> bpmnProcessIds,
       final WorkflowTaskInvoker workflowTaskInvoker,
-      final io.vanillabp.integration.adapter.spi.NameClashAvoidanceSupport scoping) {
-
-    this(adapterId, workflowModuleId, externalFormReference, bpmnProcessIds, workflowTaskInvoker, scoping, null);
-
-  }
-
-  public PeaUserTaskHandler(
-      final String adapterId,
-      final String workflowModuleId,
-      final String externalFormReference,
-      final List<String> bpmnProcessIds,
-      final WorkflowTaskInvoker workflowTaskInvoker,
-      final io.vanillabp.integration.adapter.spi.NameClashAvoidanceSupport scoping,
+      final NameClashAvoidanceSupport scoping,
       final PeaFetchVariables.Selection fetchVariables) {
 
     this.adapterId = adapterId;

@@ -1,9 +1,12 @@
 package io.vanillabp.pea.springboot;
 
+import java.util.function.Supplier;
+
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
 import io.vanillabp.integration.spi.PhaseTwoOutbox;
+import io.vanillabp.integration.spi.TransactionRunner;
 
 /**
  * Provides a {@link PhaseTwoOutbox} stub for smoke tests booting WITHOUT a database:
@@ -34,19 +37,19 @@ public class TestOutboxConfiguration {
    * @return The runner
    */
   @Bean
-  public io.vanillabp.integration.spi.TransactionRunner testTransactionRunner() {
+  public TransactionRunner testTransactionRunner() {
 
-    return new io.vanillabp.integration.spi.TransactionRunner() {
+    return new TransactionRunner() {
 
       @Override
       public <T> T requireNew(
-          final java.util.function.Supplier<T> work) {
+          final Supplier<T> work) {
         return work.get();
       }
 
       @Override
       public <T> T inCurrent(
-          final java.util.function.Supplier<T> work) {
+          final Supplier<T> work) {
         return work.get();
       }
 

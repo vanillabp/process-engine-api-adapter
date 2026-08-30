@@ -1,6 +1,7 @@
 package io.vanillabp.pea.quarkus.runtime;
 
 import io.quarkus.arc.DefaultBean;
+import io.vanillabp.pea.deployment.PeaDeployedProcessesRegistry;
 import io.vanillabp.pea.mock.InMemoryProcessEngine;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.inject.Produces;
@@ -47,9 +48,9 @@ public class PeaProcessEngineProducer {
    */
   @Produces
   @Singleton
-  public io.vanillabp.pea.deployment.PeaDeployedProcessesRegistry peaDeployedProcessesRegistry() {
+  public PeaDeployedProcessesRegistry peaDeployedProcessesRegistry() {
 
-    return new io.vanillabp.pea.deployment.PeaDeployedProcessesRegistry();
+    return new PeaDeployedProcessesRegistry();
 
   }
 

@@ -11,6 +11,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 
 import dev.bpmcrafters.processengineapi.task.TaskInformation;
+import io.vanillabp.integration.adapter.spi.AggregateSyncMode;
 import io.vanillabp.integration.adapter.spi.workflowtask.TaskInvocationContext;
 import io.vanillabp.integration.adapter.spi.workflowtask.WorkflowTaskInvoker;
 import io.vanillabp.integration.adapter.spi.workflowtask.WorkflowTaskOutcome;
@@ -85,13 +86,13 @@ public class PeaUserTaskHandlerTest {
 
 
     @Override
-    public java.util.Map<String, Object> syncedWorkflowAggregateValues(
+    public Map<String, Object> syncedWorkflowAggregateValues(
         final String workflowModuleId,
         final String bpmnProcessId,
         final String workflowAggregateId,
-        final io.vanillabp.integration.adapter.spi.AggregateSyncMode adapterDefault) {
+        final AggregateSyncMode adapterDefault) {
 
-      return java.util.Map.of();
+      return Map.of();
 
     }
 
@@ -111,7 +112,14 @@ public class PeaUserTaskHandlerTest {
   private PeaUserTaskHandler handler(
       final List<String> bpmnProcessIds) {
 
-    return new PeaUserTaskHandler("pea", "test-module", "approve", bpmnProcessIds, invoker);
+    return PeaUserTaskHandler
+        .builder()
+        .adapterId("pea")
+        .workflowModuleId("test-module")
+        .externalFormReference("approve")
+        .bpmnProcessIds(bpmnProcessIds)
+        .workflowTaskInvoker(invoker)
+        .build();
 
   }
 

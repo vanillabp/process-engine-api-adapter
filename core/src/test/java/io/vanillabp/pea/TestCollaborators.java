@@ -2,7 +2,10 @@ package io.vanillabp.pea;
 
 import static org.mockito.Mockito.mock;
 
+import org.mockito.Answers;
+
 import io.vanillabp.integration.adapter.spi.AdapterCollaborators;
+import io.vanillabp.integration.adapter.spi.NameClashAvoidance;
 import io.vanillabp.integration.adapter.spi.NameClashAvoidanceSupport;
 import io.vanillabp.integration.adapter.spi.PreCommitRegistrar;
 import io.vanillabp.integration.adapter.spi.WorkflowAggregateSync;
@@ -40,14 +43,14 @@ public final class TestCollaborators {
     return mock(NameClashAvoidanceSupport.class, invocation -> {
       final var method = invocation.getMethod();
       if ("modeFor".equals(method.getName())) {
-        return io.vanillabp.integration.adapter.spi.NameClashAvoidance.NONE;
+        return NameClashAvoidance.NONE;
       }
       if (method.getReturnType() == String.class) {
         // every one of them ends with the adapter id and carries the identifier right
         // before it
         return invocation.getArgument(invocation.getArguments().length - 2);
       }
-      return org.mockito.Answers.RETURNS_DEFAULTS.answer(invocation);
+      return Answers.RETURNS_DEFAULTS.answer(invocation);
     });
 
   }
