@@ -46,6 +46,7 @@ All other methods still return a completed future / empty result of the declared
 | `deploy.DeploymentApi`          | `deploy(DeployBundleCommand)`                                                                           | `CompletableFuture<DeploymentInformation>`                         |
 | `process.StartProcessApi`       | `startProcess(StartProcessCommand)`                                                                     | `CompletableFuture<ProcessInformation>`                            |
 | `correlation.CorrelationApi`    | `correlateMessage(CorrelateMessageCmd)`                                                                 | `CompletableFuture<Empty>`                                         |
+| `correlation.SignalApi`         | `sendSignal(SendSignalCmd)`                                                                             | `CompletableFuture<Empty>`                                         |
 | `task.TaskSubscriptionApi`      | `subscribeForTask(SubscribeForTaskCmd)`, `unsubscribe(UnsubscribeFromTaskCmd)`                          | `CompletableFuture<TaskSubscription>` / `CompletableFuture<Empty>` |
 | `task.ServiceTaskCompletionApi` | `completeTask(CompleteTaskCmd)`, `completeTaskByError(CompleteTaskByErrorCmd)`, `failTask(FailTaskCmd)` | `CompletableFuture<Empty>`                                         |
 | `task.UserTaskCompletionApi`    | `completeTask(CompleteTaskCmd)`, `completeTaskByError(CompleteTaskByErrorCmd)`                          | `CompletableFuture<Empty>`                                         |
@@ -61,8 +62,8 @@ and `RestrictionAware.ensureSupported(...)` are Java `default` methods on the
 Process-Engine-API interfaces and need no implementation.
 
 Deliberately not implemented, because VanillaBP does not call them:
-`correlation.SignalApi`, `task.UserTaskModificationApi`, `decision.EvaluateDecisionApi` —
-add them here as soon as an adapter feature needs them.
+`task.UserTaskModificationApi` and `decision.EvaluateDecisionApi` — add them here as soon as
+an adapter feature needs them.
 
 ## Failure injection
 
@@ -81,3 +82,8 @@ aggregate id) so duplicate starts for the same aggregate are observable - a map
 would silently overwrite and hide exactly the bug the fake is meant to surface.
 Note the fake cannot validate a `PREFLIGHT_CHECK` against deployed processes
 (opaque resources, see `GAPS.md` entry 5) - inject failures instead.
+
+What the fake records and what it refuses to record is held by the tests using it, above all
+`PeaTwoPhaseStartOutboxTest` (one `PREFLIGHT_CHECK` inside the transaction, one `SYNC` after
+the commit, none after a rollback) and
+`PeaFetchVariablesTest#theEngineNarrowsThePayload` for the narrowing.

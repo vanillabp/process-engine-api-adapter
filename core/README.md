@@ -107,9 +107,9 @@ Cross-cutting: command interfaces implement `ExecutionModeAware.executionMode()`
 (`meta(...)`) and `RestrictionAware` (`getSupportedRestrictions()`).
 
 `PeaProcessService` uses the subset VanillaBP's operations need (start process, correlate
-message, task subscription, service- and user-task completion); deployment goes through
-`PeaDeploymentService`. APIs VanillaBP has no use for yet (signals, user-task
-modification, decision evaluation) are simply not called — the gaps the API leaves for
+message, signals where a `SignalApi` was provided, task subscription, service- and user-task
+completion); deployment goes through `PeaDeploymentService`. APIs VanillaBP has no use for yet
+(user-task modification, decision evaluation) are simply not called — the gaps the API leaves for
 the features VanillaBP DOES implement are collected in [`../GAPS.md`](../GAPS.md).
 
 ## Platform version guard
@@ -119,7 +119,8 @@ version of the VanillaBP platform integration it was built against
 (`platform.version=${adapter-platform.version}`, filled by resource filtering configured
 in `pom.xml`). The `PeaDeploymentService` constructor passes it to
 `AdapterPlatformVersion.requireCompatiblePlatform(...)`, which aborts the startup with a
-guiding message if the platform integration on the classpath is older — Maven does not
+guiding message if the platform integration on the classpath is older (the comparison itself is
+held by `AdapterPlatformVersionTest` of the platform repository) — Maven does not
 report that as a conflict, because a version managed by the application always wins over
 the version required transitively by this adapter, even as a downgrade. See
 `migration-adapter/README.md`, section "Adapter/platform version guard".

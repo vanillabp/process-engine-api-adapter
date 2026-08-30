@@ -220,7 +220,8 @@ replaces the mock with a real Process-Engine-API implementation.
   deployed process definition, so the adapter registers no version catalog and reports only
   the version TAG from the task meta (key `processDefinitionVersionTag`, named by the API's
   `CommonRestrictions`) where the engine supplies it. An exact tag therefore works, while a
-  range over tags and any specification made of numbers matches nothing and is reported once.
+  range over tags and any specification made of numbers matches nothing and is reported once
+  (`PeaTaskHandlerTest#theVersionTagOfTheTaskMetaIsReported`).
 - **Viewing workflows** (`ProcessService#getProcessDefinitions`/`#getBpmnXml`/`#getWorkflowHistory`):
   served from what THIS application version deployed - the Process-Engine-API has
   neither a repository nor a query/history API ([`GAPS.md`](GAPS.md), entries 12 and 13). The
@@ -229,6 +230,18 @@ replaces the mock with a real Process-Engine-API implementation.
   history reports the definition with `elementsHistory == null` (the SPI's "not supported by the
   underlying BPMS"), so there are no secondary history contexts and call activities cannot be
   drilled into; call-activity definitions are not reported either (no BPMN model type).
+
+The bullets above have their tests. The two-phase start is `PeaTwoPhaseStartOutboxTest`,
+task processing and its four outcomes are `TaskProcessingIntegrationTest` on Spring Boot and
+`PeaWorkflowLifecycleTest` on Quarkus, the delivered task itself is `PeaTaskHandlerTest` and
+`PeaUserTaskHandlerTest`, the preflight-based task operations and probes are
+`PeaProcessServiceTaskOpsTest` (`awarenessProbesViaPreflight`, `phaseOneChecksExistence`,
+`redispatchProbeIsNeverOptimistic`, `workflowsCannotBeLocated`), the payload is
+`PeaSharedValuesTest`, the refusal of `aggregateChanged` is `PeaAggregateChangedTest`, the
+signal is `PeaSendSignalTest`, and the viewer API is `PeaViewerApiTest`. That a start event
+the engine fires itself is refused while deploying and that a `@WorkflowEnded` method only
+warns are `PeaDeploymentServiceTest` respectively the WARN the Quarkus lifecycle test boots
+with.
 
 ## What a subscription asks the engine for
 
@@ -265,7 +278,9 @@ named `@TaskParam`, and kept for a name a handler computes at runtime.
 
 The mock engine narrows a delivered payload to what the subscription asked for
 (`InMemoryProcessEngine.ActiveSubscription#narrow`). Without that the derivation would be
-asserted and never exercised.
+asserted and never exercised. `PeaFetchVariablesTest` holds all of it, from
+`theSubscriptionNamesWhatItReads` and `theUnionCoversEverythingTheSubscriptionServes`
+through `theEscapeHatchAsksForEverything` to `anUnknownAggregateFallsBackToEverything`.
 
 ## Outbound operations: one handler per operation
 
@@ -280,6 +295,8 @@ signal needs a `SignalApi`, and pushing a changed aggregate is not possible at a
 updates the payload of a task, not of a running instance - GAPS entry 18). They stay in the map
 because their handler is where the reason lives, and a message which says only "this adapter
 cannot" would leave the reader without the fix.
+`PeaSendSignalTest#missingSignalApiFailsGuiding` and `PeaAggregateChangedTest` are those two
+messages.
 
 ## When a phase-one check runs
 
@@ -300,7 +317,11 @@ operation. The awareness probe of a task is a `PREFLIGHT_CHECK` completion as we
 platform asks it only when it must: a task operation is routed by the record the delivery of that
 task wrote, and where such a record answers, no adapter is probed. So the engine may see one
 `PREFLIGHT_CHECK` per task or two, both are right, and a test which wants to read what this
-adapter promises reads the pre-commit check.
+adapter promises reads the pre-commit check. `PeaPreCommitHookTest` is that test
+(`theCheckIsHandedToTheHook`, `aFailingCheckReachesTheCaller`,
+`withoutAPersistenceTheCheckRunsImmediately`), and
+`PeaWorkflowLifecycleTest#assertThePreflightRanBeforeTheCommitReturned` reads the same from a
+booted application.
 
 Correlating a message and broadcasting a signal still have no preflight, and the reason is not
 a missing query: `CorrelateMessageCmd` and `SendSignalCmd` are Kotlin `data class`es, hence
@@ -315,7 +336,9 @@ arrives wrapped in an `ExecutionException`, and "the engine is unreachable" look
 "the engine refused". So one family is classifiable, and it is the one this adapter throws
 itself: `UnsupportedOperationException`, raised where the API cannot do what VanillaBP asks (a
 signal without a `SignalApi`, pushing a changed aggregate into a running instance). Those
-entries are blocked at once. Everything else is repeated, which is the safe default.
+entries are blocked at once. Everything else is repeated, which is the safe default
+(`PeaPhaseTwoClassificationTest#whatTheApiCannotDoIsPermanent` and
+`#everythingElseIsRepeatable`).
 
 ### A failure of phase two is reported, not dropped
 
@@ -351,7 +374,10 @@ is not an oversight: this engine creates one task per activation of an element a
 under that id, so the identity of the DELIVERY (equal across redeliveries) and the identity of the
 ACTIVATION (different between two activations of one element) really are one value here. An engine
 whose redelivery got a new id would have to answer the two differently, which is why they are two
-methods rather than one.
+methods rather than one. `PeaTaskHandlerTest#everyTaskIsItsOwnActivation` holds the half this
+adapter can hold; that the same id also stays equal across redeliveries is an assumption about
+the engine behind the API rather than something a test here can produce, and an implementation
+which hands out a new task id per redelivery would disprove it.
 
 ## Decision log
 
@@ -367,14 +393,17 @@ Prerequisites installed into the local Maven repository first (build order):
 
 ```bash
 mvn spotless:apply
-mvn install verify
+mvn install
 ```
+
+`install` alone, never `install verify`: `install` already runs every phase `verify` has, so
+naming both walks two lifecycles per module and reports every compiler warning twice.
 
 Tests are pure JVM smoke tests (no Docker, no network).
 
 ## Test coverage
 
-`mvn install verify` builds one aggregated JaCoCo report per platform:
+`mvn install` builds one aggregated JaCoCo report per platform:
 
 1. **Spring Boot** (core + Spring Boot integration) - into `test-coverage-report/spring-boot/report`
 2. **Quarkus** (core + Quarkus extension + the Quarkus end-to-end tests) - into
@@ -392,7 +421,9 @@ repository gates on, and that is not the target: the rule is 90 per platform, so
 85 and 90 passes the build and still names a gap. The gate is where the gap has grown too big to
 carry, which is why it is never edited to make a build pass. It also compares every module
 producing a `jacoco.exec` against the two aggregates, so a module added to the build without being
-added to its report cannot stay unnoticed.
+added to its report cannot stay unnoticed. `CoverageGateTest` is where both measurements happen,
+and `TestClassConventionsTest` next to it keeps every test class on the output suppression the
+printed lines below depend on.
 
 The gate reports what it measured on every run, green ones included, which is the one place in
 VanillaBP where a passing test prints:
