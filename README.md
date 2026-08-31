@@ -65,6 +65,14 @@ Accordingly the adapter treats the Process-Engine-API as a **remote BPMS**: work
 starts run through VanillaBP's generic transaction-outbox path, like everything else this
 adapter sends to the engine.
 
+That path is drawn twice in `migration-adapter/README.md` of `adapter-platform-integration`, under
+[Two-phase workflow start](https://github.com/vanillabp/adapter-platform-integration/blob/main/migration-adapter/README.md#two-phase-workflow-start-phasetwooutbox-spi):
+once as the plain start and once on a time line which crosses a crash. The other mechanisms this
+adapter plugs into are drawn there as well, each in the section describing it, and
+[`diagrams/README.md`](https://github.com/vanillabp/adapter-platform-integration/blob/main/diagrams)
+lists them. The Process-Engine-API appears in most pictures as one branch beside Camunda 7 and
+Camunda 8, which is a comparison this repository cannot draw on its own.
+
 ## Coordinates
 
 Parent (all modules are `2.0.0-SNAPSHOT`, groupId `io.vanillabp`):
@@ -306,6 +314,9 @@ called; now the adapter hands them to the platform's pre-commit hook, so they ru
 the transaction of the workflow aggregate commits. The later the check, the smaller the window
 in which its answer goes stale before phase two acts on it, and a failing check still aborts
 the caller's transaction - that is the whole point of asking in phase one.
+
+Where that hook sits relative to the caller's commit and to the dispatcher which runs phase two is
+drawn under [The transaction the work runs in](https://github.com/vanillabp/adapter-platform-integration/blob/main/migration-adapter/README.md#the-transaction-the-work-runs-in).
 
 The platform resolves the transaction runner of the aggregate first, so the check hooks into
 the unit of work the aggregate is actually stored in - which may be one the
