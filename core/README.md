@@ -7,8 +7,8 @@ the bpm-crafters Process-Engine-API. It contains no Spring or Quarkus code and â
 design â€” **does not depend on the `mock/` module**. The Process-Engine-API implementation
 is injected from the outside (the mock in tests/early apps, a real implementation later).
 
-Dependencies: `io.vanillabp.adapter:migration-adapter-spi` (adapter SPI, brings the
-business SPI transitively) and `dev.bpm-crafters.process-engine-api:process-engine-api`
+Dependencies: `io.vanillabp:vanillabp-adapter-spi` (adapter SPI, brings the integration
+SPI and the extension SPI transitively) and `dev.bpm-crafters.process-engine-api:process-engine-api`
 (the pure API artifact).
 
 ## Contents
