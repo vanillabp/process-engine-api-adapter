@@ -43,6 +43,36 @@ public class PeaProcessingContext {
 
   }
 
+  private final java.util.Map<String, byte[]> decisions = new java.util.LinkedHashMap<>();
+
+  /**
+   * The decision tables of the workflow module, keyed by filename - deployed with its
+   * processes in the same bundle. The API takes opaque resources, so nothing here has to
+   * understand a decision.
+   *
+   * @return The files, in the order they were read
+   */
+  public java.util.Map<String, byte[]> getDecisions() {
+
+    return decisions;
+
+  }
+
+  /**
+   * Remembers a decision table for deployment.
+   *
+   * @param filename The DMN file name - it keeps its extension, which is all the engine
+   *          behind the API has to tell a decision from a process
+   * @param dmn The file
+   */
+  public void addDecision(
+      final String filename,
+      final byte[] dmn) {
+
+    decisions.putIfAbsent(filename, dmn);
+
+  }
+
   /**
    * The task subscriptions opened by startWorkflowProcessing, closed by
    * stopWorkflowProcessing (reverse order).

@@ -145,6 +145,14 @@ replaces the mock with a real Process-Engine-API implementation.
   `DeploymentApi`. Because the API has no workflow-module / tenant namespace that matches
   VanillaBP's, resources are deployed to the default tenant — **module isolation relies on
   unique BPMN process ids across modules** ([`GAPS.md`](GAPS.md), entry 4).
+- **Decision tables** of a workflow module are deployed with its processes, as one more
+  resource of the same bundle — the API takes opaque resources, so a DMN file needs nothing
+  of its own here. A business rule task naming a decision is not asked for a
+  `@WorkflowTask` method: whatever engine sits behind the API serves it. What this adapter
+  cannot do is SCOPE a decision id under `use-prefix`, because the API has no binding from
+  a business rule task to a decision which could be renamed with it ([`GAPS.md`](GAPS.md),
+  entry 22) — such an application gives its decisions ids which are unique across its
+  modules, exactly as it has to for its process ids (entry 4).
 - **Starting workflows** is two-phase (the Process-Engine-API is treated as a remote BPMS):
   phase one maps to `ExecutionMode.PREFLIGHT_CHECK` (validate only, inside the transaction),
   phase two (after commit, via the outbox) to `ExecutionMode.SYNC` (create the instance). The
