@@ -431,3 +431,29 @@ answer. The rest of the concurrent-token support works here, because it does not
 VanillaBP owns the transaction of a task, recognizes a version conflict in its commit, logs
 the guiding message and passes the exception on to this adapter. What the engine behind the
 Process-Engine-API does with the failed task is its own business, as with every failure.
+
+## 22. No binding from a business rule task to a decision, so decision ids cannot be scoped
+
+**Needed by VanillaBP:** a workflow module may bring decision tables, and they are deployed
+with its processes. Where a module is kept apart from another one by PREFIXING its
+identifiers rather than by an isolation of the engine, everything the engine resolves across
+definitions is renamed - process ids, message names, and the ids of the decisions. The
+reference from a business rule task to the decision it calls is renamed with them, so both
+sides keep naming the same thing. The Camunda adapters do exactly that (`camunda:decisionRef`
+respectively `zeebe:calledDecision`).
+
+**Offered by the Process-Engine-API:** deployment of opaque `NamedResource`s and nothing
+else. There is no model to read (gap 1) and no notion of how the engine behind the API binds
+a business rule task to a decision, so there is no reference this adapter could rewrite.
+
+**Consequence for the adapter:** the decision tables are deployed unchanged, decision ids
+included. Under `use-prefix` a module's decisions are therefore NOT protected against a
+decision of the same id in another module: the last deployment wins in whatever the engine
+uses as its namespace. Renaming the decisions and not the tasks calling them would be worse -
+every business rule task would point at nothing - which is why the decision id stays what
+the modeller wrote.
+
+What an application can do about it: give its decisions ids which are unique across the
+modules deployed to that engine, the way it would have to for every identifier if the engine
+had no isolation at all (gap 15 is the same story one level up). A binding this adapter could
+read, or a deployment which took a namespace, would close this gap.

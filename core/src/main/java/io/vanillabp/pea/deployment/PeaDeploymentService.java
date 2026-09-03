@@ -351,6 +351,29 @@ public class PeaDeploymentService implements AdapterDeploymentService<PeaBpmnMod
    * @return The executable processes contained in the resource
    * @throws BpmnParseException If the XML cannot be parsed
    */
+  /**
+   * Whether the element the reader stands on carries an attribute of the given local
+   * name, whatever namespace it is in - the reference to a decision is spelled
+   * differently per engine, and this parser reads raw XML rather than a model.
+   *
+   * @param reader The reader, standing on a start element
+   * @param localName The attribute's local name
+   * @return Whether it is there and holds something
+   */
+  private static boolean hasAttribute(
+      final XMLStreamReader reader,
+      final String localName) {
+
+    for (var i = 0; i < reader.getAttributeCount(); i++) {
+      if (localName.equals(reader.getAttributeLocalName(i))) {
+        final var value = reader.getAttributeValue(i);
+        return (value != null) && !value.isBlank();
+      }
+    }
+    return false;
+
+  }
+
   private List<ParsedProcess> parseBpmn(
       final String workflowModuleId,
       final String filename,
@@ -368,6 +391,7 @@ public class PeaDeploymentService implements AdapterDeploymentService<PeaBpmnMod
     ParsedProcess currentProcess = null;
     String currentTaskId = null;
     boolean currentTaskHasDefinition = false;
+    boolean currentTaskCallsADecision = false;
     String currentUserTaskId = null;
     boolean currentUserTaskHasFormReference = false;
 
@@ -390,6 +414,11 @@ public class PeaDeploymentService implements AdapterDeploymentService<PeaBpmnMod
           } else if ((currentProcess != null) && serviceLikeTasks.contains(element)) {
             currentTaskId = reader.getAttributeValue(null, "id");
             currentTaskHasDefinition = false;
+            // a business rule task naming a decision is served by the ENGINE, whichever
+            // way the engine spells that reference - it expects no @WorkflowTask method
+            currentTaskCallsADecision = hasAttribute(reader, "decisionRef");
+          } else if ((currentTaskId != null) && "calledDecision".equals(element)) {
+            currentTaskCallsADecision = true;
           } else if ((currentTaskId != null) && "taskDefinition".equals(element)) {
             currentProcess
                 .tasks()
@@ -416,13 +445,14 @@ public class PeaDeploymentService implements AdapterDeploymentService<PeaBpmnMod
         } else if (event == XMLStreamConstants.END_ELEMENT) {
           final var element = reader.getLocalName();
           if (serviceLikeTasks.contains(element) && (currentTaskId != null)) {
-            if (!currentTaskHasDefinition && (currentProcess != null)) {
+            if (!currentTaskHasDefinition && !currentTaskCallsADecision && (currentProcess != null)) {
               // no zeebe:taskDefinition: reported by the wiring validation
               currentProcess
                   .tasks()
                   .add(new BpmnTaskSpec(currentTaskId, null));
             }
             currentTaskId = null;
+            currentTaskCallsADecision = false;
           } else
             if ("userTask".equals(element) && (currentUserTaskId != null) && BPMN_NS.equals(reader.getNamespaceURI())) {
               if (!currentUserTaskHasFormReference && (currentProcess != null)) {
@@ -583,6 +613,29 @@ public class PeaDeploymentService implements AdapterDeploymentService<PeaBpmnMod
   }
 
   @Override
+  public PeaProcessingContext readDmn(
+      final String workflowModuleId,
+      final PeaProcessingContext existingContext,
+      final String filename,
+      final java.io.InputStream dmn) {
+
+    // the file travels to the engine as it is. The decision id is NOT scoped, unlike a
+    // process id under prefix scoping: this API knows no binding from a business rule
+    // task to a decision, so there is no reference which could be rewritten to match a
+    // renamed decision - renaming one side only would break every model. See GAPS.md.
+    existingContext
+        .addDecision(filename, io.vanillabp.integration.adapter.spi.DmnDecisionIds.bytesOf(dmn));
+    log.debug(
+        "Process-Engine-API adapter '{}': decision table '{}' of workflow module '{}' will be "
+            + "deployed with its processes",
+        adapterId,
+        filename,
+        workflowModuleId);
+    return existingContext;
+
+  }
+
+  @Override
   public void deployResources(
       final String workflowModuleId,
       final PeaProcessingContext bpmsProcessingContext) throws IllegalStateException {
@@ -608,6 +661,11 @@ public class PeaDeploymentService implements AdapterDeploymentService<PeaBpmnMod
     bpmsProcessingContext
         .getModels()
         .forEach(model -> resourcesByFilename.putIfAbsent(model.filename(), model.resource()));
+    // the module's decision tables are resources of the same bundle: a business rule task
+    // calls a decision of its own module, so both are deployed together
+    bpmsProcessingContext
+        .getDecisions()
+        .forEach(resourcesByFilename::putIfAbsent);
     final var resources = resourcesByFilename
         .entrySet()
         .stream()

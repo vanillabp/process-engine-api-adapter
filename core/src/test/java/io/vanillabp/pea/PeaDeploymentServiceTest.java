@@ -68,6 +68,16 @@ public class PeaDeploymentServiceTest {
 
   }
 
+  private static final String DECISION_TABLE = """
+      <?xml version="1.0" encoding="UTF-8"?>
+      <definitions xmlns="https://www.omg.org/spec/DMN/20191111/MODEL/"
+          id="creditRatingDefinitions" name="Credit rating" namespace="http://vanillabp.io/test">
+        <decision id="creditRating" name="Credit rating">
+          <decisionTable id="creditRatingTable" hitPolicy="UNIQUE"/>
+        </decision>
+      </definitions>
+      """;
+
   private static ByteArrayInputStream bpmn(
       final String xml) {
 
@@ -165,6 +175,59 @@ public class PeaDeploymentServiceTest {
     Assertions.assertTrue(
         deployment.resources().stream().anyMatch(resource -> "b.bpmn".equals(resource.getName())));
     Assertions.assertNull(deployment.tenantId(), "module-as-tenant is not expressible - deployed to default tenant");
+
+  }
+
+  @Test
+  @DisplayName("A decision table of the module is one more resource of the same bundle")
+  public void decisionTablesAreDeployedWithTheProcesses() {
+
+    final var context = new PeaProcessingContext("mod");
+    context
+        .getModels()
+        .add(new PeaBpmnModel("a.bpmn", "a-bytes".getBytes(StandardCharsets.UTF_8), "P1", List.of()));
+    service.readDmn("mod", context, "rating.dmn", bpmn(DECISION_TABLE));
+
+    service.deployResources("mod", context);
+
+    final var deployment = engine.getDeployments().get(0);
+    Assertions
+        .assertEquals(2, deployment.resources().size(), "the process and the decision travel together");
+    Assertions
+        .assertTrue(deployment.resources().stream().anyMatch(resource -> "rating.dmn".equals(resource.getName())));
+
+  }
+
+  @Test
+  @DisplayName("A business rule task calling a decision expects no @WorkflowTask method")
+  public void aBusinessRuleTaskCallingADecisionIsNoTaskToWire() {
+
+    final var xml = """
+        <?xml version="1.0" encoding="UTF-8"?>
+        <bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:zeebe="http://camunda.org/schema/zeebe/1.0">
+          <bpmn:process id="DecidingProcess" isExecutable="true">
+            <bpmn:businessRuleTask id="rate">
+              <bpmn:extensionElements>
+                <zeebe:calledDecision decisionId="creditRating" resultVariable="rating" />
+              </bpmn:extensionElements>
+            </bpmn:businessRuleTask>
+            <bpmn:businessRuleTask id="workerRule">
+              <bpmn:extensionElements>
+                <zeebe:taskDefinition type="rateIt" />
+              </bpmn:extensionElements>
+            </bpmn:businessRuleTask>
+          </bpmn:process>
+        </bpmn:definitions>
+        """;
+
+    final var models = service.readBpmn("mod", "deciding.bpmn", bpmn(xml), true);
+
+    final var tasks = models.get(0).getValue().tasks();
+    Assertions
+        .assertEquals(
+            List.of("workerRule"),
+            tasks.stream().map(BpmnTaskSpec::activityId).toList(),
+            "the engine evaluates the decision; only the task wired by a task definition is the application's");
 
   }
 
@@ -607,6 +670,25 @@ public class PeaDeploymentServiceTest {
       Assertions.assertTrue(exception.getMessage().contains("'loan-approval'"), exception::getMessage);
       Assertions.assertTrue(exception.getMessage().contains("use-prefix"), exception::getMessage);
       Assertions.assertTrue(exception.getMessage().contains("none"), exception::getMessage);
+
+    }
+
+    @Test
+    @DisplayName("A decision id is deployed as it was modelled - this API has no reference to rename with it")
+    public void aDecisionIdIsNotScoped() {
+
+      final var context = new PeaProcessingContext("mod");
+      serviceScopedBy(scopingWith(NameClashAvoidance.USE_PREFIX)).readDmn("mod", context, "rating.dmn",
+          bpmn(DECISION_TABLE));
+
+      Assertions
+          .assertEquals(
+              List.of("creditRating"),
+              List
+                  .copyOf(
+                      io.vanillabp.integration.adapter.spi.DmnDecisionIds
+                          .of(context.getDecisions().get("rating.dmn"))),
+              "renaming the decision while no business rule task can follow would break every model (GAPS 22)");
 
     }
 
