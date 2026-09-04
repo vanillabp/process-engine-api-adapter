@@ -411,6 +411,13 @@ application on this adapter learns about a dropped task definition the way it di
 when a workflow reaches it. A `processDefinitionVersion` per task plus a query for the
 deployed versions and their models would close gap 19 and this one together.
 
+The same gap covers a BPMN process the application RENAMED. The core asks every adapter
+what its BPMS holds for a process id which is declared
+(`@WorkflowService(secondaryBpmnProcesses = ...)`) without a model being deployed under it,
+so the workflows still running under the old name are checked like every other older
+version. This adapter answers nothing there either - `processVersionCatalogOf` keeps the
+default - and the check stays silent about a rename, for the reasons above.
+
 ## 21. Models cannot be read, so concurrent tokens cannot be reported
 
 **Needed by VanillaBP:** as soon as a BPMN process can hold more than one token, two
