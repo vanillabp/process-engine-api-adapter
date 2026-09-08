@@ -399,6 +399,22 @@ public class PeaDeploymentService implements AdapterDeploymentService<PeaBpmnMod
 
   }
 
+  /**
+   * An attribute a modeller left out and one they left empty are the same thing, and
+   * <code>null</code> is what the adapter SPI says for "none".
+   *
+   * @param value The attribute value, or <code>null</code>
+   * @return The value, or <code>null</code> where there is nothing in it
+   */
+  private static String blankToNull(
+      final String value) {
+
+    return (value == null) || value.isBlank()
+        ? null
+        : value;
+
+  }
+
   private List<ParsedProcess> parseBpmn(
       final String workflowModuleId,
       final String filename,
@@ -418,6 +434,7 @@ public class PeaDeploymentService implements AdapterDeploymentService<PeaBpmnMod
     boolean currentTaskHasDefinition = false;
     boolean currentTaskCallsADecision = false;
     String currentUserTaskId = null;
+    String currentUserTaskName = null;
     boolean currentUserTaskHasFormReference = false;
 
     XMLStreamReader reader = null;
@@ -454,6 +471,9 @@ public class PeaDeploymentService implements AdapterDeploymentService<PeaBpmnMod
               // namespace check: the marker extension <zeebe:userTask/> shares the
               // local name with the BPMN element
               currentUserTaskId = reader.getAttributeValue(null, "id");
+              // what the modeller wrote on the element: the only human-readable name a task
+              // list has for this task, since the engine reports none of its own
+              currentUserTaskName = blankToNull(reader.getAttributeValue(null, "name"));
               currentUserTaskHasFormReference = false;
             } else if ((currentUserTaskId != null) && "formDefinition".equals(element)) {
               // user tasks: the zeebe:formDefinition external reference
@@ -463,7 +483,7 @@ public class PeaDeploymentService implements AdapterDeploymentService<PeaBpmnMod
               if ((externalReference != null) && !externalReference.isBlank()) {
                 currentProcess
                     .userTasks()
-                    .add(BpmnTaskSpec.userTask(currentUserTaskId, externalReference));
+                    .add(BpmnTaskSpec.userTask(currentUserTaskId, externalReference, currentUserTaskName));
                 currentUserTaskHasFormReference = true;
               }
             }
@@ -490,6 +510,7 @@ public class PeaDeploymentService implements AdapterDeploymentService<PeaBpmnMod
                     filename);
               }
               currentUserTaskId = null;
+              currentUserTaskName = null;
             } else if ("process".equals(element)) {
               currentProcess = null;
             }

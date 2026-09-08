@@ -280,6 +280,54 @@ public class PeaDeploymentServiceTest {
   }
 
   @Test
+  public void readBpmnCarriesTheUserTaskNameTheModellerWrote() {
+
+    final var xml = """
+        <?xml version="1.0" encoding="UTF-8"?>
+        <bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:zeebe="http://camunda.org/schema/zeebe/1.0">
+          <bpmn:process id="NamedProcess" isExecutable="true">
+            <bpmn:userTask id="ut1" name="Approve the order">
+              <bpmn:extensionElements>
+                <zeebe:userTask />
+                <zeebe:formDefinition externalReference="approve" />
+              </bpmn:extensionElements>
+            </bpmn:userTask>
+            <bpmn:userTask id="ut2">
+              <bpmn:extensionElements>
+                <zeebe:userTask />
+                <zeebe:formDefinition externalReference="check" />
+              </bpmn:extensionElements>
+            </bpmn:userTask>
+            <bpmn:userTask id="ut3" name="  ">
+              <bpmn:extensionElements>
+                <zeebe:userTask />
+                <zeebe:formDefinition externalReference="blank" />
+              </bpmn:extensionElements>
+            </bpmn:userTask>
+          </bpmn:process>
+        </bpmn:definitions>
+        """;
+
+    final var userTasks = service
+        .readBpmn("mod", "named.bpmn", bpmn(xml), true)
+        .get(0)
+        .getValue()
+        .userTasks();
+
+    Assertions.assertEquals(3, userTasks.size());
+    // what a task list shows: this engine reports no name of its own, so the model is
+    // where it comes from
+    Assertions.assertEquals("approve", userTasks.get(0).taskDefinition());
+    Assertions.assertEquals("Approve the order", userTasks.get(0).name());
+    // a user task the modeller did not name has none, and neither has one named with
+    // nothing but whitespace - an absent attribute and an empty one are the same thing
+    Assertions.assertEquals("check", userTasks.get(1).taskDefinition());
+    Assertions.assertNull(userTasks.get(1).name());
+    Assertions.assertNull(userTasks.get(2).name());
+
+  }
+
+  @Test
   public void startWorkflowProcessingSubscribesPerDistinctTaskDefinitionAndStopUnsubscribes() {
 
     final var xml = """
