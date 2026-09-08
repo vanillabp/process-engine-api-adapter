@@ -21,9 +21,11 @@ package io.vanillabp.pea.observation;
  * checks whether a {@code @WorkflowTask} method of the application claims the task, because
  * a task list shows a user task whether or not the application has code for it.
  * <p>
- * <b>One list, called for every adapter id.</b> The observation names the adapter whose
- * engine delivered the task, so an observer which serves one of several configured engines
- * filters on {@link PeaUserTaskObservation#adapterId()}.
+ * <b>One list, called for every adapter id.</b> An application configures exactly one adapter
+ * id of this type - a second one ends the boot, because this API cannot tell two engines apart
+ * ({@code GAPS.md}, entry 14) - so there is one list and the observation names the adapter it
+ * came from, which is what an observer reports under. See decision 9 in the repository's
+ * DECISIONS.md.
  * <p>
  * <b>Failing is the observer's own business.</b> An observer which throws is logged with its
  * class and its task; the delivery reaches the application and the remaining observers are

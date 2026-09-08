@@ -1,6 +1,5 @@
 package io.vanillabp.pea.wiring;
 
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -98,7 +97,7 @@ public class PeaUserTaskHandler implements TaskHandler {
         ? PeaFetchVariables.Selection.everything()
         : fetchVariables;
     this.observers = observers == null
-        ? PeaUserTaskObservers.of(List.of())
+        ? PeaUserTaskObservers.of(adapterId, List.of())
         : observers;
 
   }
@@ -111,34 +110,56 @@ public class PeaUserTaskHandler implements TaskHandler {
     final var taskId = taskInformation.getTaskId();
 
     try {
-      final var bpmnProcessId = determineBpmnProcessId(taskInformation);
-      // whoever watches this application's user tasks sees every one of them: the routing
-      // check right below drops a delivery no @WorkflowTask method claims, and a task list
-      // shows a user task whether or not the application has code for it
-      observers.delivered(() -> observationOf(bpmnProcessId, taskInformation, payload));
+      final var bpmnProcessId = bpmnProcessIdOrNull(taskInformation);
+      // what the payload holds the workflow aggregate's id under, asked once and answered
+      // leniently: an observer is told about a delivery this application cannot place, and
+      // the failure is kept for the strict path below, which is where it is a defect
+      String aggregateIdName = null;
+      RuntimeException noAggregateIdName = null;
+      if (bpmnProcessId != null) {
+        try {
+          aggregateIdName = workflowTaskInvoker.resolveWorkflowAggregateIdName(
+              workflowModuleId, bpmnProcessId);
+        } catch (final RuntimeException e) {
+          noAggregateIdName = e;
+        }
+      }
+      // whoever watches this application's user tasks sees every one of them: the two
+      // failures below drop a delivery which cannot be routed and one no @WorkflowTask
+      // method claims, and a task list shows a user task in both cases
+      final var observedAggregateIdName = aggregateIdName;
+      observers.delivered(
+          taskId, () -> observationOf(bpmnProcessId, observedAggregateIdName, taskInformation, payload));
+      if (bpmnProcessId == null) {
+        throw ambiguousRouting(taskInformation);
+      }
+      // the core's registries are keyed by the plain identifiers, so what this subscription
+      // is keyed by is translated back before the core is asked anything
+      final var taskDefinition = plainTaskDefinition(bpmnProcessId);
       if (!workflowTaskInvoker.workflowTaskHandlerExists(
-          workflowModuleId, bpmnProcessId, externalFormReference)) {
+          workflowModuleId, bpmnProcessId, taskDefinition)) {
         log.trace(
             "Process-Engine-API adapter '{}': no @WorkflowTask handler for user task '{}' of BPMN "
                 + "process '{}' - skipping the notification",
             adapterId,
-            externalFormReference,
+            taskDefinition,
             bpmnProcessId);
         return;
       }
-      final var aggregateIdName = workflowTaskInvoker.resolveWorkflowAggregateIdName(
-          workflowModuleId, bpmnProcessId);
+      if (noAggregateIdName != null) {
+        throw noAggregateIdName;
+      }
       final var aggregateId = payload.get(aggregateIdName);
       if (aggregateId == null) {
         throw new IllegalStateException(
             PeaFetchVariables.missingAggregateId(
-                "User task", taskId, externalFormReference, bpmnProcessId, aggregateIdName, adapterId, fetchVariables));
+                "User task", taskId, taskDefinition, bpmnProcessId, aggregateIdName, adapterId, fetchVariables));
       }
       final var outcome = workflowTaskInvoker.invokeWorkflowTask(
           workflowModuleId,
           bpmnProcessId,
           new PeaUserTaskInvocationContext(
-              adapterId, externalFormReference, String
+              adapterId, taskDefinition, String
                   .valueOf(aggregateId), taskId, payload, taskInformation
                       .getMeta()
                       .get(PeaTaskHandler.META_VERSION_TAG), fetchVariables));
@@ -148,7 +169,7 @@ public class PeaUserTaskHandler implements TaskHandler {
                 + "workflow module '%s') threw a TaskException! User-task notification handlers "
                 + "must not raise BPMN errors - route errors via ProcessService#cancelUserTask "
                 + "instead.")
-                .formatted(externalFormReference, bpmnProcessId, workflowModuleId));
+                .formatted(taskDefinition, bpmnProcessId, workflowModuleId));
       }
     } catch (final Exception e) {
       // a failing NOTIFICATION must not break the user task itself - the task
@@ -187,8 +208,9 @@ public class PeaUserTaskHandler implements TaskHandler {
             .getMeta()
             .getOrDefault(TaskInformation.REASON, "no reason given"));
     try {
-      observers.terminated(() -> new PeaUserTaskObservation(
-          adapterId, workflowModuleId, bpmnProcessIdOrNull(taskInformation), externalFormReference,
+      final var bpmnProcessId = bpmnProcessIdOrNull(taskInformation);
+      observers.terminated(taskId, () -> new PeaUserTaskObservation(
+          adapterId, workflowModuleId, bpmnProcessId, plainTaskDefinition(bpmnProcessId),
           // a termination carries no payload, so the aggregate-id variable is not among
           // the things the engine hands over
           null, taskInformation, Map.of()));
@@ -207,62 +229,96 @@ public class PeaUserTaskHandler implements TaskHandler {
   }
 
   /**
-   * What an observer is handed, resolved as far as this delivery allows. The workflow
-   * aggregate's id is read from the payload under the name the core knows for the BPMN
-   * process, and where there is no such name - the process has no workflow aggregate in this
-   * application - or the subscription did not ask the engine for that variable, the
-   * observation carries none: an observer sees a task it cannot place under a business case
-   * rather than no task at all.
+   * What an observer is handed. The identifiers are the PLAIN ones the application's BPMN and
+   * its configuration use: the subscription is keyed by the SCOPED task definition and the
+   * engine reports the scoped BPMN process id, and both are translated back before anybody
+   * outside the adapter sees them (decision 2 in the repository's DECISIONS.md).
    * <p>
-   * The application's own path resolves the same value once more and STRICTLY, because a
-   * delivery a <code>&#64;WorkflowTask</code> method claims without an aggregate id is a
-   * defect there.
+   * <code>aggregateIdName</code> is what the caller resolved for this BPMN process, or
+   * <code>null</code> where the application declares no workflow aggregate for it. That case
+   * and a variable the subscription did not ask the engine for are the two which leave the
+   * observation without an aggregate id: an observer then sees a task it cannot place under a
+   * business case rather than no task at all. The application's own path is strict about the
+   * same value, because a delivery a <code>&#64;WorkflowTask</code> method claims without an
+   * aggregate id is a defect there.
    *
-   * @param bpmnProcessId The BPMN process the delivery was routed to
+   * @param bpmnProcessId The plain BPMN process the delivery was routed to, or
+   *          <code>null</code> where it cannot be told
+   * @param aggregateIdName The payload variable holding the aggregate's id, or
+   *          <code>null</code>
    * @param taskInformation What the engine says about the task
    * @param payload What the engine delivered
    * @return The observation
    */
   private PeaUserTaskObservation observationOf(
       final String bpmnProcessId,
+      final String aggregateIdName,
       final TaskInformation taskInformation,
       final Map<String, ?> payload) {
 
-    Object aggregateId = null;
-    try {
-      final var aggregateIdName = workflowTaskInvoker.resolveWorkflowAggregateIdName(
-          workflowModuleId, bpmnProcessId);
-      aggregateId = payload.get(aggregateIdName);
-    } catch (final RuntimeException e) {
-      log.debug(
-          "Process-Engine-API adapter '{}': the BPMN process '{}' of workflow module '{}' has no "
-              + "known workflow aggregate - the observers of user task '{}' are told about it "
-              + "without one",
-          adapterId,
-          bpmnProcessId,
-          workflowModuleId,
-          taskInformation.getTaskId(),
-          e);
-    }
+    final var aggregateId = aggregateIdName == null
+        ? null
+        : payload.get(aggregateIdName);
     return new PeaUserTaskObservation(
-        adapterId, workflowModuleId, bpmnProcessId, externalFormReference, aggregateId == null
+        adapterId, workflowModuleId, bpmnProcessId, plainTaskDefinition(bpmnProcessId), aggregateId == null
             ? null
-            : String.valueOf(aggregateId), taskInformation, new LinkedHashMap<>(payload));
+            : String.valueOf(aggregateId), taskInformation,
+        // the record makes the one defensive copy there is - this map is only read
+        payloadAsDelivered(payload));
 
   }
 
-  private String determineBpmnProcessId(
+  /**
+   * The delivered payload as the observation declares it. The engine hands over a map of
+   * unknown value type and the record one of <code>Object</code>: the same map, read through
+   * a wider door, and never written through either.
+   *
+   * @param payload What the engine delivered
+   * @return The same map
+   */
+  @SuppressWarnings("unchecked")
+  private static Map<String, Object> payloadAsDelivered(
+      final Map<String, ?> payload) {
+
+    return (Map<String, Object>) payload;
+
+  }
+
+  /**
+   * The PLAIN task definition of this subscription - its key is the scoped one under
+   * {@code use-prefix}, where a task definition is scoped per BPMN process.
+   * <p>
+   * Without a BPMN process there is nothing to unscope by, and then there is nothing to
+   * unscope either: under {@code use-prefix} two processes sharing a form reference get one
+   * subscription each, because their scoped keys differ, so a subscription which cannot tell
+   * its process apart belongs to a mode which prefixes nothing.
+   *
+   * @param bpmnProcessId The plain BPMN process id, or <code>null</code>
+   * @return The plain task definition
+   */
+  private String plainTaskDefinition(
+      final String bpmnProcessId) {
+
+    if ((scoping == null) || (bpmnProcessId == null)) {
+      return externalFormReference;
+    }
+    return scoping.plainTaskDefinition(
+        workflowModuleId, bpmnProcessId, externalFormReference, adapterId);
+
+  }
+
+  /**
+   * The delivery cannot be routed: the engine named no BPMN process and this subscription
+   * serves several. The observers have been told by the time this is thrown - a task a cockpit
+   * shows is not the same question as a task this application can dispatch.
+   *
+   * @param taskInformation What the engine says about the task
+   * @return The failure the notification ends with
+   */
+  private IllegalStateException ambiguousRouting(
       final TaskInformation taskInformation) {
 
-    final var resolved = bpmnProcessIdOrNull(taskInformation);
-    if (resolved != null) {
-      return resolved;
-    }
-    final var distinct = bpmnProcessIds
-        .stream()
-        .distinct()
-        .toList();
-    throw new IllegalStateException(
+    return new IllegalStateException(
         ("User task '%s' (form reference '%s') carries no meta entry '%s' and the form reference "
             + "is used by several BPMN processes of workflow module '%s' (%s) - the notification "
             + "cannot be routed!")
@@ -271,7 +327,10 @@ public class PeaUserTaskHandler implements TaskHandler {
                 externalFormReference,
                 PeaTaskHandler.META_BPMN_PROCESS_ID,
                 workflowModuleId,
-                distinct));
+                bpmnProcessIds
+                    .stream()
+                    .distinct()
+                    .toList()));
 
   }
 
@@ -279,8 +338,13 @@ public class PeaUserTaskHandler implements TaskHandler {
    * Which BPMN process a delivery belongs to, as far as it can be told: the engine's meta
    * entry names it, and where the engine fills none this subscription's single process is the
    * answer. Several processes behind one form reference and no meta entry leave it open,
-   * which is a defect for a delivery and a fact of life for a termination - see
-   * {@link #terminated(TaskInformation)}.
+   * which ends a delivery in {@link #ambiguousRouting} and is a fact of life for a termination
+   * - see {@link #terminated(TaskInformation)}.
+   * <p>
+   * The meta entry is what the ENGINE knows the process as, so it is unscoped: the core's
+   * registries are keyed by the plain id and so is everything this adapter hands out
+   * (decision 2 in the repository's DECISIONS.md). The single process of a subscription is
+   * plain already, being the one this adapter subscribed for.
    *
    * @param taskInformation What the engine says about the task
    * @return The plain BPMN process id, or <code>null</code>
@@ -290,7 +354,7 @@ public class PeaUserTaskHandler implements TaskHandler {
 
     final var fromMeta = taskInformation.getMeta().get(PeaTaskHandler.META_BPMN_PROCESS_ID);
     if (fromMeta != null) {
-      return fromMeta;
+      return NameClashAvoidanceSupport.plainProcessId(scoping, workflowModuleId, fromMeta, adapterId);
     }
     final var distinct = bpmnProcessIds
         .stream()

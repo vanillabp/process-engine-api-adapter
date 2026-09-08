@@ -134,6 +134,7 @@ public class PeaDeploymentService implements AdapterDeploymentService<PeaBpmnMod
     this.taskSubscriptionApi = taskSubscriptionApi;
     this.serviceTaskCompletionApi = serviceTaskCompletionApi;
     this.deployedProcesses = deployedProcesses;
+    this.userTaskObservers = PeaUserTaskObservers.of(adapterId, List.of());
 
   }
 
@@ -163,7 +164,7 @@ public class PeaDeploymentService implements AdapterDeploymentService<PeaBpmnMod
    * collected by the platform modules. Empty unless something registered one, and then this
    * service behaves exactly as it did before the seam existed.
    */
-  private PeaUserTaskObservers userTaskObservers = PeaUserTaskObservers.of(List.of());
+  private PeaUserTaskObservers userTaskObservers;
 
   /**
    * Sets the <code>fetch-variables</code> resolver (the platform modules construct this
@@ -188,7 +189,7 @@ public class PeaDeploymentService implements AdapterDeploymentService<PeaBpmnMod
   public void setUserTaskObservers(
       final List<PeaUserTaskObserver> userTaskObservers) {
 
-    this.userTaskObservers = PeaUserTaskObservers.of(userTaskObservers);
+    this.userTaskObservers = PeaUserTaskObservers.of(adapterId, userTaskObservers);
 
   }
 

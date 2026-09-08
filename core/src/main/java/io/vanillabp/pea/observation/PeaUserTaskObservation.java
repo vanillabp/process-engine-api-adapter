@@ -17,10 +17,12 @@ import dev.bpmcrafters.processengineapi.task.TaskInformation;
  * Everything else is the engine's own word, handed on unchanged, because the meta map is
  * engine-specific and an observer usually reads more of it than the adapter needs.
  * <p>
- * The identifiers are PLAIN, never the scoped ones the deployed bytes carry: name-clash
- * avoidance is undone before a delivery reaches the adapter's handler, and an observer sees
- * the same names the application's BPMN and configuration use (see decision 2 in the
- * repository's DECISIONS.md).
+ * The identifiers are PLAIN, never the scoped ones the deployed bytes carry: the subscription
+ * is keyed by the scoped task definition and the engine reports the scoped BPMN process id,
+ * and {@code PeaUserTaskHandler} translates both back before building this, so an observer
+ * sees the names the application's BPMN and its configuration use (see decision 2 in the
+ * repository's DECISIONS.md). {@code UserTaskObserverIntegrationTest} holds that under
+ * <code>use-prefix</code>.
  *
  * @param adapterId The configured adapter id whose engine delivered this task
  * @param workflowModuleId The workflow module the subscription belongs to

@@ -8,6 +8,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.Supplier;
 
 import javax.sql.DataSource;
 
@@ -27,6 +28,7 @@ import org.springframework.jdbc.datasource.embedded.EmbeddedDatabaseBuilder;
 import org.springframework.jdbc.datasource.embedded.EmbeddedDatabaseType;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import dev.bpmcrafters.processengineapi.task.TaskInformation;
 import io.vanillabp.integration.spi.AggregatePersistenceAware;
@@ -35,6 +37,7 @@ import io.vanillabp.pea.mock.InMemoryProcessEngine;
 import io.vanillabp.pea.observation.PeaUserTaskObservation;
 import io.vanillabp.pea.observation.PeaUserTaskObserver;
 import io.vanillabp.pea.springboot.TestPersistenceConfiguration;
+import io.vanillabp.spi.process.ProcessService;
 import io.vanillabp.spi.service.BpmnProcess;
 import io.vanillabp.spi.service.TaskId;
 import io.vanillabp.spi.service.WorkflowService;
@@ -266,6 +269,23 @@ public class UserTaskObserverIntegrationTest {
       bpmnProcess = @BpmnProcess(bpmnProcessId = PROCESS))
   public static class ObserverWorkflowService {
 
+    private final ProcessService<ObserverAggregate> processService;
+
+    public ObserverWorkflowService(
+        final ProcessService<ObserverAggregate> processService) {
+
+      this.processService = processService;
+
+    }
+
+    public ObserverAggregate completeUserTask(
+        final ObserverAggregate aggregate,
+        final String taskId) {
+
+      return processService.completeUserTask(aggregate, taskId);
+
+    }
+
     /**
      * The claimed user task. Its sibling <code>peaUnclaimed</code> has no method here on
      * purpose: a task list shows it anyway.
@@ -284,6 +304,12 @@ public class UserTaskObserverIntegrationTest {
 
   @Autowired
   private InMemoryProcessEngine engine;
+
+  @Autowired
+  private ObserverWorkflowService workflowService;
+
+  @Autowired
+  private PlatformTransactionManager transactionManager;
 
   @BeforeEach
   public void seedAggregates() {
@@ -352,6 +378,45 @@ public class UserTaskObserverIntegrationTest {
     assertNull(
         UserTaskObserverConfiguration.AGGREGATES.get("5001").results,
         "no method claims this task, so nothing of the application ran");
+
+  }
+
+  @Test
+  @DisplayName("Completing the user task terminates it at the engine, and the observers hear complete")
+  public void completionTerminatesWithComplete() throws Exception {
+
+    engine.deliverTask("obs-4", "peaObserved", PROCESS, Map.of("id", "5001"));
+    assertTrue(engine.getOpenTaskIds().contains("obs-4"), "the user task stays open");
+
+    new TransactionTemplate(transactionManager)
+        .executeWithoutResult(status -> workflowService
+            .completeUserTask(UserTaskObserverConfiguration.AGGREGATES.get("5001"), "obs-4"));
+
+    // the completion is dispatched after the caller's commit, and the engine reports the
+    // task as gone the way the reference adapter does for a task finished through the
+    // completion API
+    awaitUntil(
+        () -> !UserTaskObserverConfiguration.SECOND.terminated.isEmpty(),
+        "the termination of the completed user task");
+
+    final var observation = UserTaskObserverConfiguration.SECOND.terminated.getFirst();
+    assertEquals("obs-4", observation.taskId());
+    assertEquals(TaskInformation.COMPLETE, observation.reason());
+
+  }
+
+  private void awaitUntil(
+      final Supplier<Boolean> condition,
+      final String description) throws InterruptedException {
+
+    final var deadline = System.currentTimeMillis() + 15000;
+    while (!Boolean.TRUE.equals(condition.get())) {
+      if (System.currentTimeMillis() > deadline) {
+        throw new AssertionError("timed out waiting for: "
+            + description);
+      }
+      Thread.sleep(50);
+    }
 
   }
 

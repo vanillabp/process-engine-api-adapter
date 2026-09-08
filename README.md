@@ -334,9 +334,10 @@ public record PeaUserTaskObservation(
 
 On Spring Boot an observer is a bean of the interface, on Quarkus a CDI bean of it. Both
 platform modules collect what they find and hand it to every `PeaDeploymentService` they build,
-which passes it on to the handlers of its user-task subscriptions. One list serves every
-configured adapter id, and the observation names the adapter its task came from (decision 9 in
-[`DECISIONS.md`](DECISIONS.md)).
+which passes it on to the handlers of its user-task subscriptions. An application configures
+one adapter id of this type - a second one ends the boot ([`GAPS.md`](GAPS.md), entry 14) - so
+one list serves it, and the observation names the adapter its task came from, which is what an
+observer reports under (decision 9 in [`DECISIONS.md`](DECISIONS.md)).
 
 An observer is told about EVERY delivery. It is called before the check which drops a
 delivery no `@WorkflowTask` method claims, because a task list shows a user task whether or
@@ -354,9 +355,10 @@ change a task, and it cannot stop a delivery from reaching the application. Comp
 task goes through `ProcessService#completeUserTask` like everywhere else.
 
 One which throws is logged with its class and its task, and then the delivery reaches the
-application and the remaining observers are called anyway. An application which registered
-none pays nothing for the seam: no observation is built at all and everything behaves as it
-did before.
+application and the remaining observers are called anyway. So does a failure while describing
+the task for them, which would otherwise cost the application the notification it was about to
+get. An application which registered no observer builds no observation at all and behaves
+exactly as it did before the seam existed.
 
 What an observation leaves open is said rather than guessed. `workflowAggregateId` is `null`
 where the BPMN process has no workflow aggregate in this application, where the subscription

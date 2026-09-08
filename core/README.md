@@ -102,26 +102,31 @@ The package holds three types:
   [`../README.md`](../README.md), section "Observing the user tasks of an application".
 - `PeaUserTaskObservation` — the value handed over: adapter id, workflow module, BPMN process,
   task definition, workflow aggregate id, the engine's `TaskInformation` and the payload the
-  subscription asked for. The identifiers are the PLAIN ones (decision 2 in
-  [`../DECISIONS.md`](../DECISIONS.md)), and the two which a delivery may leave open —
-  `bpmnProcessId` and `workflowAggregateId` — are documented as nullable rather than faked.
+  subscription asked for. The identifiers are the PLAIN ones: the subscription key is the
+  SCOPED task definition and the engine reports the scoped BPMN process id, and both are
+  translated back through `NameClashAvoidanceSupport` before the observation is built
+  (decision 2 in [`../DECISIONS.md`](../DECISIONS.md)). The two which a delivery may leave
+  open — `bpmnProcessId` and `workflowAggregateId` — are documented as nullable rather than
+  faked.
 - `PeaUserTaskObservers` — the observers of one adapter id and the one place they are called
   from, so that what an observer costs the task it watches is decided once for both
-  platforms: a throwing observer is caught and logged, the next one is called anyway, and an
-  application which registered nothing never builds an observation (the callers hand over a
-  `Supplier`).
+  platforms. Nothing that happens in there reaches the caller: a throwing observer is caught
+  and logged and the next one is called anyway, and so is a failure while DESCRIBING the task,
+  which would otherwise land in the handler's own catch and cost the application its
+  notification. An application which registered nothing never builds an observation, because
+  the callers hand over a `Supplier`.
 
 Where it is called from:
 
 - `PeaDeploymentService` takes the observers through `setUserTaskObservers(...)`, the way it
   takes the `fetch-variables` resolver, and hands them to every `PeaUserTaskHandler` it builds
   while opening the user-task subscriptions of a workflow module.
-- `PeaUserTaskHandler.accept` calls `userTaskDelivered` right after it routed the delivery to
-  its BPMN process and BEFORE the check which drops a delivery no `@WorkflowTask` method
-  claims. The workflow aggregate's id is therefore resolved twice per delivery when somebody
-  observes: tolerantly for the observation (an unknown aggregate leaves it `null`) and
-  strictly for the application's own path, where a claimed delivery without an aggregate id is
-  a defect. Nobody observing means neither resolution happens.
+- `PeaUserTaskHandler.accept` calls `userTaskDelivered` before anything can drop the delivery:
+  before the routing failure of a form reference several BPMN processes share, and before the
+  check which skips a delivery no `@WorkflowTask` method claims. What the delivery leaves open
+  it says: the BPMN process is `null` in the first case and the aggregate id in the second,
+  where the process has no workflow aggregate at all. The aggregate-id variable is resolved
+  once, leniently, and the strict path afterwards throws the failure that resolution kept.
 - `PeaUserTaskHandler.terminated` is registered as the subscription's `TaskTerminationHandler`
   — the overload carrying the engine's `TaskInformation`, which is what the reason travels in.
   The service-task subscriptions register the same overload, without observers: there is

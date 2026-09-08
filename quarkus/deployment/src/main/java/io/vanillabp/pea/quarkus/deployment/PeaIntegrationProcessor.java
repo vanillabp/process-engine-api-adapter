@@ -1,12 +1,14 @@
 package io.vanillabp.pea.quarkus.deployment;
 
 import io.quarkus.arc.deployment.AdditionalBeanBuildItem;
+import io.quarkus.arc.deployment.UnremovableBeanBuildItem;
 import io.quarkus.deployment.annotations.BuildProducer;
 import io.quarkus.deployment.annotations.BuildStep;
 import io.quarkus.deployment.builditem.FeatureBuildItem;
 import io.vanillabp.integration.deployment.pipeline.VanillaBpAdapterDeploymentServiceBuildItem;
 import io.vanillabp.integration.deployment.processservice.VanillaBpMigratableProcessServiceBuildItem;
 import io.vanillabp.pea.PeaAdapter;
+import io.vanillabp.pea.observation.PeaUserTaskObserver;
 import io.vanillabp.pea.quarkus.deployment.config.PeaProperties;
 import io.vanillabp.pea.quarkus.runtime.PeaDeploymentServiceProducer;
 import io.vanillabp.pea.quarkus.runtime.PeaProcessEngineProducer;
@@ -94,10 +96,9 @@ class PeaIntegrationProcessor {
    * @return What must not be removed
    */
   @BuildStep
-  io.quarkus.arc.deployment.UnremovableBeanBuildItem keepUserTaskObservers() {
+  UnremovableBeanBuildItem keepUserTaskObservers() {
 
-    return io.quarkus.arc.deployment.UnremovableBeanBuildItem
-        .beanTypes(io.vanillabp.pea.observation.PeaUserTaskObserver.class);
+    return UnremovableBeanBuildItem.beanTypes(PeaUserTaskObserver.class);
 
   }
 

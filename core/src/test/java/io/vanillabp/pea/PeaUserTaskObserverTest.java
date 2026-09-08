@@ -142,7 +142,7 @@ public class PeaUserTaskObserverTest {
         .externalFormReference("approve")
         .bpmnProcessIds(bpmnProcessIds)
         .workflowTaskInvoker(invoker)
-        .observers(PeaUserTaskObservers.of(List.of(observers)))
+        .observers(PeaUserTaskObservers.of("pea", List.of(observers)))
         .build();
 
   }
@@ -276,12 +276,14 @@ public class PeaUserTaskObserverTest {
   @DisplayName("Without an observer no observation is built")
   public void withoutAnObserverNothingIsBuilt() {
 
-    final PeaUserTaskObservers nobody = PeaUserTaskObservers.of(List.of());
+    final PeaUserTaskObservers nobody = PeaUserTaskObservers.of("pea", List.of());
 
     assertTrue(nobody.isEmpty());
     assertTrue(nobody.names().isEmpty());
-    nobody.delivered(() -> fail("an application without an observer pays nothing for the seam"));
-    nobody.terminated(() -> fail("an application without an observer pays nothing for the seam"));
+    nobody.delivered(
+        "utask-nobody", () -> fail("an application without an observer pays nothing for the seam"));
+    nobody.terminated(
+        "utask-nobody", () -> fail("an application without an observer pays nothing for the seam"));
 
     // and a handler built without any observer at all behaves like one built with an empty
     // list - the platform modules hand over what they found, which may be nothing
@@ -296,6 +298,67 @@ public class PeaUserTaskObserverTest {
         .accept(new TaskInformation("utask-8", Map.of()), Map.of("id", "4718"));
 
     assertEquals("OnlyProcess", invoker.invokedBpmnProcessId);
+
+  }
+
+  @Test
+  @DisplayName("An unroutable delivery reaches the observers before it fails")
+  public void anUnroutableDeliveryStillReachesTheObservers() {
+
+    final var observer = new RecordingObserver("only", callLog);
+
+    // two BPMN processes behind one form reference and no meta entry naming the process:
+    // the application's notification cannot be routed, a task list still shows the task
+    handler(List.of("ProcessA", "ProcessB"), observer)
+        .accept(new TaskInformation("utask-10", Map.of()), Map.of("id", "4720"));
+
+    final var observation = observer.delivered.getFirst();
+    assertNull(observation.bpmnProcessId());
+    assertNull(observation.workflowAggregateId(), "without a process there is no aggregate to name");
+    assertEquals("utask-10", observation.taskId());
+    assertNull(invoker.invokedBpmnProcessId, "the notification cannot be routed and does not run");
+
+  }
+
+  @Test
+  @DisplayName("A failure while describing the task costs the application nothing")
+  public void aFailingDescriptionCostsTheApplicationNothing() {
+
+    final var observers = PeaUserTaskObservers.of("pea", List.of(new RecordingObserver("only", callLog)));
+    observers.delivered("utask-11", () -> {
+      throw new IllegalStateException("boom-description");
+    });
+
+    assertTrue(callLog.isEmpty(), "there was nothing to hand anybody");
+
+    // and the same failure inside a delivery leaves the notification untouched: the
+    // observation is built lazily, so a broken description is caught where it happens
+    final var handler = PeaUserTaskHandler
+        .builder()
+        .adapterId("pea")
+        .workflowModuleId("test-module")
+        .externalFormReference("approve")
+        .bpmnProcessIds(List.of("OnlyProcess"))
+        .workflowTaskInvoker(invoker)
+        .observers(PeaUserTaskObservers.of("pea", List.of(new PeaUserTaskObserver() {
+
+          @Override
+          public void userTaskDelivered(
+              final PeaUserTaskObservation observation) {
+            // the observation was built, so this one is the observer's own failure
+            throw new IllegalStateException("boom-observer");
+          }
+
+          @Override
+          public void userTaskTerminated(
+              final PeaUserTaskObservation observation) {
+          }
+
+        })))
+        .build();
+    handler.accept(new TaskInformation("utask-12", Map.of()), Map.of("id", "4721"));
+
+    assertEquals("OnlyProcess", invoker.invokedBpmnProcessId, "the notification ran anyway");
 
   }
 
