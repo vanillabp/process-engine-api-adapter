@@ -199,14 +199,17 @@ replaces the mock with a real Process-Engine-API implementation.
   (a gone task is tolerated - at-least-once residual). PEA failures are untyped, so a failing
   probe cannot be told apart from an unreachable engine and maps to "unknown"
   ([`GAPS.md`](GAPS.md), entry 10 - relevant for multi-BPMS migration setups). `@TaskEvent
-  CANCELED` cannot be delivered (the subscription's termination callback carries only the task
-  ID, no aggregate reference). The mock tracks open tasks (`deliverTask` opens,
-  SYNC completions close) so preflights validate honestly.
+  CANCELED` cannot be delivered: the subscription's termination callback carries the engine's
+  `TaskInformation` - the task id, the reason and the rest of its meta map - but no payload,
+  so the workflow aggregate the notification would run for cannot be told. The mock tracks
+  open tasks (`deliverTask` opens, SYNC completions close) so preflights validate honestly.
 - **User tasks:** user tasks with a `zeebe:formDefinition` EXTERNAL reference (the
   reference is the task definition) are subscribed via the Task Subscription API with
   `TaskType.USER`; a delivered user task is a CREATED notification to an OPTIONAL
   `@WorkflowTask` method (never completing the task; the task's ID arrives as `@TaskId`).
-  CANCELED cannot be delivered (termination callback carries no aggregate reference - GAPS).
+  CANCELED cannot be delivered, because a termination carries no payload and therefore no
+  aggregate reference; what it does carry reaches the user-task observers of the application
+  (see [Observing the user tasks of an application](#observing-the-user-tasks-of-an-application)).
   `completeUserTask`/`cancelUserTask` run through the `UserTaskCompletionApi` with the same
   PREFLIGHT_CHECK (phase one) / SYNC (phase two) mapping as service tasks; failing
   notifications are logged loudly but never break the user task itself.
@@ -305,6 +308,65 @@ The mock engine narrows a delivered payload to what the subscription asked for
 asserted and never exercised. `PeaFetchVariablesTest` holds all of it, from
 `theSubscriptionNamesWhatItReads` and `theUnionCoversEverythingTheSubscriptionServes`
 through `theEscapeHatchAsksForEverything` to `anUnknownAggregateFallsBackToEverything`.
+
+## Observing the user tasks of an application
+
+A task list, a cockpit or anything else which wants to WATCH the user tasks of an application
+cannot subscribe next to it. The Process-Engine-API delivers a task to exactly one
+subscription - its engine adapters pick the first subscription matching a task and remember
+that one as the task's - so a second subscription for the same task definition either sees
+nothing or takes the task away from the workflow application, decided by the order the two
+were registered in. Watching along therefore means being called by the adapter's own
+subscription, and only the adapter can arrange that.
+
+`io.vanillabp.pea.observation` is that arrangement:
+
+```java
+public interface PeaUserTaskObserver {
+  void userTaskDelivered(PeaUserTaskObservation observation);
+  void userTaskTerminated(PeaUserTaskObservation observation);
+}
+
+public record PeaUserTaskObservation(
+    String adapterId, String workflowModuleId, String bpmnProcessId, String taskDefinition,
+    String workflowAggregateId, TaskInformation taskInformation, Map<String, Object> payload) { }
+```
+
+On Spring Boot an observer is a bean of the interface, on Quarkus a CDI bean of it. Both
+platform modules collect what they find and hand it to every `PeaDeploymentService` they build,
+which passes it on to the handlers of its user-task subscriptions. One list serves every
+configured adapter id, and the observation names the adapter its task came from (decision 9 in
+[`DECISIONS.md`](DECISIONS.md)).
+
+An observer is told about EVERY delivery. It is called before the check which drops a
+delivery no `@WorkflowTask` method claims, because a task list shows a user task whether or
+not the application has code for it.
+
+It is told about the termination with the reason the engine gave. The subscription registers
+the `TaskTerminationHandler` overload of the API rather than the older `Consumer<String>`, so
+the `TaskInformation` arrives whole. What the reason means is the engine's business and this
+adapter passes it on uninterpreted: the reference adapter for an embedded Camunda 7 says
+`complete` where a task was finished through the completion API and `delete` for everything
+else it notices, so a task somebody finished in a task list looks like a cancelled one there.
+
+Nothing an observer does reaches the engine. It observes: it cannot claim, complete, cancel or
+change a task, and it cannot stop a delivery from reaching the application. Completing a user
+task goes through `ProcessService#completeUserTask` like everywhere else.
+
+One which throws is logged with its class and its task, and then the delivery reaches the
+application and the remaining observers are called anyway. An application which registered
+none pays nothing for the seam: no observation is built at all and everything behaves as it
+did before.
+
+What an observation leaves open is said rather than guessed. `workflowAggregateId` is `null`
+where the BPMN process has no workflow aggregate in this application, where the subscription
+did not ask the engine for the variable holding it
+([What a subscription asks the engine for](#what-a-subscription-asks-the-engine-for)), and for
+every termination, which carries no payload. `bpmnProcessId` is `null` where the engine names
+none in its meta map and the subscription serves several processes.
+
+`UserTaskObserverIntegrationTest` (Spring Boot) and `PeaUserTaskObserverTest` (Quarkus and
+core) hold all of it.
 
 ## Outbound operations: one handler per operation
 

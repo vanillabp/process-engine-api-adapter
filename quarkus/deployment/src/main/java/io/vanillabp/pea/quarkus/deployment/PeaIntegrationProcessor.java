@@ -86,4 +86,19 @@ class PeaIntegrationProcessor {
 
   }
 
+  /**
+   * Keeps the user-task observers of an application alive. Nothing of the application
+   * injects them - the deployment services are handed them while they are produced - and ArC
+   * removes beans nobody injects.
+   *
+   * @return What must not be removed
+   */
+  @BuildStep
+  io.quarkus.arc.deployment.UnremovableBeanBuildItem keepUserTaskObservers() {
+
+    return io.quarkus.arc.deployment.UnremovableBeanBuildItem
+        .beanTypes(io.vanillabp.pea.observation.PeaUserTaskObserver.class);
+
+  }
+
 }

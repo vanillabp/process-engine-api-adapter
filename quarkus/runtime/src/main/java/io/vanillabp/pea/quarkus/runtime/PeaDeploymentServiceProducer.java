@@ -20,6 +20,7 @@ import io.vanillabp.integration.adapter.spi.workflowstart.BpmsInitiatedStartInvo
 import io.vanillabp.pea.PeaAdapter;
 import io.vanillabp.pea.deployment.PeaDeployedProcessesRegistry;
 import io.vanillabp.pea.deployment.PeaDeploymentService;
+import io.vanillabp.pea.observation.PeaUserTaskObserver;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.inject.Any;
 import jakarta.enterprise.inject.Instance;
@@ -63,7 +64,16 @@ public class PeaDeploymentServiceProducer {
       final WorkflowAggregateSync aggregateSync,
       final PreCommitRegistrar preCommitRegistrar,
       @Any final Instance<WorkflowEndedInvoker> workflowEndedInvoker,
-      @Any final Instance<BpmsInitiatedStartInvoker> bpmsInitiatedStartInvoker) {
+      @Any final Instance<BpmsInitiatedStartInvoker> bpmsInitiatedStartInvoker,
+      @Any final Instance<PeaUserTaskObserver> userTaskObservers) {
+
+    // who watches the user tasks this adapter is delivered: CDI beans of the application,
+    // resolved once and handed to every configured adapter id - see decision 9 in the
+    // repository's DECISIONS.md. ArC removes a bean nothing injects, which is why the
+    // extension declares this type unremovable
+    final var observers = userTaskObservers
+        .stream()
+        .toList();
 
     final var overlay = ConfigProvider
         .getConfig()
@@ -91,6 +101,7 @@ public class PeaDeploymentServiceProducer {
               bpmnProcessId,
               taskDefinition) -> overlay.fetchVariablesFor(
                   workflowModuleId, bpmnProcessId, taskDefinition, adapterId));
+          deploymentService.setUserTaskObservers(observers);
           return deploymentService;
         })
         .toList();
