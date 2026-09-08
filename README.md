@@ -231,13 +231,21 @@ replaces the mock with a real Process-Engine-API implementation.
   or conditional start event is rejected during `wireBpmn` (through the deployment-failure
   policy, so a non-first-priority adapter degrades it to a warning), because deploying it
   would produce workflows without an aggregate. A `@WorkflowEnded` method only WARNs, since
-  the workflow runs perfectly well and just the notification is missing.
+  the workflow runs perfectly well and just the notification is missing. A
+  `@WorkflowStartedByBpms` method kept for a BPMN process id the application only DECLARES
+  (`secondaryBpmnProcesses`) is judged by nothing here: telling whether a version the engine
+  holds starts on that event needs the model, which this adapter cannot read, so the check
+  stays silent for that id.
 - **Versions of a process** ([`GAPS.md`](GAPS.md), entry 19): the API knows no version of a
   deployed process definition, so the adapter registers no version catalog and reports only
   the version TAG from the task meta (key `processDefinitionVersionTag`, named by the API's
   `CommonRestrictions`) where the engine supplies it. An exact tag therefore works, while a
   range over tags and any specification made of numbers matches nothing and is reported once
-  (`PeaTaskHandlerTest#theVersionTagOfTheTaskMetaIsReported`).
+  (`PeaTaskHandlerTest#theVersionTagOfTheTaskMetaIsReported`). Registering no catalog leaves
+  every question about a version the engine still holds unanswered as well - its task
+  definitions, its start events, the elements which can fork one of its workflows, and how
+  many workflows still run on it - so each check reading one says nothing for this adapter
+  ([`GAPS.md`](GAPS.md), entries 20 and 21).
 - **Viewing workflows** (`ProcessService#getProcessDefinitions`/`#getBpmnXml`/`#getWorkflowHistory`):
   served from what THIS application version deployed - the Process-Engine-API has
   neither a repository nor a query/history API ([`GAPS.md`](GAPS.md), entries 12 and 13). The

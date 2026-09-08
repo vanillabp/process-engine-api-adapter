@@ -326,6 +326,17 @@ a warning. Deploying it silently would produce workflows without an aggregate: t
 task delivery would fail with "no aggregate", one failure per instance and no way back. A
 "process started" notification (or a subscription for it) would resolve it.
 
+That rejection reaches the models this application deploys and nothing else. VanillaBP
+also asks a BPMS which start events a version it still HOLDS fires on its own, to judge a
+`@WorkflowStartedByBpms` method kept for a BPMN process id the application declares without
+deploying a model under it - the old id of a renamed process (gap 23).
+Reading a held model needs a repository (gap 12) and a version to read it for (gap 19),
+so this adapter answers `null` and the check says nothing about such an id. A method
+naming a start event no held model carries stays as unnoticed here as it was before the
+check existed, and a declared-only id is the only place where a `@WorkflowStartedByBpms`
+method survives on this adapter at all, since a deployed model carrying such a start
+event is refused.
+
 ## 17. No notification when a process instance ends
 
 **Needed by VanillaBP:** an application may ask to be told that a workflow ended
@@ -408,8 +419,18 @@ same gap.
 the whole check off for it - the core skips a BPMS which counts no versions rather than
 guessing. Outfading is equally without effect here, since there is no version to name. An
 application on this adapter learns about a dropped task definition the way it did before:
-when a workflow reaches it. A `processDefinitionVersion` per task plus a query for the
-deployed versions and their models would close gap 19 and this one together.
+when a workflow reaches it.
+
+A catalog is asked more than the task definitions of a version, and this adapter answers
+none of those questions either: `startEventsOfVersion` for the start events a held version
+fires on its own (gap 16), `concurrentTokenElementsOfVersion` for the elements which can put
+a second token into one of its workflows (gap 21), `activeInstanceCountOf` for the workflows
+still running on it. Each keeps the SPI default `null`, the answer meaning "this BPMS cannot
+say", so every check reading one stays silent here instead of judging a version by an answer
+nobody gave it.
+
+A `processDefinitionVersion` per task plus a query for the deployed versions and their
+models would close gap 19 and this one together.
 
 The same gap covers a BPMN process the application RENAMED. The core asks every adapter
 what its BPMS holds for a process id which is declared
@@ -438,6 +459,12 @@ answer. The rest of the concurrent-token support works here, because it does not
 VanillaBP owns the transaction of a task, recognizes a version conflict in its commit, logs
 the guiding message and passes the exception on to this adapter. What the engine behind the
 Process-Engine-API does with the failed task is its own business, as with every failure.
+
+The versions the engine still holds are out of reach for the same reason. VanillaBP asks for
+the second-token elements of a version workflows are still running on, precisely because
+those workflows run longest and a parallel gateway the newest model dropped keeps forking
+every workflow started before it. This adapter has neither the version to ask about (gap 19)
+nor a model to walk, so it answers nothing there either.
 
 ## 22. No binding from a business rule task to a decision, so decision ids cannot be scoped
 
@@ -490,5 +517,7 @@ prefix its identifiers, a task of the old id may still be delivered through a su
 of the same task definition, and it is then attributed to a deployed process: the delivery's
 `bpmnProcessId` meta key (gap 6) is what would tell them apart, and without it the routing
 guesses. The way out that asks nothing of the API is to keep deploying the old model under
-its old id until its workflows have ended. A repository API (gap 12) would open the same
-path the Camunda adapters take.
+its old id until its workflows have ended. The checks VanillaBP runs over a declared id go
+silent for the same reason: what its held versions start on and where they fork cannot be read
+here, so nothing is said about either (gaps 16 and 21). A repository API (gap 12) would
+open the same path the Camunda adapters take.
