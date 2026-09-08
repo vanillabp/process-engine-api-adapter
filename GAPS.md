@@ -464,3 +464,31 @@ What an application can do about it: give its decisions ids which are unique acr
 modules deployed to that engine, the way it would have to for every identifier if the engine
 had no isolation at all (gap 15 is the same story one level up). A binding this adapter could
 read, or a deployment which took a namespace, would close this gap.
+
+## 23. The workflows of a renamed process' old id cannot be served
+
+**Needed by VanillaBP:** a workflow module may declare a BPMN process id it deploys nothing
+under - the old id of a renamed process, declared by
+`@WorkflowService(secondaryBpmnProcesses = ...)`. The engine still holds the old models with
+the workflows running on them, and both Camunda adapters keep serving those workflows: they
+read the models their BPMS holds under the declared id and compose their subscriptions
+respectively connectables from them. The rule behind it is decision 38 of the platform's
+DECISIONS.md: a check or a delivery must not depend on which application version deployed
+the model.
+
+**Offered by the Process-Engine-API:** nothing to read. There is no repository (gap 12), so
+the models the engine holds under the old id cannot be fetched, and task subscriptions are
+composed from the models of the CURRENT deployment only. Task definitions are scoped per
+process where a module prefixes its identifiers, so the tasks of the old id's workflows
+carry names no subscription of the renamed application asks for.
+
+**Consequence for the adapter:** the workflows under a declared-only id are not served, and
+the adapter says so while the module starts processing, once per declared id - together with
+the warning that their end is not reported (gap 17), which needs no model and is therefore
+warned about for declared ids the same way as for deployed ones. Where a module does NOT
+prefix its identifiers, a task of the old id may still be delivered through a subscription
+of the same task definition, and it is then attributed to a deployed process: the delivery's
+`bpmnProcessId` meta key (gap 6) is what would tell them apart, and without it the routing
+guesses. The way out that asks nothing of the API is to keep deploying the old model under
+its old id until its workflows have ended. A repository API (gap 12) would open the same
+path the Camunda adapters take.

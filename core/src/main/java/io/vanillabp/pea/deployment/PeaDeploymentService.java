@@ -612,6 +612,43 @@ public class PeaDeploymentService implements AdapterDeploymentService<PeaBpmnMod
 
   }
 
+  /**
+   * Says what a BPMN process id the application declares WITHOUT deploying anything
+   * under it - the old id of a renamed process - cannot get from this adapter. The
+   * Process-Engine-API has no way to read the models the engine still holds under
+   * such an id (see {@code GAPS.md}), so the tasks of those workflows either reach no
+   * subscription at all (scoped task definitions carry the process id) or arrive
+   * attributed to a deployed process (unscoped ones do not), and the end of such a
+   * workflow is not reported either. The <code>&#64;WorkflowEnded</code> half needs
+   * no model at all, only the declared id, which is why it is warned about here the
+   * same way it is for a deployed process.
+   *
+   * @param workflowModuleId The workflow module which is about to process workflows
+   */
+  private void reportWhatADeclaredIdCannotGet(
+      final String workflowModuleId) {
+
+    workflowTaskWiring
+        .taskWiringOfProcessesNobodyDeployed(workflowModuleId)
+        .keySet()
+        .forEach(bpmnProcessId -> {
+          warnAboutUnservedWorkflowEndedHandlers(workflowModuleId, bpmnProcessId);
+          log
+              .warn(
+                  """
+                      BPMN process '{}' of workflow module '{}' is declared without a model, but the \
+                      Process-Engine-API adapter '{}' cannot serve the workflows still running under \
+                      it: the API offers no way to read the models the engine holds, so their tasks \
+                      reach no subscription of their own (see GAPS.md). Keep deploying the old model \
+                      under its old id until those workflows have ended, or run this workflow module \
+                      on a BPMS whose adapter serves a declared id.""",
+                  bpmnProcessId,
+                  workflowModuleId,
+                  adapterId);
+        });
+
+  }
+
   @Override
   public PeaProcessingContext readDmn(
       final String workflowModuleId,
@@ -721,6 +758,11 @@ public class PeaDeploymentService implements AdapterDeploymentService<PeaBpmnMod
     if (bpmsProcessingContext == null) {
       return;
     }
+
+    // the ids the application declares without deploying anything - the old id of a
+    // renamed process - before any subscription opens: what this adapter cannot do
+    // for them has to be said while starting, not discovered workflow by workflow
+    reportWhatADeclaredIdCannotGet(workflowModuleId);
 
     // one task subscription per DISTINCT task definition of the module; the task
     // handler dispatches through the core's WorkflowTaskInvoker. The BPMN process
