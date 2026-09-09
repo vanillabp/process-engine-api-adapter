@@ -15,6 +15,7 @@ import io.vanillabp.integration.adapter.AdapterBeanRegistrarSupport;
 import io.vanillabp.pea.PeaAdapter;
 import io.vanillabp.pea.deployment.PeaDeployedProcessesRegistry;
 import io.vanillabp.pea.deployment.PeaDeploymentService;
+import io.vanillabp.pea.observation.PeaUserTaskObserver;
 import io.vanillabp.pea.processservice.PeaProcessService;
 
 /**
@@ -95,6 +96,15 @@ public class PeaAdapterBeanRegistrar implements BeanRegistrar {
                     bpmnProcessId,
                     taskDefinition) -> overlay.fetchVariablesFor(
                         workflowModuleId, bpmnProcessId, taskDefinition, adapterId));
+                // who watches the user tasks this adapter is delivered: beans of the
+                // application, ordered the way Spring orders any collected bean, and the
+                // same list for every configured adapter id - see decision 9 in the
+                // repository's DECISIONS.md
+                deploymentService.setUserTaskObservers(
+                    supplierContext
+                        .beanProvider(PeaUserTaskObserver.class)
+                        .orderedStream()
+                        .toList());
                 return deploymentService;
               }));
 

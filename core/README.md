@@ -31,6 +31,10 @@ SPI and the extension SPI transitively) and `dev.bpm-crafters.process-engine-api
 - `processservice/PeaStartProcessCommand` — the adapter's own `StartProcessCommand` carrying
   the BPMN process id, the payload and the `ExecutionMode` (the built-in commands cannot
   carry a non-default `ExecutionMode` — see [`../GAPS.md`](../GAPS.md), entry 2).
+- `observation/` — the seam through which something outside the adapter watches its user
+  tasks (see below). This is adapter-own API, the way `Camunda7EngineCustomizer` is
+  adapter-own API of the Camunda 7 adapter: nothing of it belongs to the VanillaBP adapter
+  SPI, because nothing of it is true of another BPMS.
 
 ## Reading BPMN (`readBpmn`)
 
@@ -82,6 +86,51 @@ remembered (decision 25 of the platform's `DECISIONS.md`). The core narrows the 
 probing before a re-dispatched start, and this adapter answers that probe optimistically
 ([`GAPS.md`](../GAPS.md), entry 11), so the residual stays wider here than on an adapter which
 can be asked.
+
+## Observing user tasks (`io.vanillabp.pea.observation`)
+
+The Process-Engine-API delivers a task to exactly ONE subscription, so an extension which
+wants to watch the user tasks of an application cannot subscribe next to the adapter: it
+would either see nothing or take the delivery away from the workflow application, decided by
+the order the two subscriptions were registered in. The seam is therefore inside the
+adapter's own subscription.
+
+The package holds three types:
+
+- `PeaUserTaskObserver` — what an application or an extension implements. Two methods,
+  `userTaskDelivered` and `userTaskTerminated`. The user-facing contract is in
+  [`../README.md`](../README.md), section "Observing the user tasks of an application".
+- `PeaUserTaskObservation` — the value handed over: adapter id, workflow module, BPMN process,
+  task definition, workflow aggregate id, the engine's `TaskInformation` and the payload the
+  subscription asked for. The identifiers are the PLAIN ones: the subscription key is the
+  SCOPED task definition and the engine reports the scoped BPMN process id, and both are
+  translated back through `NameClashAvoidanceSupport` before the observation is built
+  (decision 2 in [`../DECISIONS.md`](../DECISIONS.md)). The two which a delivery may leave
+  open — `bpmnProcessId` and `workflowAggregateId` — are documented as nullable rather than
+  faked.
+- `PeaUserTaskObservers` — the observers of one adapter id and the one place they are called
+  from, so that what an observer costs the task it watches is decided once for both
+  platforms. Nothing that happens in there reaches the caller: a throwing observer is caught
+  and logged and the next one is called anyway, and so is a failure while DESCRIBING the task,
+  which would otherwise land in the handler's own catch and cost the application its
+  notification. An application which registered nothing never builds an observation, because
+  the callers hand over a `Supplier`.
+
+Where it is called from:
+
+- `PeaDeploymentService` takes the observers through `setUserTaskObservers(...)`, the way it
+  takes the `fetch-variables` resolver, and hands them to every `PeaUserTaskHandler` it builds
+  while opening the user-task subscriptions of a workflow module.
+- `PeaUserTaskHandler.accept` calls `userTaskDelivered` before anything can drop the delivery:
+  before the routing failure of a form reference several BPMN processes share, and before the
+  check which skips a delivery no `@WorkflowTask` method claims. What the delivery leaves open
+  it says: the BPMN process is `null` in the first case and the aggregate id in the second,
+  where the process has no workflow aggregate at all. The aggregate-id variable is resolved
+  once, leniently, and the strict path afterwards throws the failure that resolution kept.
+- `PeaUserTaskHandler.terminated` is registered as the subscription's `TaskTerminationHandler`
+  — the overload carrying the engine's `TaskInformation`, which is what the reason travels in.
+  The service-task subscriptions register the same overload, without observers: there is
+  nobody to tell, and the DEBUG line saying a task is gone is worth the engine's reason.
 
 ## Process-Engine-API interfaces used
 

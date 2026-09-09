@@ -1,12 +1,14 @@
 package io.vanillabp.pea.quarkus.deployment;
 
 import io.quarkus.arc.deployment.AdditionalBeanBuildItem;
+import io.quarkus.arc.deployment.UnremovableBeanBuildItem;
 import io.quarkus.deployment.annotations.BuildProducer;
 import io.quarkus.deployment.annotations.BuildStep;
 import io.quarkus.deployment.builditem.FeatureBuildItem;
 import io.vanillabp.integration.deployment.pipeline.VanillaBpAdapterDeploymentServiceBuildItem;
 import io.vanillabp.integration.deployment.processservice.VanillaBpMigratableProcessServiceBuildItem;
 import io.vanillabp.pea.PeaAdapter;
+import io.vanillabp.pea.observation.PeaUserTaskObserver;
 import io.vanillabp.pea.quarkus.deployment.config.PeaProperties;
 import io.vanillabp.pea.quarkus.runtime.PeaDeploymentServiceProducer;
 import io.vanillabp.pea.quarkus.runtime.PeaProcessEngineProducer;
@@ -83,6 +85,20 @@ class PeaIntegrationProcessor {
         .addBeanClass(PeaProcessEngineProducer.class)
         .setUnremovable()
         .build();
+
+  }
+
+  /**
+   * Keeps the user-task observers of an application alive. Nothing of the application
+   * injects them - the deployment services are handed them while they are produced - and ArC
+   * removes beans nobody injects.
+   *
+   * @return What must not be removed
+   */
+  @BuildStep
+  UnremovableBeanBuildItem keepUserTaskObservers() {
+
+    return UnremovableBeanBuildItem.beanTypes(PeaUserTaskObserver.class);
 
   }
 

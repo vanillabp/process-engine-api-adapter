@@ -120,3 +120,24 @@ adapter cannot serve the operation" for a missing entry, which is true but usele
 is missing, and what to model instead, is knowledge only this adapter has. So the entries stay
 and the handlers throw with a message which names the fix - the core's message is the fallback
 for an adapter which has nothing to add, not the better answer.
+
+### 9. One list of user-task observers, and the observation names the adapter
+
+Who watches this adapter's user tasks is collected once per application - the beans of
+`PeaUserTaskObserver` a platform module finds - and every configured adapter id of type
+`process-engine-api` is given that one list.
+
+There is nothing to distribute anyway. `validateDistinctAdapterInstances` ends the boot as
+soon as a second adapter id of this type is configured, because the engine arrives as a set of
+application-provided beans with no notion of which engine they are ([`GAPS.md`](./GAPS.md),
+entry 14). One application, one engine, and a per-id registration today would be a knob with
+one setting.
+
+The observation still names the adapter its task came from. It is what an observer reports
+under, this repository is not the only source of adapter ids an extension sees, and the day
+the API can tell two engines apart the field is already there. A registration per adapter id
+stays addable then: it narrows what an observer is handed and breaks nobody.
+
+The two platform registrations rely on this, and so does the shape of the observation. What
+the seam promises beyond it is in the type javadoc of `PeaUserTaskObserver` and in
+[Observing the user tasks of an application](./README.md#observing-the-user-tasks-of-an-application).

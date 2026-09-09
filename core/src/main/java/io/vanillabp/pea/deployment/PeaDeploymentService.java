@@ -10,7 +10,6 @@ import java.util.Map;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.concurrent.ExecutionException;
-import java.util.function.Consumer;
 
 import javax.xml.stream.XMLInputFactory;
 import javax.xml.stream.XMLStreamConstants;
@@ -22,7 +21,9 @@ import dev.bpmcrafters.processengineapi.deploy.DeploymentApi;
 import dev.bpmcrafters.processengineapi.deploy.NamedResource;
 import dev.bpmcrafters.processengineapi.task.ServiceTaskCompletionApi;
 import dev.bpmcrafters.processengineapi.task.SubscribeForTaskCmd;
+import dev.bpmcrafters.processengineapi.task.TaskInformation;
 import dev.bpmcrafters.processengineapi.task.TaskSubscriptionApi;
+import dev.bpmcrafters.processengineapi.task.TaskTerminationHandler;
 import dev.bpmcrafters.processengineapi.task.TaskType;
 import dev.bpmcrafters.processengineapi.task.UnsubscribeFromTaskCmd;
 import io.vanillabp.integration.adapter.spi.AdapterCollaborators;
@@ -37,6 +38,8 @@ import io.vanillabp.integration.adapter.spi.workflowtask.WorkflowTaskWiring;
 import io.vanillabp.pea.PeaAdapter;
 import io.vanillabp.pea.PeaBpmnModel;
 import io.vanillabp.pea.PeaProcessingContext;
+import io.vanillabp.pea.observation.PeaUserTaskObserver;
+import io.vanillabp.pea.observation.PeaUserTaskObservers;
 import io.vanillabp.pea.wiring.PeaFetchVariables;
 import io.vanillabp.pea.wiring.PeaFetchVariablesResolver;
 import io.vanillabp.pea.wiring.PeaTaskHandler;
@@ -131,6 +134,7 @@ public class PeaDeploymentService implements AdapterDeploymentService<PeaBpmnMod
     this.taskSubscriptionApi = taskSubscriptionApi;
     this.serviceTaskCompletionApi = serviceTaskCompletionApi;
     this.deployedProcesses = deployedProcesses;
+    this.userTaskObservers = PeaUserTaskObservers.of(adapterId, List.of());
 
   }
 
@@ -156,6 +160,13 @@ public class PeaDeploymentService implements AdapterDeploymentService<PeaBpmnMod
   private PeaFetchVariablesResolver fetchVariablesResolver;
 
   /**
+   * Who watches the user tasks this adapter is delivered - hook beans of the application,
+   * collected by the platform modules. Empty unless something registered one, and then this
+   * service behaves exactly as it did before the seam existed.
+   */
+  private PeaUserTaskObservers userTaskObservers;
+
+  /**
    * Sets the <code>fetch-variables</code> resolver (the platform modules construct this
    * service and inject it afterwards).
    *
@@ -165,6 +176,20 @@ public class PeaDeploymentService implements AdapterDeploymentService<PeaBpmnMod
       final PeaFetchVariablesResolver fetchVariablesResolver) {
 
     this.fetchVariablesResolver = fetchVariablesResolver;
+
+  }
+
+  /**
+   * Sets who watches this adapter's user-task deliveries (the platform modules collect the
+   * beans of the application and inject them after construction, like the resolver above).
+   *
+   * @param userTaskObservers The observers in the order the platform resolved them, or
+   *          <code>null</code> for none
+   */
+  public void setUserTaskObservers(
+      final List<PeaUserTaskObserver> userTaskObservers) {
+
+    this.userTaskObservers = PeaUserTaskObservers.of(adapterId, userTaskObservers);
 
   }
 
@@ -374,6 +399,22 @@ public class PeaDeploymentService implements AdapterDeploymentService<PeaBpmnMod
 
   }
 
+  /**
+   * An attribute a modeller left out and one they left empty are the same thing, and
+   * <code>null</code> is what the adapter SPI says for "none".
+   *
+   * @param value The attribute value, or <code>null</code>
+   * @return The value, or <code>null</code> where there is nothing in it
+   */
+  private static String blankToNull(
+      final String value) {
+
+    return (value == null) || value.isBlank()
+        ? null
+        : value;
+
+  }
+
   private List<ParsedProcess> parseBpmn(
       final String workflowModuleId,
       final String filename,
@@ -393,6 +434,7 @@ public class PeaDeploymentService implements AdapterDeploymentService<PeaBpmnMod
     boolean currentTaskHasDefinition = false;
     boolean currentTaskCallsADecision = false;
     String currentUserTaskId = null;
+    String currentUserTaskName = null;
     boolean currentUserTaskHasFormReference = false;
 
     XMLStreamReader reader = null;
@@ -429,6 +471,9 @@ public class PeaDeploymentService implements AdapterDeploymentService<PeaBpmnMod
               // namespace check: the marker extension <zeebe:userTask/> shares the
               // local name with the BPMN element
               currentUserTaskId = reader.getAttributeValue(null, "id");
+              // what the modeller wrote on the element: the only human-readable name a task
+              // list has for this task, since the engine reports none of its own
+              currentUserTaskName = blankToNull(reader.getAttributeValue(null, "name"));
               currentUserTaskHasFormReference = false;
             } else if ((currentUserTaskId != null) && "formDefinition".equals(element)) {
               // user tasks: the zeebe:formDefinition external reference
@@ -438,7 +483,7 @@ public class PeaDeploymentService implements AdapterDeploymentService<PeaBpmnMod
               if ((externalReference != null) && !externalReference.isBlank()) {
                 currentProcess
                     .userTasks()
-                    .add(BpmnTaskSpec.userTask(currentUserTaskId, externalReference));
+                    .add(BpmnTaskSpec.userTask(currentUserTaskId, externalReference, currentUserTaskName));
                 currentUserTaskHasFormReference = true;
               }
             }
@@ -465,6 +510,7 @@ public class PeaDeploymentService implements AdapterDeploymentService<PeaBpmnMod
                     filename);
               }
               currentUserTaskId = null;
+              currentUserTaskName = null;
             } else if ("process".equals(element)) {
               currentProcess = null;
             }
@@ -794,6 +840,16 @@ public class PeaDeploymentService implements AdapterDeploymentService<PeaBpmnMod
                     scopedTaskDefinition(workflowModuleId, model.bpmnProcessId(), userTask.taskDefinition()),
                     key -> new ArrayList<>())
                 .add(new ServedTask(model.bpmnProcessId(), userTask.taskDefinition()))));
+    if (!userTaskObservers.isEmpty()) {
+      // said while starting rather than at the first delivery: an observer the platform
+      // did not pick up behaves like one which has nothing to say, and starting is the
+      // only moment where the two can still be told apart
+      log.info(
+          "Process-Engine-API adapter '{}': the user tasks of workflow module '{}' are observed by {}",
+          adapterId,
+          workflowModuleId,
+          userTaskObservers.names());
+    }
     processesByUserTaskReference.forEach((
         externalFormReference,
         served) -> {
@@ -813,13 +869,18 @@ public class PeaDeploymentService implements AdapterDeploymentService<PeaBpmnMod
           .workflowTaskInvoker(workflowTaskInvoker)
           .scoping(scoping)
           .fetchVariables(fetchVariables)
+          .observers(userTaskObservers)
           .build();
       try {
         final var subscription = taskSubscriptionApi
             .subscribeForTask(new SubscribeForTaskCmd(
                 Map.of(), TaskType.USER, externalFormReference, fetchVariables
-                    .payloadDescription(), handler, (Consumer<String>) taskId -> log.debug(
-                        "Process-Engine-API adapter '{}': user task '{}' terminated", adapterId, taskId)))
+                    .payloadDescription(), handler,
+                // the TaskTerminationHandler overload (Process-Engine-API 1.5 and up): the
+                // older Consumer<String> keeps the task id and drops the reason with the rest
+                // of the engine's meta map, which is what tells a finished task from a
+                // withdrawn one
+                (TaskTerminationHandler) handler::terminated))
             .get();
         bpmsProcessingContext.getSubscriptions().add(subscription);
       } catch (final InterruptedException e) {
@@ -866,8 +927,15 @@ public class PeaDeploymentService implements AdapterDeploymentService<PeaBpmnMod
             .subscribeForTask(new SubscribeForTaskCmd(
                 Map.of(), // no restrictions
                 TaskType.EXTERNAL, taskDefinition, fetchVariables
-                    .payloadDescription(), handler, (Consumer<String>) taskId -> log.debug(
-                        "Process-Engine-API adapter '{}': task '{}' terminated", adapterId, taskId)))
+                    .payloadDescription(), handler,
+                // the same overload as for user tasks: nobody observes an async task, but
+                // the log line saying one is gone is worth the engine's reason
+                (TaskTerminationHandler) terminated -> log.debug(
+                    "Process-Engine-API adapter '{}': task '{}' terminated ({})", adapterId, terminated
+                        .getTaskId(),
+                    terminated
+                        .getMeta()
+                        .getOrDefault(TaskInformation.REASON, "no reason given"))))
             .get();
         bpmsProcessingContext.getSubscriptions().add(subscription);
       } catch (final InterruptedException e) {

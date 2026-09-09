@@ -37,6 +37,7 @@ import dev.bpmcrafters.processengineapi.task.TaskHandler;
 import dev.bpmcrafters.processengineapi.task.TaskInformation;
 import dev.bpmcrafters.processengineapi.task.TaskSubscription;
 import dev.bpmcrafters.processengineapi.task.TaskSubscriptionApi;
+import dev.bpmcrafters.processengineapi.task.TaskTerminationHandler;
 import dev.bpmcrafters.processengineapi.task.UnsubscribeFromTaskCmd;
 import dev.bpmcrafters.processengineapi.task.UserTaskCompletionApi;
 
@@ -205,6 +206,8 @@ public class InMemoryProcessEngine implements DeploymentApi, StartProcessApi, Co
     failedTasks.clear();
     failNextCompletionForTaskIds.clear();
     openTaskIds.clear();
+    deliveredTo.clear();
+    deliveredAs.clear();
     correlatedMessages.clear();
     failPreflightForProcessIds.clear();
     failNextSyncForProcessIds.clear();
@@ -226,6 +229,8 @@ public class InMemoryProcessEngine implements DeploymentApi, StartProcessApi, Co
     failedTasks.clear();
     failNextCompletionForTaskIds.clear();
     openTaskIds.clear();
+    deliveredTo.clear();
+    deliveredAs.clear();
     correlatedMessages.clear();
     failPreflightForProcessIds.clear();
     failNextSyncForProcessIds.clear();
@@ -396,11 +401,13 @@ public class InMemoryProcessEngine implements DeploymentApi, StartProcessApi, Co
    * @param payloadDescription The payload variables the subscription asked for - an
    *          EMPTY set is the API's way of asking for everything
    * @param handler The subscriber's task handler
+   * @param termination Where the subscriber is told that a delivered task is gone
    */
   public record ActiveSubscription(
                                    String taskDescriptionKey,
                                    Set<String> payloadDescription,
-                                   TaskHandler handler) implements TaskSubscription {
+                                   TaskHandler handler,
+                                   TaskTerminationHandler termination) implements TaskSubscription {
 
     /**
      * Narrows a delivered payload the way an engine does: a subscription naming
@@ -459,16 +466,12 @@ public class InMemoryProcessEngine implements DeploymentApi, StartProcessApi, Co
       final Map<String, Object> payload) {
 
     openTaskIds.add(taskId);
-    final var subscription = subscriptions
-        .stream()
-        .filter(candidate -> candidate.taskDescriptionKey().equals(taskDefinition))
-        .findFirst()
-        .orElseThrow(() -> new IllegalStateException(
-            "No subscription for task definition '%s' - subscribed: %s"
-                .formatted(taskDefinition, subscriptions
-                    .stream()
-                    .map(ActiveSubscription::taskDescriptionKey)
-                    .toList())));
+    final var subscription = subscriptionFor(taskDefinition);
+    // which subscription a task was given to, so that a completion can tell the same one
+    // that the task is gone - an engine remembers this, and without it the completion API
+    // and the termination callback would be two unrelated things here
+    deliveredTo.put(taskId, subscription);
+    deliveredAs.put(taskId, bpmnProcessId);
     subscription
         .handler()
         .accept(
@@ -480,13 +483,94 @@ public class InMemoryProcessEngine implements DeploymentApi, StartProcessApi, Co
 
   }
 
+  /**
+   * Withdraws a task the mock delivered: the subscription's termination handler is called
+   * with the engine's word for why, the way an engine tells a subscriber that a task it was
+   * given is gone. The reason travels in {@code TaskInformation.meta} under
+   * {@link TaskInformation#REASON} - {@code complete} where a task was finished through a
+   * completion API, {@code delete} for everything else, which is the vocabulary the API's own
+   * engine adapters use.
+   *
+   * @param taskId The terminated task's ID
+   * @param taskDefinition The task definition (matched against subscriptions)
+   * @param bpmnProcessId The BPMN process the task belonged to, or <code>null</code> to
+   *          terminate it the way an engine does which fills no meta of its own
+   * @param reason The engine's reason
+   */
+  public void terminateTask(
+      final String taskId,
+      final String taskDefinition,
+      final String bpmnProcessId,
+      final String reason) {
+
+    openTaskIds.remove(taskId);
+    deliveredTo.remove(taskId);
+    deliveredAs.remove(taskId);
+    terminate(subscriptionFor(taskDefinition), taskId, bpmnProcessId, reason);
+
+  }
+
+  /**
+   * Tells the subscription a task was DELIVERED to that the task is gone - what an engine
+   * does after a completion API finished it, and what makes the reason of a termination
+   * observable end to end rather than only when a test calls
+   * {@link #terminateTask(String, String, String, String)} itself.
+   *
+   * @param taskId The completed task
+   * @param reason The engine's word for what happened to it
+   */
+  private void terminateDelivered(
+      final String taskId,
+      final String reason) {
+
+    final var subscription = deliveredTo.remove(taskId);
+    final var bpmnProcessId = deliveredAs.remove(taskId);
+    if (subscription == null) {
+      // a task completed without ever having been delivered here: nobody to tell
+      return;
+    }
+    terminate(subscription, taskId, bpmnProcessId, reason);
+
+  }
+
+  private void terminate(
+      final ActiveSubscription subscription,
+      final String taskId,
+      final String bpmnProcessId,
+      final String reason) {
+
+    final var meta = bpmnProcessId == null
+        ? Map.<String, String>of()
+        : Map.of("bpmnProcessId", bpmnProcessId);
+    subscription
+        .termination()
+        .accept(new TaskInformation(taskId, meta).withReason(reason));
+
+  }
+
+  private ActiveSubscription subscriptionFor(
+      final String taskDefinition) {
+
+    return subscriptions
+        .stream()
+        .filter(candidate -> candidate.taskDescriptionKey().equals(taskDefinition))
+        .findFirst()
+        .orElseThrow(() -> new IllegalStateException(
+            "No subscription for task definition '%s' - subscribed: %s"
+                .formatted(taskDefinition, subscriptions
+                    .stream()
+                    .map(ActiveSubscription::taskDescriptionKey)
+                    .toList())));
+
+  }
+
   @Override
   public CompletableFuture<TaskSubscription> subscribeForTask(
       final SubscribeForTaskCmd cmd) {
 
     record("TaskSubscriptionApi", "subscribeForTask", cmd);
     final var subscription = new ActiveSubscription(
-        cmd.getTaskDescriptionKey(), cmd.getPayloadDescription(), cmd.getAction());
+        cmd.getTaskDescriptionKey(), cmd.getPayloadDescription(), cmd.getAction(), cmd.getTermination());
     subscriptions.add(subscription);
     return CompletableFuture.completedFuture(subscription);
 
@@ -563,6 +647,14 @@ public class InMemoryProcessEngine implements DeploymentApi, StartProcessApi, Co
    */
   private final Set<String> openTaskIds = ConcurrentHashMap.newKeySet();
 
+  /**
+   * Which subscription a delivered task was given to, and which BPMN process it was
+   * delivered as - the engine's memory a termination is told from.
+   */
+  private final Map<String, ActiveSubscription> deliveredTo = new ConcurrentHashMap<>();
+
+  private final Map<String, String> deliveredAs = new ConcurrentHashMap<>();
+
   public Set<String> getOpenTaskIds() {
 
     return openTaskIds;
@@ -619,6 +711,9 @@ public class InMemoryProcessEngine implements DeploymentApi, StartProcessApi, Co
     }
     completedTasks.add(new CompletedTask(cmd.getTaskId()));
     completionPayloads.put(cmd.getTaskId(), payloadOf(cmd.get()));
+    // the reason the reference adapter for an embedded Camunda 7 reports for a task which
+    // was finished through a completion API
+    terminateDelivered(cmd.getTaskId(), TaskInformation.COMPLETE);
     return CompletableFuture.completedFuture(Empty.INSTANCE);
 
   }
@@ -641,6 +736,9 @@ public class InMemoryProcessEngine implements DeploymentApi, StartProcessApi, Co
     }
     erroredTasks.add(new ErroredTask(cmd.getTaskId(), cmd.getErrorCode(), cmd.getErrorMessage()));
     completionPayloads.put(cmd.getTaskId(), payloadOf(cmd.get()));
+    // a task ended by a BPMN error did not finish: the reference adapter says 'delete' for
+    // everything it notices which was not a completion
+    terminateDelivered(cmd.getTaskId(), TaskInformation.DELETE);
     return CompletableFuture.completedFuture(Empty.INSTANCE);
 
   }
