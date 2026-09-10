@@ -20,6 +20,7 @@ import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 import io.vanillabp.pea.deployment.PeaDeployedProcesses;
 import io.vanillabp.pea.mock.InMemoryProcessEngine;
 import io.vanillabp.pea.processservice.PeaProcessService;
+import io.vanillabp.spi.process.TaskNotFoundException;
 
 /**
  * The phase-one check of this adapter is handed to the platform's pre-commit hook
@@ -127,7 +128,7 @@ public class PeaPreCommitHookTest {
         check) -> check.run());
 
     final var failure = assertThrows(
-        IllegalStateException.class,
+        TaskNotFoundException.class,
         () -> PhaseOperations.phaseOne(service, PhaseOperation.COMPLETE_TASK, "mod",
             "Process", persistence(), new Object(),
             PhaseOperations.args(PhaseTwoCall.ARG_TASK_ID, "task-gone")));
@@ -148,7 +149,7 @@ public class PeaPreCommitHookTest {
     });
 
     assertThrows(
-        IllegalStateException.class,
+        TaskNotFoundException.class,
         () -> PhaseOperations
             .phaseOne(
                 service,

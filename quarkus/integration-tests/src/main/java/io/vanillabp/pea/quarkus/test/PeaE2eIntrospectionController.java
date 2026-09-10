@@ -9,6 +9,7 @@ import java.util.function.Supplier;
 import dev.bpmcrafters.processengineapi.ExecutionMode;
 import dev.bpmcrafters.processengineapi.task.CompleteTaskByErrorCmd;
 import dev.bpmcrafters.processengineapi.task.CompleteTaskCmd;
+import dev.bpmcrafters.processengineapi.task.TaskInformation;
 import io.vanillabp.pea.mock.InMemoryProcessEngine;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
@@ -420,6 +421,29 @@ public class PeaE2eIntrospectionController {
 
   }
 
+  /**
+   * Finishes a task the way somebody outside VanillaBP does: the engine withdraws it from
+   * the subscription it was delivered to. The delivery record VanillaBP wrote for that
+   * task stays untouched, which is what makes the next completion of it a stale one.
+   *
+   * @param taskId The task to finish
+   * @param taskDefinition The task definition it was delivered for
+   */
+  @POST
+  @Path("/engine/tasks/{taskId}/finish/{taskDefinition}")
+  public void finishTaskOutsideVanillaBp(
+      @PathParam("taskId") final String taskId,
+      @PathParam("taskDefinition") final String taskDefinition) {
+
+    engine
+        .terminateTask(
+            taskId,
+            taskDefinition,
+            PeaE2eWorkflowService.PROCESS,
+            TaskInformation.COMPLETE);
+
+  }
+
   @POST
   @Path("/tasks/{taskId}/fail-next-completion")
   public void failNextCompletion(
@@ -661,14 +685,46 @@ public class PeaE2eIntrospectionController {
           .size());
     } catch (Exception e) {
       userTransaction.rollback();
-      report.put("exception", e
-          .getClass()
-          .getSimpleName());
-      report.put("message", e.getMessage());
-      return report;
+      return failure(report, e);
     }
-    userTransaction.commit();
+    try {
+      userTransaction.commit();
+    } catch (Exception e) {
+      // the pre-commit check runs while the commit runs, so a check which fails fails the
+      // commit itself and JTA wraps what it threw - the transaction is already rolled back
+      return failure(report, e);
+    }
     report.put("modesWhenTheCommitReturned", namesOf(recordedModes.get()));
+    return report;
+
+  }
+
+  /**
+   * Reports a failed operation twice: as the caller of this endpoint saw it, and as the
+   * end of its cause chain. What a phase-one check throws reaches the application
+   * unwrapped where it ran inside the call, and wrapped by JTA where it ran during the
+   * commit, so a test which is about the TYPE has to be able to read both.
+   *
+   * @param report What has been collected so far
+   * @param e The exception the operation ended with
+   * @return The report, with the exception in it
+   */
+  private static Map<String, Object> failure(
+      final Map<String, Object> report,
+      final Exception e) {
+
+    var cause = (Throwable) e;
+    while ((cause.getCause() != null) && (cause.getCause() != cause)) {
+      cause = cause.getCause();
+    }
+    report.put("exception", e
+        .getClass()
+        .getSimpleName());
+    report.put("message", e.getMessage());
+    report.put("rootException", cause
+        .getClass()
+        .getSimpleName());
+    report.put("rootMessage", String.valueOf(cause.getMessage()));
     return report;
 
   }
