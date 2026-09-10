@@ -35,6 +35,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 import dev.bpmcrafters.processengineapi.ExecutionMode;
 import dev.bpmcrafters.processengineapi.task.CompleteTaskByErrorCmd;
 import dev.bpmcrafters.processengineapi.task.CompleteTaskCmd;
+import dev.bpmcrafters.processengineapi.task.TaskInformation;
 import io.vanillabp.integration.spi.AggregatePersistenceAware;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 import io.vanillabp.pea.mock.InMemoryProcessEngine;
@@ -628,6 +629,30 @@ public class TaskProcessingIntegrationTest {
   }
 
   @Test
+  @DisplayName("A stale completion aborts the transaction with the documented TaskNotFoundException")
+  public void aStaleCompletionRaisesTheGuidingException() {
+
+    seed("4725");
+    engine.deliverTask("task-c4", "peaAsync", PROCESS, Map.of("id", "4725"));
+    assertEquals("task-c4", stored("4725").taskId, "the handler has to have parked the task");
+
+    // somebody else finishes the task, which is what a concurrent completion looks
+    // like from here
+    engine.terminateTask("task-c4", "peaAsync", PROCESS, TaskInformation.COMPLETE);
+
+    // the delivery record of that task still says this adapter holds it open, so the
+    // call is routed here instead of probed and the pre-commit check is what meets the
+    // engine's rejection. What the caller reads is the type the SPI documents for a
+    // task no BPMS knows any more
+    final var exception = Assertions.assertThrows(
+        TaskNotFoundException.class,
+        () -> transactionTemplate.executeWithoutResult(status -> taskWorkflowService
+            .completeAsyncTask(stored("4725"), "task-c4")));
+    assertTrue(exception.getMessage().contains("task-c4"));
+
+  }
+
+  @Test
   @DisplayName("User task: CREATED notification via USER subscription, completeUserTask PREFLIGHT/SYNC ordering")
   public void userTaskNotificationAndCompletion() throws Exception {
 
@@ -703,6 +728,26 @@ public class TaskProcessingIntegrationTest {
         () -> transactionTemplate.executeWithoutResult(status -> taskWorkflowService
             .completeUserTask(stored("4733"), "utask-unknown")));
     assertTrue(exception.getMessage().contains("utask-unknown"));
+
+  }
+
+  @Test
+  @DisplayName("A stale user-task completion raises the same documented exception")
+  public void aStaleUserTaskCompletionRaisesTheGuidingException() {
+
+    seed("4734");
+    engine.deliverTask("utask-3", "peaApprove", PROCESS, Map.of("id", "4734"));
+    assertEquals("utask-3", stored("4734").taskId, "the notification has to have reported the task");
+
+    engine.terminateTask("utask-3", "peaApprove", PROCESS, TaskInformation.COMPLETE);
+
+    // the same route as for a service task: the record sends the call to this adapter
+    // and the user-task check is what finds out the task is gone
+    final var exception = Assertions.assertThrows(
+        TaskNotFoundException.class,
+        () -> transactionTemplate.executeWithoutResult(status -> taskWorkflowService
+            .completeUserTask(stored("4734"), "utask-3")));
+    assertTrue(exception.getMessage().contains("utask-3"));
 
   }
 

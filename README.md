@@ -403,6 +403,14 @@ the unit of work the aggregate is actually stored in - which may be one the
 application brought. Where no hook is available the check runs immediately, the behaviour this
 adapter had before.
 
+A check which finds the task gone throws `io.vanillabp.spi.process.TaskNotFoundException`. That
+is the type the SPI documents for a task no BPMS knows any more, and it is what the platform
+raises when its own probe found out. So an application catches one type either way, without
+having to know which of the two answered. The message names the task and says what a retry does.
+What the engine refused the check with goes to the log on info. The exception carries a message
+and no cause, and the Process-Engine-API says nothing typed about a refusal anyway (GAPS entry
+10), so that log line is the only place the reason is ever said.
+
 That check is the only command this adapter is sure to send before the commit of a task
 operation. The awareness probe of a task is a `PREFLIGHT_CHECK` completion as well, but the
 platform asks it only when it must: a task operation is routed by the record the delivery of that
@@ -412,7 +420,10 @@ adapter promises reads the pre-commit check. `PeaPreCommitHookTest` is that test
 (`theCheckIsHandedToTheHook`, `aFailingCheckReachesTheCaller`,
 `withoutAPersistenceTheCheckRunsImmediately`), and
 `PeaWorkflowLifecycleTest#assertThePreflightRanBeforeTheCommitReturned` reads the same from a
-booted application.
+booted application. The type is held by
+`TaskProcessingIntegrationTest#aStaleCompletionRaisesTheGuidingException` and its user-task twin,
+and on Quarkus by the two tests of the same names in `PeaWorkflowLifecycleTest`. The Quarkus ones
+read the exception out of the `RollbackException` that JTA wraps a failed `beforeCompletion` in.
 
 Correlating a message and broadcasting a signal still have no preflight, and the reason is not
 a missing query: `CorrelateMessageCmd` and `SendSignalCmd` are Kotlin `data class`es, hence

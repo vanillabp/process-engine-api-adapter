@@ -442,6 +442,61 @@ public class PeaWorkflowLifecycleTest {
   }
 
   @Test
+  @DisplayName("A stale completion aborts the transaction with the documented TaskNotFoundException")
+  public void aStaleCompletionRaisesTheGuidingException() {
+
+    postWithoutResponse("introspect/aggregates/q-task-9");
+    postWithoutResponse("introspect/tasks/task-9/deliver/e2eAsync/q-task-9");
+
+    // somebody else finishes the task, which is what a concurrent completion looks like
+    // from here. The delivery record still says this adapter holds it open, so the call is
+    // routed here instead of probed and the pre-commit check is what meets the refusal
+    postWithoutResponse("introspect/engine/tasks/task-9/finish/e2eAsync");
+
+    final var failed = post("introspect/tasks/task-9/complete/q-task-9");
+    // the check runs during the commit, and JTA wraps what a failed beforeCompletion
+    // threw - so the type an application catches sits at the end of the cause chain
+    assertEquals(
+        "TaskNotFoundException",
+        failed.get("rootException"),
+        "expected the documented exception but got: "
+            + failed);
+    assertTrue(
+        failed
+            .get("rootMessage")
+            .toString()
+            .contains("task-9"),
+        "the message has to name the task but was: "
+            + failed.get("rootMessage"));
+
+  }
+
+  @Test
+  @DisplayName("A stale user-task completion raises the same documented exception")
+  public void aStaleUserTaskCompletionRaisesTheGuidingException() {
+
+    postWithoutResponse("introspect/aggregates/q-user-4");
+    postWithoutResponse("introspect/tasks/utask-4/deliver/e2eApprove/q-user-4");
+
+    postWithoutResponse("introspect/engine/tasks/utask-4/finish/e2eApprove");
+
+    final var failed = post("introspect/user-tasks/utask-4/complete/q-user-4");
+    assertEquals(
+        "TaskNotFoundException",
+        failed.get("rootException"),
+        "expected the documented exception but got: "
+            + failed);
+    assertTrue(
+        failed
+            .get("rootMessage")
+            .toString()
+            .contains("utask-4"),
+        "the message has to name the task but was: "
+            + failed.get("rootMessage"));
+
+  }
+
+  @Test
   @DisplayName("A user task is notified on creation and completed after the commit")
   public void userTaskNotificationAndCompletion() throws Exception {
 

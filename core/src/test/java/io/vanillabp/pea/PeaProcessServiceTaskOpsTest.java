@@ -18,6 +18,7 @@ import io.vanillabp.integration.spi.PhaseTwoCall;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 import io.vanillabp.pea.mock.InMemoryProcessEngine;
 import io.vanillabp.pea.processservice.PeaProcessService;
+import io.vanillabp.spi.process.TaskNotFoundException;
 
 /**
  * Task-operation edge cases of the {@link PeaProcessService} at the
@@ -65,12 +66,20 @@ public class PeaProcessServiceTaskOpsTest {
             "Process", null, new Object(), PhaseOperations.args(PhaseTwoCall.ARG_TASK_ID,
                 "task-3", PhaseTwoCall.ARG_BPMN_ERROR_CODE, "ERR")));
 
+    // the type is the one the SPI documents for a task no BPMS knows any more, so an
+    // application catches the same thing here as it does when a probe found out
     final var failure = assertThrows(
-        IllegalStateException.class,
+        TaskNotFoundException.class,
         () -> PhaseOperations.phaseOne(service, PhaseOperation.COMPLETE_TASK, "mod",
             "Process", null, new Object(),
             PhaseOperations.args(PhaseTwoCall.ARG_TASK_ID, "task-gone")));
     assertTrue(failure.getMessage().contains("task-gone"));
+    // cancelling asks the same question about the same task, so it answers the same way
+    assertThrows(
+        TaskNotFoundException.class,
+        () -> PhaseOperations.phaseOne(service, PhaseOperation.CANCEL_TASK, "mod",
+            "Process", null, new Object(), PhaseOperations.args(PhaseTwoCall.ARG_TASK_ID,
+                "task-gone", PhaseTwoCall.ARG_BPMN_ERROR_CODE, "ERR")));
     // the preflight checks never completed anything
     assertTrue(engine.getCompletedTasks().isEmpty());
     assertTrue(engine.getErroredTasks().isEmpty());
@@ -94,11 +103,16 @@ public class PeaProcessServiceTaskOpsTest {
             "Process", null, new Object(), PhaseOperations.args(PhaseTwoCall.ARG_TASK_ID,
                 "utask-1", PhaseTwoCall.ARG_BPMN_ERROR_CODE, "ERR")));
     final var failure = assertThrows(
-        IllegalStateException.class,
+        TaskNotFoundException.class,
         () -> PhaseOperations.phaseOne(service, PhaseOperation.COMPLETE_USER_TASK, "mod",
             "Process", null, new Object(),
             PhaseOperations.args(PhaseTwoCall.ARG_TASK_ID, "utask-gone")));
     assertTrue(failure.getMessage().contains("utask-gone"));
+    assertThrows(
+        TaskNotFoundException.class,
+        () -> PhaseOperations.phaseOne(service, PhaseOperation.CANCEL_USER_TASK, "mod",
+            "Process", null, new Object(), PhaseOperations.args(PhaseTwoCall.ARG_TASK_ID,
+                "utask-gone", PhaseTwoCall.ARG_BPMN_ERROR_CODE, "ERR")));
 
     PhaseOperations.phaseTwo(service, PhaseOperation.COMPLETE_USER_TASK, "mod", "Process",
         null, "42", PhaseOperations.args(PhaseTwoCall.ARG_TASK_ID, "utask-1"));

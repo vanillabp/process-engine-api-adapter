@@ -39,6 +39,7 @@ import io.vanillabp.pea.deployment.PeaDeployedProcesses;
 import io.vanillabp.pea.wiring.PeaCompleteTaskByErrorCmd;
 import io.vanillabp.pea.wiring.PeaCompleteTaskCmd;
 import io.vanillabp.spi.process.ProcessDefinition;
+import io.vanillabp.spi.process.TaskNotFoundException;
 import io.vanillabp.spi.process.WorkflowHistory;
 import lombok.extern.slf4j.Slf4j;
 
@@ -516,12 +517,48 @@ public class PeaProcessService<A> implements MigratableProcessService<A> {
       throw new IllegalStateException(
           "Interrupted while %s task '%s'".formatted(operationDescription, taskId), e);
     } catch (final ExecutionException e) {
-      throw new IllegalStateException(
+      throw taskIsGone(
+          taskId,
           ("The task '%s' is gone (completed or canceled meanwhile) - aborting the transaction "
               + "%s it! If this task was completed by a concurrent redelivery, retrying the "
               + "business operation will end in the documented no-op.")
-              .formatted(taskId, operationDescription), e.getCause());
+              .formatted(taskId, operationDescription),
+          e.getCause());
     }
+
+  }
+
+  /**
+   * What a phase-one check throws once the engine has refused the task.
+   * <p>
+   * The type is the one the SPI documents for a task no BPMS knows any more, so an
+   * application catching {@link TaskNotFoundException} catches this as well. Whether the
+   * task turned out to be gone while a BPMS was probed or while this check ran is the
+   * adapter's business and not the caller's.
+   * <p>
+   * That exception carries a message and nothing else, so what the engine answered with is
+   * written to the log before it is thrown. The awareness probe says the same thing on
+   * debug, because the election reading its answer can still ask the next adapter. A check
+   * is the last word, so this line is the only place the reason is ever said.
+   *
+   * @param taskId The task the engine refused
+   * @param message What the caller reads, including what a retry does
+   * @param rejection What the engine answered the check with
+   * @return The exception to throw
+   */
+  private TaskNotFoundException taskIsGone(
+      final String taskId,
+      final String message,
+      final Throwable rejection) {
+
+    // the Process-Engine-API declares no typed errors (see GAPS.md), so a refusal and an
+    // unreachable engine read the same here - what the engine said is all there is to pass on
+    log.info(
+        "PEA[{}]: the phase-one check of task '{}' was refused - the task is gone",
+        adapterId,
+        taskId,
+        rejection);
+    return new TaskNotFoundException(message);
 
   }
 
@@ -642,10 +679,12 @@ public class PeaProcessService<A> implements MigratableProcessService<A> {
       throw new IllegalStateException(
           "Interrupted while %s task '%s'".formatted(operationDescription, taskId), e);
     } catch (final ExecutionException e) {
-      throw new IllegalStateException(
+      throw taskIsGone(
+          taskId,
           ("The user task '%s' is gone (completed or canceled meanwhile) - aborting the "
               + "transaction %s it!")
-              .formatted(taskId, operationDescription), e.getCause());
+              .formatted(taskId, operationDescription),
+          e.getCause());
     }
 
   }
