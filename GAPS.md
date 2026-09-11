@@ -186,6 +186,14 @@ is never unavailable), but a real PEA implementation underneath needs typed erro
 or the adapter needs an engine-specific failure classifier - before multi-BPMS
 migration setups are safe. A defined exception taxonomy in the API would solve this.
 
+The same blindness reaches phase two. `isPhaseTwoFailureRepeatable` answers `false` for an
+`UnsupportedOperationException` only, because everything else the engine refuses arrives as one
+untyped `ExecutionException`. An engine which refuses an operation for good therefore looks like
+an engine which is briefly away: the outbox repeats the call until the entry blocks, and nothing says
+so any earlier. A start is where this hurts most, because the workflow the application
+asked for never comes into being while the retries run. If the engine behind the API is Camunda 7,
+a model whose expression cannot be evaluated is exactly such a start.
+
 ## 11. `CorrelateMessageCmd`/`StartProcessByMessageCmd` are FINAL - no execution-mode transport
 
 **Needed by VanillaBP:** message correlation and start-by-message follow the two-phase
