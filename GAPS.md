@@ -548,24 +548,33 @@ holds either. `DeploymentInformation` answers a deployment key, a time and a ten
 of the three says which identifiers are now taken.
 
 **Consequence for the adapter:** the adapter asks nothing and reports nothing about what the
-engine holds, which is what the SPI means by silence: an adapter which cannot ask its BPMS calls
-`reportIdentifiersTheBpmsAlreadyHolds` never, and `processVersionCatalogOf` keeps answering
-`null`, so the question about a held version is not asked either. The check this adapter does
-contribute is the one which needs no engine at all: what the models of THIS deployment declare.
-The adapter reads every message name, signal name, error code, escalation code and task
-definition out of the models while the module deploys, and hands the plain names to the core
-once the deployment succeeded, so a name two workflow modules of this application share is
-found here. It reads them whatever the mode is, and it has to: under `use-prefix` the module id
-is part of every name and two modules cannot collide, so the finding exists exactly under
-`none`, where nothing is prefixed and the reading would otherwise not happen. A task definition
-carries the BPMN process it belongs to, because that is what it is scoped by, and it matters as
-much as the rest here: a task subscription of this API matches a task type globally (gap 15), so
-two modules under one task definition mean one module's subscription takes the other's tasks.
-The limit of that check is the same as the limit of the prefixing: both read the raw BPMN by
-element name, so a dialect whose element names the adapter does not know declares nothing it can
-see (gap 1). A decision id stays out of it, because this adapter never scopes one (gap 22) and
-the scoped form the core would compose is not the form the engine sees. What stays invisible is
-every identifier somebody else put into the engine. Read together with gap 15: an engine which
-isolates nothing and cannot be asked what it holds leaves the uniqueness of identifiers to
-the application, across every module deployed to it. A repository API (gap 12) would open the
-same path the Camunda adapters take.
+engine holds, which is what the SPI means by silence: an adapter which cannot ask its BPMS
+calls `reportIdentifiersTheBpmsAlreadyHolds` never, and `processVersionCatalogOf` keeps
+answering `null`, so the question about a held version is not asked either. What this adapter
+does contribute are the two checks which need no engine at all, because what they read is the
+deployment itself. The first is about BPMN process ids: before a workflow module is sent to the
+engine the adapter hands the core the module id and the process id of everything that module
+brings, together with what earlier modules of the same boot deployed, and a boot where two of
+those pairs reach the engine under one id ends there. It compares across modules rather than
+within one, because the one engine behind this API keeps no module apart from another (gap 15),
+so an id an earlier module took is taken for the next one as well. The second check is about
+the names a model carries. The adapter reads every message name, signal name, error code,
+escalation code and task definition out of the models while the module deploys, and hands the
+plain names to the core once the deployment succeeded, so a name two workflow modules of this
+application share is found here. It reads them whatever the mode is, and it has to: under
+`use-prefix` the module id is part of every name and two modules cannot collide, so the finding
+exists exactly under `none`, where nothing is prefixed and the reading would otherwise not
+happen. A task definition carries the BPMN process it belongs to, because that is what it is
+scoped by, and it matters as much as the rest here: a task subscription of this API matches a
+task type globally (gap 15), so two modules under one task definition mean one module's
+subscription takes the other's tasks. The limit of that check is the same as the limit of the
+prefixing: both read the raw BPMN by element name, so a dialect whose element names the adapter
+does not know declares nothing it can see (gap 1). A decision id stays out of it, because this
+adapter never scopes one (gap 22) and the scoped form the core would compose is not the form
+the engine sees. The names only warn while the process ids end the boot, and the difference
+follows what a finding costs: a shared message name leaves both models in the engine and makes
+one name ambiguous, while two processes under one id mean the engine kept one model and lost
+the other. What stays invisible is every identifier somebody else put into the engine. Read
+together with gap 15: an engine which isolates nothing and cannot be asked what it holds leaves
+the uniqueness of identifiers to the application, across every module deployed to it. A
+repository API (gap 12) would open the same path the Camunda adapters take.
