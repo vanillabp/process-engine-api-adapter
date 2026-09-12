@@ -307,7 +307,10 @@ subscription matches a task type globally. Whether the engine behind the API has
 **Consequence for the adapter:** `BY_ADAPTER` is rejected while deploying a workflow
 module - the boot fails naming the module and the two alternatives (`use-prefix`, `none`).
 It is deliberately not silently downgraded to `none`: that would deploy every module into
-one scope and let a clash surface as the wrong process being started. `use-prefix` works
+one scope and let a clash surface as the wrong process being started. The same answer goes to
+the core's question whether this adapter's own isolation separates two given workflow modules:
+it separates none of them, which is what turns two modules under one BPMN process id into a
+refused boot rather than into a model nobody notices is gone (gap 24). `use-prefix` works
 without engine support, but the adapter has to rewrite the raw BPMN XML by element name
 (gap 1: no BPMN model type), which only covers the dialects it knows the element names of.
 A tenant or deployment-scope concept in the API would resolve it.
@@ -554,10 +557,14 @@ answering `null`, so the question about a held version is not asked either. What
 does contribute are the two checks which need no engine at all, because what they read is the
 deployment itself. The first is about BPMN process ids: before a workflow module is sent to the
 engine the adapter hands the core the module id and the process id of everything that module
-brings, together with what earlier modules of the same boot deployed, and a boot where two of
-those pairs reach the engine under one id ends there. It compares across modules rather than
-within one, because the one engine behind this API keeps no module apart from another (gap 15),
-so an id an earlier module took is taken for the next one as well. The second check is about
+brings, and a boot where two of those pairs reach the engine under one id ends there. The
+comparison spans workflow modules, and what makes it span them is the core: it keeps which
+module reached the BPMS under which identifier, so the clash is found while the second of the
+two modules deploys, with the first one already in the engine. It has to span them, because the
+one engine behind this API keeps no module apart from another (gap 15), so an id an earlier
+module took is taken for the next one as well. Where nothing is prefixed and the BPMS is the one
+meant to keep two modules apart, the core asks the adapter whether its own isolation does, and
+this adapter answers that it separates nothing, which is gap 15 once more. The second check is about
 the names a model carries. The adapter reads every message name, signal name, error code,
 escalation code and task definition out of the models while the module deploys, and hands the
 plain names to the core once the deployment succeeded, so a name two workflow modules of this

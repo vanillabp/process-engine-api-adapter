@@ -157,7 +157,12 @@ replaces the mock with a real Process-Engine-API implementation.
   While a module deploys, the adapter reads the message names, signal names, error codes,
   escalation codes and task definitions out of its BPMN files and hands the plain names to the
   core, which warns where another workflow module of the same application ends up under one of
-  them - a warning, never a failed boot. That is the whole check here: the Process-Engine-API
+  them - a warning, never a failed boot. A BPMN process id is the one which does end a boot: the
+  adapter hands the core the module id and the process id of every process it is about to deploy,
+  and the core, which remembers what the workflow modules before it deployed, refuses a module
+  reaching the engine under an id an earlier one took. Nothing behind this API would keep the two
+  apart ([`GAPS.md`](GAPS.md), entry 15), so the engine would keep one model and lose the other.
+  Those two are the whole check here: the Process-Engine-API
   cannot be asked which identifiers the engine already holds, for any kind, so nothing is said
   about what somebody else deployed to it ([`GAPS.md`](GAPS.md), entry 24). The reading reaches
   the BPMN dialects whose element names the adapter knows (entry 1), and a decision id stays out

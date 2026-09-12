@@ -297,6 +297,29 @@ public class PeaDeploymentService implements AdapterDeploymentService<PeaBpmnMod
 
   }
 
+  /**
+   * Nothing is kept apart here. There is no tenant and no namespace behind this API, so every
+   * workflow module reaches one engine in one scope (see {@code GAPS.md}, entry 15).
+   * <p>
+   * The core asks this while it judges whether two BPMN processes reach the BPMS under one
+   * identifier, and it asks only where the mode leaves the identifiers plain and the BPMS is
+   * meant to do the separating. This adapter refuses that mode while deploying, so the
+   * question rarely gets here, and the answer would be the same one if it did.
+   * <p>
+   * The inherited default answers <code>false</code> as well, so this override changes no
+   * behaviour. It is here to put the answer and its reason into the adapter the gap belongs
+   * to, where a reader of this adapter looks for it. That is its whole job, so do not drop it
+   * as redundant.
+   */
+  @Override
+  public boolean ownIsolationSeparatesWorkflowModules(
+      final String oneWorkflowModuleId,
+      final String anotherWorkflowModuleId) {
+
+    return false;
+
+  }
+
   @Override
   public String getAdapterId() {
 
@@ -800,25 +823,17 @@ public class PeaDeploymentService implements AdapterDeploymentService<PeaBpmnMod
 
     reportWhatTheModelsDeclare(workflowModuleId, bpmsProcessingContext);
 
-    // after ALL processes of the module were wired: methods matching no task of
-    // any wired process are a defect (per-module check, honors the policy)
-
-    // This adapter registers no version catalog (the API cannot be asked
-    // which versions of a process exist - GAPS.md 19), so this call only reports the
-    // version tags the application names and nobody can resolve
-
   }
 
   /**
    * Refuses a deployment whose BPMN process ids the engine could not tell apart, and does
    * it before anything of that deployment is sent.
    * <p>
-   * What is compared is wider than the workflow module being deployed: it is this module
-   * plus everything the boot deployed before it. That has to be so, because there is one
-   * engine behind this API and it keeps no workflow module apart from another (see
-   * {@code GAPS.md}, entry 15), so an identifier an earlier module took is taken for this
-   * one too. The core composes the form each id reaches the engine in and words the
-   * message, so the configured mode decides what counts as a collision here.
+   * What goes over is the workflow module being deployed and nothing else. The core keeps
+   * which module reached the BPMS under which identifier, so a clash with a module deployed
+   * earlier in the same boot is found there, and the boot ends while the second of the two
+   * modules deploys. The core also composes the form each id reaches the engine in and
+   * words the message, so the configured mode decides what counts as a collision here.
    * <p>
    * Under {@code none} two workflow modules using one process id collide, and nothing else
    * would say so: the engine keeps one of the two models and loses the other. Under
@@ -842,15 +857,9 @@ public class PeaDeploymentService implements AdapterDeploymentService<PeaBpmnMod
     if (scoping == null) {
       return;
     }
-    // a set, because one BPMN file may hold several processes and a module may be handed
-    // to this method more than once: the same pair twice is not a collision
+    // a set, because one BPMN file may hold several processes and a module may declare one
+    // process id in two of its files: the same pair twice is not a collision
     final var processesReachingTheEngine = new LinkedHashSet<NameClashAvoidanceSupport.DeployedProcess>();
-    deployedProcesses
-        .deployedSoFar()
-        .forEach(process -> processesReachingTheEngine
-            .add(
-                new NameClashAvoidanceSupport.DeployedProcess(
-                    process.workflowModuleId(), process.model().bpmnProcessId())));
     bpmsProcessingContext
         .getModels()
         .forEach(model -> processesReachingTheEngine

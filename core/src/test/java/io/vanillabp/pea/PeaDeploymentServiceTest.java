@@ -1014,9 +1014,14 @@ public class PeaDeploymentServiceTest {
 
   /**
    * Two BPMN processes which reach the one engine behind this API under the same id. The
-   * engine keeps no workflow module apart from another (see {@code GAPS.md}, entry 15), so
-   * the comparison runs over everything this adapter deployed, and it ends the boot rather
-   * than letting the engine keep one of the two models and lose the other.
+   * engine keeps no workflow module apart from another (see {@code GAPS.md}, entry 15), so a
+   * process id an earlier workflow module took is taken for the next one as well, and the
+   * boot ends rather than letting the engine keep one of the two models and lose the other.
+   * <p>
+   * This adapter hands over the module it is deploying and nothing more. What spans the
+   * modules is the core, which keeps which module reached the BPMS under which identifier,
+   * so every test below deploys two workflow modules for real instead of handing one call a
+   * wider collection.
    */
   @Nested
   class CollidingProcessIds {
@@ -1029,25 +1034,61 @@ public class PeaDeploymentServiceTest {
         """;
 
     /**
-     * Runs the deployment pipeline of one BPMN process for the given workflow module.
+     * Runs the deployment pipeline for the given workflow module, one BPMN file per process
+     * id. All of them travel in one deployment, and each file gets a name of its own, so a
+     * module may declare the same process id twice.
      *
      * @param service The service under test
      * @param workflowModuleId The workflow module
-     * @param bpmnProcessId The plain BPMN process id its file declares
+     * @param bpmnProcessIds The plain BPMN process ids its files declare
      */
     private void deploy(
         final PeaDeploymentService service,
         final String workflowModuleId,
-        final String bpmnProcessId) {
+        final String... bpmnProcessIds) {
 
-      final var filename = bpmnProcessId
-          + ".bpmn";
       PeaProcessingContext context = null;
-      for (final var model : service
-          .readBpmn(workflowModuleId, filename, bpmn(PROCESS.formatted(bpmnProcessId)), true)) {
-        context = service.prepareBpmn(workflowModuleId, context, filename, model.getKey(), model.getValue());
+      var fileNumber = 0;
+      for (final var bpmnProcessId : bpmnProcessIds) {
+        final var filename = bpmnProcessId
+            + "-"
+            + ++fileNumber
+            + ".bpmn";
+        for (final var model : service
+            .readBpmn(workflowModuleId, filename, bpmn(PROCESS.formatted(bpmnProcessId)), true)) {
+          context = service.prepareBpmn(workflowModuleId, context, filename, model.getKey(), model.getValue());
+        }
       }
       service.deployResources(workflowModuleId, context);
+
+    }
+
+    /**
+     * Deploys one BPMN process id as two workflow modules, in the order given, and reads the
+     * refusal of the second one.
+     *
+     * @param firstWorkflowModuleId The workflow module which deploys first
+     * @param secondWorkflowModuleId The one which meets the taken id
+     */
+    private void refusesTheSecondOfTwoModules(
+        final String firstWorkflowModuleId,
+        final String secondWorkflowModuleId) {
+
+      final var service = serviceScopedBy(
+          scopingWith(NameClashAvoidance.NONE, firstWorkflowModuleId, secondWorkflowModuleId));
+
+      deploy(service, firstWorkflowModuleId, "RiskAssessment");
+      final var exception = Assertions.assertThrows(
+          IllegalStateException.class,
+          () -> deploy(service, secondWorkflowModuleId, "RiskAssessment"));
+
+      // the wording is the core's, so only what a developer has to read is asserted here
+      Assertions.assertTrue(exception.getMessage().contains("SAME identifier"), exception::getMessage);
+      Assertions.assertTrue(exception.getMessage().contains("RiskAssessment"), exception::getMessage);
+      Assertions.assertTrue(exception.getMessage().contains(firstWorkflowModuleId), exception::getMessage);
+      Assertions.assertTrue(exception.getMessage().contains(secondWorkflowModuleId), exception::getMessage);
+      // and the second module's model never reached the engine
+      Assertions.assertEquals(1, engine.getDeployments().size());
 
     }
 
@@ -1055,21 +1096,28 @@ public class PeaDeploymentServiceTest {
     @DisplayName("Two workflow modules under one process id end the boot with the core's message")
     public void twoModulesUnderOneProcessIdEndTheBoot() {
 
-      final var service = serviceScopedBy(
-          scopingWith(NameClashAvoidance.NONE, "loan-approval", "loan-payout"));
+      refusesTheSecondOfTwoModules("loan-approval", "loan-payout");
 
-      deploy(service, "loan-approval", "RiskAssessment");
-      final var exception = Assertions.assertThrows(
-          IllegalStateException.class,
-          () -> deploy(service, "loan-payout", "RiskAssessment"));
+    }
 
-      // the wording is the core's, so only what a developer has to read is asserted here
-      Assertions.assertTrue(exception.getMessage().contains("SAME identifier"), exception::getMessage);
-      Assertions.assertTrue(exception.getMessage().contains("RiskAssessment"), exception::getMessage);
-      Assertions.assertTrue(exception.getMessage().contains("loan-approval"), exception::getMessage);
-      Assertions.assertTrue(exception.getMessage().contains("loan-payout"), exception::getMessage);
-      // and the second module's model never reached the engine
-      Assertions.assertEquals(1, engine.getDeployments().size());
+    @Test
+    @DisplayName("The same two workflow modules in the other order end the boot as well")
+    public void theOtherDeploymentOrderEndsTheBootToo() {
+
+      // which module deploys first is none of the application's doing, so a finding which
+      // only shows up in one of the two orders is no finding
+      refusesTheSecondOfTwoModules("loan-payout", "loan-approval");
+
+    }
+
+    @Test
+    @DisplayName("This engine separates no pair of workflow modules")
+    public void nothingIsSeparatedByThisEngine() {
+
+      // what the core asks before it calls two plain ids a collision (see GAPS.md, entry 15)
+      Assertions.assertFalse(service.ownIsolationSeparatesWorkflowModules("loan-approval", "loan-payout"));
+      Assertions.assertFalse(service.ownIsolationSeparatesWorkflowModules("loan-payout", "loan-approval"));
+      Assertions.assertFalse(service.ownIsolationSeparatesWorkflowModules("loan-approval", "loan-approval"));
 
     }
 
@@ -1119,6 +1167,21 @@ public class PeaDeploymentServiceTest {
           .assertTrue(
               exception.getMessage().contains("loan__approval__RiskAssessment"),
               exception::getMessage);
+
+    }
+
+    @Test
+    @DisplayName("One workflow module declaring a process id twice deploys both files")
+    public void theSameProcessIdTwiceInOneModuleIsNoCollision() {
+
+      final var service = serviceScopedBy(scopingWith(NameClashAvoidance.NONE));
+
+      // the check is about two modules meeting under one id, and here there is one module:
+      // two files declaring one process id reach the engine and it keeps the last of them
+      Assertions.assertDoesNotThrow(() -> deploy(service, "loan-approval", "RiskAssessment", "RiskAssessment"));
+
+      Assertions.assertEquals(1, engine.getDeployments().size());
+      Assertions.assertEquals(2, engine.getDeployments().get(0).resources().size());
 
     }
 
