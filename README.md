@@ -153,6 +153,15 @@ replaces the mock with a real Process-Engine-API implementation.
   a business rule task to a decision which could be renamed with it ([`GAPS.md`](GAPS.md),
   entry 22) — such an application gives its decisions ids which are unique across its
   modules, exactly as it has to for its process ids (entry 4).
+- **Name clashes between workflow modules** are checked as far as this adapter can check them.
+  While a module deploys, the adapter reads the message names, signal names, error codes,
+  escalation codes and task definitions out of its BPMN files and hands the plain names to the
+  core, which warns where another workflow module of the same application ends up under one of
+  them - a warning, never a failed boot. That is the whole check here: the Process-Engine-API
+  cannot be asked which identifiers the engine already holds, for any kind, so nothing is said
+  about what somebody else deployed to it ([`GAPS.md`](GAPS.md), entry 24). The reading reaches
+  the BPMN dialects whose element names the adapter knows (entry 1), and a decision id stays out
+  of it because this adapter cannot scope one (entry 22).
 - **Starting workflows** is two-phase (the Process-Engine-API is treated as a remote BPMS):
   phase one maps to `ExecutionMode.PREFLIGHT_CHECK` (validate only, inside the transaction),
   phase two (after commit, via the outbox) to `ExecutionMode.SYNC` (create the instance). The

@@ -87,14 +87,13 @@ public final class PeaScoping {
           value -> scoping.scopedProcessId(workflowModuleId, value, adapterId));
       rewriteAttribute(document, "calledElement", "processId",
           value -> scoping.scopedProcessId(workflowModuleId, value, adapterId));
-      rewriteAttribute(document, "message", "name",
-          value -> scoping.scopedIdentifier(workflowModuleId, value, adapterId));
-      rewriteAttribute(document, "signal", "name",
-          value -> scoping.scopedIdentifier(workflowModuleId, value, adapterId));
-      rewriteAttribute(document, "escalation", "escalationCode",
-          value -> scoping.scopedIdentifier(workflowModuleId, value, adapterId));
-      rewriteAttribute(document, "error", "errorCode",
-          value -> scoping.scopedIdentifier(workflowModuleId, value, adapterId));
+      // the elements a workflow module scopes on its own, taken from the list
+      // PeaDeclaredIdentifiers reads as well: what is rewritten here and what the core is
+      // told about is then the same set of element names by construction
+      for (final var element : PeaDeclaredIdentifiers.ELEMENTS_SCOPED_BY_THE_WORKFLOW_MODULE) {
+        rewriteAttribute(document, element.localName(), element.attributeName(),
+            value -> scoping.scopedIdentifier(workflowModuleId, value, adapterId));
+      }
       // task definitions are scoped per PROCESS - the plain process id is the one
       // the caller passed, the model's own id may already be rewritten above
       rewriteAttribute(document, "taskDefinition", "type",

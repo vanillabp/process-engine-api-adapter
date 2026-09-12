@@ -4,6 +4,7 @@ import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
@@ -15,6 +16,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mockito;
 
 import dev.bpmcrafters.processengineapi.Empty;
 import dev.bpmcrafters.processengineapi.MetaInfo;
@@ -34,6 +36,8 @@ import io.vanillabp.integration.adapter.spi.AggregateSyncMode;
 import io.vanillabp.integration.adapter.spi.BpmnParseException;
 import io.vanillabp.integration.adapter.spi.NameClashAvoidance;
 import io.vanillabp.integration.adapter.spi.NameClashAvoidanceSupport;
+import io.vanillabp.integration.adapter.spi.NameClashAvoidanceSupport.ModelIdentifier;
+import io.vanillabp.integration.adapter.spi.NameClashAvoidanceSupport.ScopedIdentifierKind;
 import io.vanillabp.integration.adapter.spi.workflowtask.BpmnTaskSpec;
 import io.vanillabp.integration.adapter.spi.workflowtask.TaskInvocationContext;
 import io.vanillabp.integration.adapter.spi.workflowtask.WorkflowTaskInvoker;
@@ -658,6 +662,31 @@ public class PeaDeploymentServiceTest {
 
 
   /**
+   * A core which avoids name clashes the given way for workflow module
+   * {@code loan-approval} - the real service rather than a double, because the form an
+   * identifier reaches the engine in is what the core composes.
+   */
+  private static NameClashAvoidanceService scopingWith(
+      final NameClashAvoidance mode) {
+
+    final var adapter = AdapterConfigProperties
+        .ofType("process-engine-api");
+    adapter.setNameClashAvoidance(mode);
+    final var properties = MigrationAdapterProperties
+        .builder()
+        .adapters(Map.of("pea", adapter))
+        .prioritizedAdapters(List.of("pea"))
+        .workflowModules(
+            Map.of(
+                "loan-approval",
+                new WorkflowModuleAdapterProperties()))
+        .build();
+    properties.validateAndLink();
+    return new NameClashAvoidanceService(properties);
+
+  }
+
+  /**
    * This BPMS has no isolation mechanism of its own, so the DEFAULT mode
    * {@code by-adapter} cannot be served - and {@code use-prefix} rewrites the raw
    * BPMN (the API has no model type).
@@ -679,26 +708,6 @@ public class PeaDeploymentServiceTest {
           </bpmn:process>
         </bpmn:definitions>
         """;
-
-    private NameClashAvoidanceService scopingWith(
-        final NameClashAvoidance mode) {
-
-      final var adapter = AdapterConfigProperties
-          .ofType("process-engine-api");
-      adapter.setNameClashAvoidance(mode);
-      final var properties = MigrationAdapterProperties
-          .builder()
-          .adapters(Map.of("pea", adapter))
-          .prioritizedAdapters(List.of("pea"))
-          .workflowModules(
-              Map.of(
-                  "loan-approval",
-                  new WorkflowModuleAdapterProperties()))
-          .build();
-      properties.validateAndLink();
-      return new NameClashAvoidanceService(properties);
-
-    }
 
     @Test
     public void byAdapterIsRejectedWhileDeploying() {
@@ -781,6 +790,206 @@ public class PeaDeploymentServiceTest {
           XML,
           new String(context.getModels().getFirst().resource(), StandardCharsets.UTF_8));
       service.deployResources("loan-approval", context);
+
+    }
+
+  }
+
+  /**
+   * The only name clash this adapter can look for: what the models of a workflow module
+   * declare. The engine behind the API cannot be asked which identifiers it already holds
+   * (see {@code GAPS.md}, entry 24), while the names of the models being deployed are read
+   * anyway - so the core is told about those and about nothing else.
+   */
+  @Nested
+  class IdentifiersTheModelsDeclare {
+
+    private static final String XML = """
+        <?xml version="1.0" encoding="UTF-8"?>
+        <bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:zeebe="http://camunda.org/schema/zeebe/1.0">
+          <bpmn:message id="Msg" name="PaymentReceived"/>
+          <bpmn:signal id="Sig" name="RatingDone"/>
+          <bpmn:error id="Err" errorCode="PAYMENT_FAILED"/>
+          <bpmn:escalation id="Esc" escalationCode="MANUAL_REVIEW"/>
+          <bpmn:process id="RiskAssessment" isExecutable="true">
+            <bpmn:serviceTask id="Task">
+              <bpmn:extensionElements>
+                <zeebe:taskDefinition type="scoreApplicant"/>
+              </bpmn:extensionElements>
+            </bpmn:serviceTask>
+            <bpmn:userTask id="Review">
+              <bpmn:extensionElements>
+                <zeebe:formDefinition externalReference="reviewForm"/>
+              </bpmn:extensionElements>
+            </bpmn:userTask>
+          </bpmn:process>
+        </bpmn:definitions>
+        """;
+
+    /**
+     * A BPMN written for an engine whose task definition is a Camunda 7 external task
+     * topic - an element name the adapter's rewrite does not know.
+     */
+    private static final String XML_OF_AN_UNKNOWN_DIALECT = """
+        <?xml version="1.0" encoding="UTF-8"?>
+        <bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:camunda="http://camunda.org/schema/1.0/bpmn">
+          <bpmn:message id="Msg" name="PaymentReceived"/>
+          <bpmn:process id="RiskAssessment" isExecutable="true">
+            <bpmn:serviceTask id="Task" camunda:type="external" camunda:topic="scoreApplicant"/>
+          </bpmn:process>
+        </bpmn:definitions>
+        """;
+
+    private final List<ModelIdentifier> reported = new ArrayList<>();
+
+    /**
+     * A core which records what it is told instead of wording its warning - what the
+     * warning says is the core's own business, what arrives here is this adapter's.
+     */
+    private NameClashAvoidanceSupport recordingScoping(
+        final NameClashAvoidance mode) {
+
+      final var scoping = Mockito.spy(scopingWith(mode));
+      Mockito
+          .doAnswer(invocation -> {
+            reported.addAll(invocation.<Collection<ModelIdentifier>>getArgument(2));
+            return null;
+          })
+          .when(scoping)
+          .reportIdentifiersTheModelsDeclare(Mockito.any(), Mockito.any(), Mockito.any());
+      return scoping;
+
+    }
+
+    /**
+     * Runs the deployment pipeline of one BPMN file for workflow module
+     * {@code loan-approval}.
+     */
+    private void deploy(
+        final PeaDeploymentService service,
+        final String xml) {
+
+      PeaProcessingContext context = null;
+      for (final var model : service.readBpmn("loan-approval", "risk.bpmn", bpmn(xml), true)) {
+        context = service.prepareBpmn("loan-approval", context, "risk.bpmn", model.getKey(), model.getValue());
+      }
+      service.deployResources("loan-approval", context);
+
+    }
+
+    @Test
+    @DisplayName("Every identifier the rewrite knows reaches the core with the name the application wrote")
+    public void identifiersArrivePlainAndByTheirKind() {
+
+      // the mode which lets two workflow modules share a name, and therefore the one the
+      // check exists for
+      deploy(serviceScopedBy(recordingScoping(NameClashAvoidance.NONE)), XML);
+
+      Assertions
+          .assertEquals(
+              Set
+                  .of(
+                      new ModelIdentifier(ScopedIdentifierKind.MESSAGE_NAME, "PaymentReceived", null),
+                      new ModelIdentifier(ScopedIdentifierKind.SIGNAL_NAME, "RatingDone", null),
+                      new ModelIdentifier(ScopedIdentifierKind.ERROR_CODE, "PAYMENT_FAILED", null),
+                      new ModelIdentifier(ScopedIdentifierKind.ESCALATION_CODE, "MANUAL_REVIEW", null),
+                      new ModelIdentifier(ScopedIdentifierKind.TASK_DEFINITION, "scoreApplicant", "RiskAssessment"),
+                      new ModelIdentifier(ScopedIdentifierKind.TASK_DEFINITION, "reviewForm", "RiskAssessment")),
+              Set.copyOf(reported));
+
+    }
+
+    @Test
+    @DisplayName("A task definition names its BPMN process, because that is what it is scoped by")
+    public void aTaskDefinitionArrivesWithItsBpmnProcessId() {
+
+      // under 'use-prefix' the deployed bytes carry the prefix, so this also shows that
+      // what the core is told are the plain names
+      deploy(serviceScopedBy(recordingScoping(NameClashAvoidance.USE_PREFIX)), XML);
+
+      Assertions
+          .assertEquals(
+              List
+                  .of(
+                      new ModelIdentifier(ScopedIdentifierKind.TASK_DEFINITION, "scoreApplicant", "RiskAssessment"),
+                      new ModelIdentifier(ScopedIdentifierKind.TASK_DEFINITION, "reviewForm", "RiskAssessment")),
+              reported
+                  .stream()
+                  .filter(identifier -> identifier.kind() == ScopedIdentifierKind.TASK_DEFINITION)
+                  .toList());
+      Assertions
+          .assertTrue(
+              reported.contains(new ModelIdentifier(ScopedIdentifierKind.MESSAGE_NAME, "PaymentReceived", null)),
+              reported::toString);
+
+    }
+
+    @Test
+    @DisplayName("An element name the rewrite does not know is not reported as something else")
+    public void anUnknownElementNameIsNotReported() {
+
+      deploy(serviceScopedBy(recordingScoping(NameClashAvoidance.NONE)), XML_OF_AN_UNKNOWN_DIALECT);
+
+      // the message name is BPMN itself and is found; the external task topic is not a
+      // task definition this adapter scopes, so reporting it would name a name the engine
+      // never sees under that kind
+      Assertions
+          .assertEquals(
+              List.of(new ModelIdentifier(ScopedIdentifierKind.MESSAGE_NAME, "PaymentReceived", null)),
+              reported);
+
+    }
+
+    @Test
+    @DisplayName("A workflow module which deploys nothing has nothing to report")
+    public void aModuleWithoutModelsReportsNothing() {
+
+      final var scoping = recordingScoping(NameClashAvoidance.NONE);
+      final var service = serviceScopedBy(scoping);
+
+      service.deployResources("loan-approval", new PeaProcessingContext("loan-approval"));
+      service.deployResources("loan-approval", null);
+
+      Mockito
+          .verify(scoping, Mockito.never())
+          .reportIdentifiersTheModelsDeclare(Mockito.any(), Mockito.any(), Mockito.any());
+
+    }
+
+    @Test
+    @DisplayName("A file which cannot be read costs the deployment nothing")
+    public void anUnreadableFileIsNotReportedAndDeploysAnyway() {
+
+      final var service = serviceScopedBy(recordingScoping(NameClashAvoidance.NONE));
+
+      final var context = service
+          .prepareBpmn(
+              "loan-approval",
+              null,
+              "broken.bpmn",
+              "RiskAssessment",
+              new PeaBpmnModel(
+                  "broken.bpmn", "not XML at all".getBytes(StandardCharsets.UTF_8), "RiskAssessment", List.of()));
+      service.deployResources("loan-approval", context);
+
+      Assertions.assertTrue(reported.isEmpty(), reported::toString);
+      Assertions.assertEquals(1, engine.getDeployments().size());
+
+    }
+
+    @Test
+    @DisplayName("A check which fails does not fail the deployment the engine accepted")
+    public void aFailingCheckLeavesTheDeploymentAlone() {
+
+      final var scoping = Mockito.spy(scopingWith(NameClashAvoidance.NONE));
+      Mockito
+          .doThrow(new IllegalStateException("the check itself broke"))
+          .when(scoping)
+          .reportIdentifiersTheModelsDeclare(Mockito.any(), Mockito.any(), Mockito.any());
+      final var service = serviceScopedBy(scoping);
+
+      Assertions.assertDoesNotThrow(() -> deploy(service, XML));
+      Assertions.assertEquals(1, engine.getDeployments().size());
 
     }
 

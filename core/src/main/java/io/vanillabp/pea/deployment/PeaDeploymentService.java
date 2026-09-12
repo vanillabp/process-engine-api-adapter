@@ -543,6 +543,14 @@ public class PeaDeploymentService implements AdapterDeploymentService<PeaBpmnMod
     final var context = existingContext == null
         ? new PeaProcessingContext(workflowModuleId)
         : existingContext;
+    // read what this model declares while the PLAIN bytes are at hand - the rewrite below
+    // hands the engine prefixed ones, and the core wants the names the application wrote.
+    // Read in EVERY mode: the clash the core looks for needs two modules whose names reach
+    // the engine in one form, which is what the mode 'none' does, so collecting only while
+    // prefixing would look exactly where there is nothing to find
+    context
+        .getDeclaredIdentifiers()
+        .addAll(PeaDeclaredIdentifiers.of(model));
     // The deployed BYTES carry the scoped identifiers, while the model's
     // own bpmnProcessId/tasks stay PLAIN - they key the core's registries
     // (see decision 2 in the repository's DECISIONS.md)
@@ -786,6 +794,7 @@ public class PeaDeploymentService implements AdapterDeploymentService<PeaBpmnMod
           "Deployment of resources of workflow module '%s' failed".formatted(workflowModuleId), e.getCause());
     }
 
+    reportWhatTheModelsDeclare(workflowModuleId, bpmsProcessingContext);
 
     // after ALL processes of the module were wired: methods matching no task of
     // any wired process are a defect (per-module check, honors the policy)
@@ -793,6 +802,47 @@ public class PeaDeploymentService implements AdapterDeploymentService<PeaBpmnMod
     // This adapter registers no version catalog (the API cannot be asked
     // which versions of a process exist - GAPS.md 19), so this call only reports the
     // version tags the application names and nobody can resolve
+
+  }
+
+  /**
+   * Hands the core the identifiers the module's models declare, once the module is
+   * deployed. The core composes the form each of them reaches the engine in and warns
+   * where another workflow module of this application ends up under the same one.
+   * <p>
+   * This asks the engine nothing, and that is the whole reason it is here: what the engine
+   * already holds cannot be asked of this API at all, for no kind of identifier (see
+   * {@code GAPS.md}, entry 24), while the names of the models being deployed are in the
+   * adapter's hands anyway. What reaches the core is what the rewrite of the raw BPMN
+   * recognises, no more.
+   * <p>
+   * A diagnostic must not end a deployment the engine accepted, so a failure in here is a
+   * debug line and nothing else.
+   *
+   * @param workflowModuleId The workflow module which was deployed
+   * @param bpmsProcessingContext What the pipeline collected for it
+   */
+  private void reportWhatTheModelsDeclare(
+      final String workflowModuleId,
+      final PeaProcessingContext bpmsProcessingContext) {
+
+    if (scoping == null) {
+      return;
+    }
+    try {
+      scoping
+          .reportIdentifiersTheModelsDeclare(
+              adapterId,
+              workflowModuleId,
+              bpmsProcessingContext.getDeclaredIdentifiers());
+    } catch (final RuntimeException e) {
+      log.debug(
+          "Process-Engine-API adapter '{}': the identifiers declared by workflow module '{}' were "
+              + "not checked against the other workflow modules",
+          adapterId,
+          workflowModuleId,
+          e);
+    }
 
   }
 
