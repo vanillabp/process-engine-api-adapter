@@ -1,5 +1,6 @@
 package io.vanillabp.pea.deployment;
 
+import java.util.Collection;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -74,6 +75,21 @@ public class PeaDeployedProcesses {
       final String bpmnProcessId) {
 
     return byProcess.get(definitionId(workflowModuleId, bpmnProcessId));
+
+  }
+
+  /**
+   * Everything this boot has handed to the engine so far, over every workflow module.
+   * <p>
+   * There is one engine behind this API and it keeps nothing apart (see {@code GAPS.md},
+   * entry 15), so this is also the list of BPMN process ids which are taken in it. The
+   * collision check of the next workflow module reads it for that reason.
+   *
+   * @return The processes deployed up to now, in no particular order
+   */
+  public Collection<DeployedProcess> deployedSoFar() {
+
+    return byProcess.values();
 
   }
 

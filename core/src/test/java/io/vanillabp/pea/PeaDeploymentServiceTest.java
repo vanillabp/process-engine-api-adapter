@@ -6,6 +6,7 @@ import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -669,17 +670,33 @@ public class PeaDeploymentServiceTest {
   private static NameClashAvoidanceService scopingWith(
       final NameClashAvoidance mode) {
 
+    return scopingWith(mode, "loan-approval");
+
+  }
+
+  /**
+   * The same core for the given workflow modules, which is what a clash between two of
+   * them needs.
+   *
+   * @param mode The mode every one of them resolves
+   * @param workflowModuleIds The modules the application configures
+   */
+  private static NameClashAvoidanceService scopingWith(
+      final NameClashAvoidance mode,
+      final String... workflowModuleIds) {
+
     final var adapter = AdapterConfigProperties
         .ofType("process-engine-api");
     adapter.setNameClashAvoidance(mode);
+    final var workflowModules = new LinkedHashMap<String, WorkflowModuleAdapterProperties>();
+    for (final var workflowModuleId : workflowModuleIds) {
+      workflowModules.put(workflowModuleId, new WorkflowModuleAdapterProperties());
+    }
     final var properties = MigrationAdapterProperties
         .builder()
         .adapters(Map.of("pea", adapter))
         .prioritizedAdapters(List.of("pea"))
-        .workflowModules(
-            Map.of(
-                "loan-approval",
-                new WorkflowModuleAdapterProperties()))
+        .workflowModules(workflowModules)
         .build();
     properties.validateAndLink();
     return new NameClashAvoidanceService(properties);
@@ -990,6 +1007,140 @@ public class PeaDeploymentServiceTest {
 
       Assertions.assertDoesNotThrow(() -> deploy(service, XML));
       Assertions.assertEquals(1, engine.getDeployments().size());
+
+    }
+
+  }
+
+  /**
+   * Two BPMN processes which reach the one engine behind this API under the same id. The
+   * engine keeps no workflow module apart from another (see {@code GAPS.md}, entry 15), so
+   * the comparison runs over everything this adapter deployed, and it ends the boot rather
+   * than letting the engine keep one of the two models and lose the other.
+   */
+  @Nested
+  class CollidingProcessIds {
+
+    private static final String PROCESS = """
+        <?xml version="1.0" encoding="UTF-8"?>
+        <bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL">
+          <bpmn:process id="%s" isExecutable="true"/>
+        </bpmn:definitions>
+        """;
+
+    /**
+     * Runs the deployment pipeline of one BPMN process for the given workflow module.
+     *
+     * @param service The service under test
+     * @param workflowModuleId The workflow module
+     * @param bpmnProcessId The plain BPMN process id its file declares
+     */
+    private void deploy(
+        final PeaDeploymentService service,
+        final String workflowModuleId,
+        final String bpmnProcessId) {
+
+      final var filename = bpmnProcessId
+          + ".bpmn";
+      PeaProcessingContext context = null;
+      for (final var model : service
+          .readBpmn(workflowModuleId, filename, bpmn(PROCESS.formatted(bpmnProcessId)), true)) {
+        context = service.prepareBpmn(workflowModuleId, context, filename, model.getKey(), model.getValue());
+      }
+      service.deployResources(workflowModuleId, context);
+
+    }
+
+    @Test
+    @DisplayName("Two workflow modules under one process id end the boot with the core's message")
+    public void twoModulesUnderOneProcessIdEndTheBoot() {
+
+      final var service = serviceScopedBy(
+          scopingWith(NameClashAvoidance.NONE, "loan-approval", "loan-payout"));
+
+      deploy(service, "loan-approval", "RiskAssessment");
+      final var exception = Assertions.assertThrows(
+          IllegalStateException.class,
+          () -> deploy(service, "loan-payout", "RiskAssessment"));
+
+      // the wording is the core's, so only what a developer has to read is asserted here
+      Assertions.assertTrue(exception.getMessage().contains("SAME identifier"), exception::getMessage);
+      Assertions.assertTrue(exception.getMessage().contains("RiskAssessment"), exception::getMessage);
+      Assertions.assertTrue(exception.getMessage().contains("loan-approval"), exception::getMessage);
+      Assertions.assertTrue(exception.getMessage().contains("loan-payout"), exception::getMessage);
+      // and the second module's model never reached the engine
+      Assertions.assertEquals(1, engine.getDeployments().size());
+
+    }
+
+    @Test
+    @DisplayName("Two workflow modules with process ids of their own deploy both")
+    public void twoModulesWithDifferentProcessIdsDeployBoth() {
+
+      final var service = serviceScopedBy(
+          scopingWith(NameClashAvoidance.NONE, "loan-approval", "loan-payout"));
+
+      deploy(service, "loan-approval", "RiskAssessment");
+      Assertions.assertDoesNotThrow(() -> deploy(service, "loan-payout", "Payout"));
+
+      Assertions.assertEquals(2, engine.getDeployments().size());
+
+    }
+
+    @Test
+    @DisplayName("A prefix lets two workflow modules use the same process id")
+    public void usePrefixKeepsTwoModulesApart() {
+
+      final var service = serviceScopedBy(
+          scopingWith(NameClashAvoidance.USE_PREFIX, "loan-approval", "loan-payout"));
+
+      deploy(service, "loan-approval", "RiskAssessment");
+      // what the engine sees are two ids, each carrying its module - the same pair of
+      // modules which cannot both deploy 'RiskAssessment' under 'none'
+      Assertions.assertDoesNotThrow(() -> deploy(service, "loan-payout", "RiskAssessment"));
+
+      Assertions.assertEquals(2, engine.getDeployments().size());
+
+    }
+
+    @Test
+    @DisplayName("A prefix collides where two modules compose one id")
+    public void usePrefixCollidesWhereTwoModulesComposeOneId() {
+
+      final var service = serviceScopedBy(
+          scopingWith(NameClashAvoidance.USE_PREFIX, "loan", "loan__approval"));
+
+      deploy(service, "loan", "approval__RiskAssessment");
+      final var exception = Assertions.assertThrows(
+          IllegalStateException.class,
+          () -> deploy(service, "loan__approval", "RiskAssessment"));
+
+      Assertions
+          .assertTrue(
+              exception.getMessage().contains("loan__approval__RiskAssessment"),
+              exception::getMessage);
+
+    }
+
+    @Test
+    @DisplayName("One workflow module deployed twice collides with nothing")
+    public void theSameModuleDeployedAgainIsNoCollision() {
+
+      final var service = serviceScopedBy(scopingWith(NameClashAvoidance.NONE));
+
+      deploy(service, "loan-approval", "RiskAssessment");
+      Assertions.assertDoesNotThrow(() -> deploy(service, "loan-approval", "RiskAssessment"));
+
+    }
+
+    @Test
+    @DisplayName("Without a core to ask nothing is compared")
+    public void withoutScopingNothingIsChecked() {
+
+      // a component built without a platform around it holds no support, and the plain
+      // identifier is then the only answer there is
+      deploy(service, "loan-approval", "RiskAssessment");
+      Assertions.assertDoesNotThrow(() -> deploy(service, "loan-payout", "RiskAssessment"));
 
     }
 

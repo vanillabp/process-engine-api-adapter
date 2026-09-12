@@ -5,6 +5,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -746,6 +747,9 @@ public class PeaDeploymentService implements AdapterDeploymentService<PeaBpmnMod
       return;
     }
 
+    // nothing reaches the engine before it is clear that it can tell the processes apart
+    failOnCollidingProcessIds(workflowModuleId, bpmsProcessingContext);
+
     // A BPMN file may contain several executable processes, so the same resource can show
     // up multiple times in the context - deploy each file (by name) exactly once.
     final var resourcesByFilename = new LinkedHashMap<String, byte[]>();
@@ -802,6 +806,58 @@ public class PeaDeploymentService implements AdapterDeploymentService<PeaBpmnMod
     // This adapter registers no version catalog (the API cannot be asked
     // which versions of a process exist - GAPS.md 19), so this call only reports the
     // version tags the application names and nobody can resolve
+
+  }
+
+  /**
+   * Refuses a deployment whose BPMN process ids the engine could not tell apart, and does
+   * it before anything of that deployment is sent.
+   * <p>
+   * What is compared is wider than the workflow module being deployed: it is this module
+   * plus everything the boot deployed before it. That has to be so, because there is one
+   * engine behind this API and it keeps no workflow module apart from another (see
+   * {@code GAPS.md}, entry 15), so an identifier an earlier module took is taken for this
+   * one too. The core composes the form each id reaches the engine in and words the
+   * message, so the configured mode decides what counts as a collision here.
+   * <p>
+   * Under {@code none} two workflow modules using one process id collide, and nothing else
+   * would say so: the engine keeps one of the two models and loses the other. Under
+   * {@code use-prefix} the module id is part of every id, so two modules
+   * collide only where one module id plus one process id compose what another such pair
+   * composes, which a module id carrying the prefix separator can do. The remaining mode
+   * never gets this far, because this adapter refuses it while deploying.
+   * <p>
+   * This ends the boot, while a name the models declare is only warned about. Two modules
+   * sharing a message name leave both models as they are and only make the name ambiguous,
+   * whereas two processes under one id mean one of the models is not in the engine at all.
+   *
+   * @param workflowModuleId The workflow module about to be deployed
+   * @param bpmsProcessingContext What the pipeline collected for it
+   * @throws IllegalStateException Naming the colliding pairs and the fix
+   */
+  private void failOnCollidingProcessIds(
+      final String workflowModuleId,
+      final PeaProcessingContext bpmsProcessingContext) {
+
+    if (scoping == null) {
+      return;
+    }
+    // a set, because one BPMN file may hold several processes and a module may be handed
+    // to this method more than once: the same pair twice is not a collision
+    final var processesReachingTheEngine = new LinkedHashSet<NameClashAvoidanceSupport.DeployedProcess>();
+    deployedProcesses
+        .deployedSoFar()
+        .forEach(process -> processesReachingTheEngine
+            .add(
+                new NameClashAvoidanceSupport.DeployedProcess(
+                    process.workflowModuleId(), process.model().bpmnProcessId())));
+    bpmsProcessingContext
+        .getModels()
+        .forEach(model -> processesReachingTheEngine
+            .add(
+                new NameClashAvoidanceSupport.DeployedProcess(
+                    workflowModuleId, model.bpmnProcessId())));
+    scoping.validateNoCollidingProcessIds(adapterId, processesReachingTheEngine);
 
   }
 
