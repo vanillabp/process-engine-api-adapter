@@ -1,9 +1,12 @@
 package io.vanillabp.pea;
 
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
 
 import dev.bpmcrafters.processengineapi.task.TaskSubscription;
+import io.vanillabp.integration.adapter.spi.NameClashAvoidanceSupport.ModelIdentifier;
 
 /**
  * The adapter's processing context ({@code PC} type parameter of
@@ -70,6 +73,28 @@ public class PeaProcessingContext {
       final byte[] dmn) {
 
     decisions.putIfAbsent(filename, dmn);
+
+  }
+
+  private final Set<ModelIdentifier> declaredIdentifiers = new LinkedHashSet<>();
+
+  /**
+   * The identifiers the module's models declare, with the plain names the application gave
+   * them - handed to the core after the deployment so it can warn where another workflow
+   * module declares a name which reaches the engine in the same form.
+   * <p>
+   * Read while the module deploys and never again: no delivery and no
+   * <code>ProcessService</code> call looks at them.
+   * <p>
+   * A set, because the names a workflow module scopes on its own sit in the
+   * <code>definitions</code> element of a file: a file holding two processes declares each
+   * of them once for both, and the core asks for them without duplicates.
+   *
+   * @return What the models read so far declare
+   */
+  public Set<ModelIdentifier> getDeclaredIdentifiers() {
+
+    return declaredIdentifiers;
 
   }
 

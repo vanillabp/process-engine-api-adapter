@@ -529,3 +529,43 @@ its old id until its workflows have ended. The checks VanillaBP runs over a decl
 silent for the same reason: what its held versions start on and where they fork cannot be read
 here, so nothing is said about either (gaps 16 and 21). A repository API (gap 12) would
 open the same path the Camunda adapters take.
+
+## 24. The engine cannot be asked which identifiers it already holds
+
+**Needed by VanillaBP:** a name clash check which sees more than the deployment it is part of.
+VanillaBP compares the scoped identifiers an application deploys against each other, and it also
+asks the BPMS which of them somebody else already holds: another application's BPMN process id,
+the decision id of a module deployed years ago, a message name a held version still declares. The
+adapter asks its BPMS and the core words the warning, which is a warning and never the end of a
+boot, because the other side may be an application which runs correctly (decision 38 of the
+platform's DECISIONS.md).
+
+**Offered by the Process-Engine-API:** nothing for any identifier kind. There is no repository
+to search (gap 12), so neither a process id nor a decision id can be looked up, and there is
+no model to read (gap 1), so the names which live only inside a BPMN model - a message name, a
+signal name, a BPMN error code, an escalation code - cannot be read out of what the engine
+holds either. `DeploymentInformation` answers a deployment key, a time and a tenant, and none
+of the three says which identifiers are now taken.
+
+**Consequence for the adapter:** the adapter asks nothing and reports nothing about what the
+engine holds, which is what the SPI means by silence: an adapter which cannot ask its BPMS calls
+`reportIdentifiersTheBpmsAlreadyHolds` never, and `processVersionCatalogOf` keeps answering
+`null`, so the question about a held version is not asked either. The check this adapter does
+contribute is the one which needs no engine at all: what the models of THIS deployment declare.
+The adapter reads every message name, signal name, error code, escalation code and task
+definition out of the models while the module deploys, and hands the plain names to the core
+once the deployment succeeded, so a name two workflow modules of this application share is
+found here. It reads them whatever the mode is, and it has to: under `use-prefix` the module id
+is part of every name and two modules cannot collide, so the finding exists exactly under
+`none`, where nothing is prefixed and the reading would otherwise not happen. A task definition
+carries the BPMN process it belongs to, because that is what it is scoped by, and it matters as
+much as the rest here: a task subscription of this API matches a task type globally (gap 15), so
+two modules under one task definition mean one module's subscription takes the other's tasks.
+The limit of that check is the same as the limit of the prefixing: both read the raw BPMN by
+element name, so a dialect whose element names the adapter does not know declares nothing it can
+see (gap 1). A decision id stays out of it, because this adapter never scopes one (gap 22) and
+the scoped form the core would compose is not the form the engine sees. What stays invisible is
+every identifier somebody else put into the engine. Read together with gap 15: an engine which
+isolates nothing and cannot be asked what it holds leaves the uniqueness of identifiers to
+the application, across every module deployed to it. A repository API (gap 12) would open the
+same path the Camunda adapters take.
