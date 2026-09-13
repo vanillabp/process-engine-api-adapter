@@ -368,18 +368,22 @@ public class PeaDeploymentService implements AdapterDeploymentService<PeaBpmnMod
     for (final var process : parsed) {
       result.add(Map.entry(
           process.bpmnProcessId(),
-          new PeaBpmnModel(filename, resource, process.bpmnProcessId(), process.tasks(), process.userTasks())));
+          new PeaBpmnModel(
+              filename, resource, process.bpmnProcessId(), process.processName(), process.tasks(), process
+                  .userTasks())));
     }
     return result;
 
   }
 
   /**
-   * One executable process parsed from a BPMN file: its id and its service-like
-   * tasks (activity id + <code>zeebe:taskDefinition</code> type).
+   * One executable process parsed from a BPMN file: its id, the name a modeller wrote
+   * on it and its service-like tasks (activity id +
+   * <code>zeebe:taskDefinition</code> type).
    */
   private record ParsedProcess(
                                String bpmnProcessId,
+                               String processName,
                                List<BpmnTaskSpec> tasks,
                                List<BpmnTaskSpec> userTasks) {
   }
@@ -472,7 +476,9 @@ public class PeaDeploymentService implements AdapterDeploymentService<PeaBpmnMod
             final var bpmnProcessId = reader.getAttributeValue(null, "id");
             currentProcess = Boolean.parseBoolean(
                 reader.getAttributeValue(null, "isExecutable")) && (bpmnProcessId != null) && !bpmnProcessId.isBlank()
-                    ? new ParsedProcess(bpmnProcessId, new ArrayList<>(), new ArrayList<>())
+                    ? new ParsedProcess(
+                        bpmnProcessId, blankToNull(
+                            reader.getAttributeValue(null, "name")), new ArrayList<>(), new ArrayList<>())
                     : null;
             if (currentProcess != null) {
               processes.add(currentProcess);
@@ -585,7 +591,8 @@ public class PeaDeploymentService implements AdapterDeploymentService<PeaBpmnMod
         .add(scopedResource == model.resource()
             ? model
             : new PeaBpmnModel(
-                model.filename(), scopedResource, model.bpmnProcessId(), model.tasks(), model.userTasks()));
+                model.filename(), scopedResource, model.bpmnProcessId(), model.processName(), model.tasks(), model
+                    .userTasks()));
     return context;
 
   }

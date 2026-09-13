@@ -33,6 +33,8 @@ import org.springframework.transaction.support.TransactionTemplate;
 import dev.bpmcrafters.processengineapi.task.TaskInformation;
 import io.vanillabp.integration.spi.AggregatePersistenceAware;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
+import io.vanillabp.pea.deployment.PeaDeployedProcesses;
+import io.vanillabp.pea.deployment.PeaDeployedProcessesRegistry;
 import io.vanillabp.pea.mock.InMemoryProcessEngine;
 import io.vanillabp.pea.observation.PeaUserTaskObservation;
 import io.vanillabp.pea.observation.PeaUserTaskObserver;
@@ -306,6 +308,9 @@ public class UserTaskObserverIntegrationTest {
   private InMemoryProcessEngine engine;
 
   @Autowired
+  private PeaDeployedProcessesRegistry deployedProcesses;
+
+  @Autowired
   private ObserverWorkflowService workflowService;
 
   @Autowired
@@ -337,6 +342,42 @@ public class UserTaskObserverIntegrationTest {
         subscribed.containsAll(List.of("peaObserved", "peaUnclaimed")),
         "expected a subscription per user task but got: "
             + subscribed);
+
+  }
+
+  @Test
+  @DisplayName("What was deployed answers by user-task element id and by form reference")
+  public void deployedProcessesAnswerByBothUserTaskKeys() {
+
+    final var deployed = deployedProcesses.forAdapter("pea");
+
+    // the process the observers report tasks of, with the name a modeller wrote on it
+    final var process = deployed.deployedVersionOf(MODULE, PROCESS);
+    assertEquals("Observed process", process.processName());
+
+    // the two keys a details provider of a cockpit is matched by, both answered out of
+    // the model this adapter read while deploying it
+    final var byElementId = process.userTaskByElementId("t_observed");
+    assertEquals("peaObserved", byElementId.taskDefinition());
+    assertEquals("The observed task", byElementId.name());
+    assertEquals(List.of(byElementId), process.userTasksByFormReference("peaObserved"));
+
+    assertEquals(
+        List.of(PROCESS),
+        deployed
+            .byUserTaskElementId(MODULE, "t_unclaimed")
+            .stream()
+            .map(PeaDeployedProcesses.DeployedProcess::bpmnProcessId)
+            .toList());
+    assertEquals(
+        "The unclaimed task",
+        deployed
+            .byUserTaskFormReference(MODULE, "peaUnclaimed")
+            .getFirst()
+            .userTasksByFormReference("peaUnclaimed")
+            .getFirst()
+            .name(),
+        "a user task no @WorkflowTask method claims is in the index like every other");
 
   }
 

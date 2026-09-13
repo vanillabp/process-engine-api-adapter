@@ -37,9 +37,9 @@ import lombok.extern.slf4j.Slf4j;
  * transaction was already rolled back by the core; retry semantics are the
  * engine's).</li>
  * </ul>
- * The BPMN process a task belongs to is read from {@link TaskInformation}
- * meta key <code>bpmnProcessId</code> (adapter convention - the API does not
- * define it, see {@code GAPS.md}); without it the task definition has to be
+ * The BPMN process a task belongs to is read from the {@link TaskInformation}
+ * meta key {@link PeaTaskMeta#BPMN_PROCESS_ID} (adapter convention - the API does
+ * not define it, see {@code GAPS.md}); without it the task definition has to be
  * unique across the module's processes.
  * <p>
  * Why this path swallows nothing but also needs no outbox, unlike the phase-two operations of the
@@ -47,22 +47,6 @@ import lombok.extern.slf4j.Slf4j;
  */
 @Slf4j
 public class PeaTaskHandler implements TaskHandler {
-
-  /**
-   * The {@link TaskInformation} meta key carrying the BPMN process ID (adapter
-   * convention).
-   */
-  public static final String META_BPMN_PROCESS_ID = "bpmnProcessId";
-
-  /**
-   * The {@link TaskInformation} meta key carrying the version tag of the deployed
-   * process definition, named by the Process-Engine-API
-   * ({@code CommonRestrictions.PROCESS_DEFINITION_VERSION_TAG}). The API has no
-   * numeric version, so this tag is all VanillaBP can match
-   * <code>&#64;WorkflowTask(version = ...)</code> against here - and only where the
-   * underlying engine supplies it (see GAPS.md).
-   */
-  public static final String META_VERSION_TAG = "processDefinitionVersionTag";
 
   private final String adapterId;
 
@@ -169,7 +153,7 @@ public class PeaTaskHandler implements TaskHandler {
               adapterId, plainTaskDefinition(bpmnProcessId), String
                   .valueOf(aggregateId), taskId, payload, taskInformation
                       .getMeta()
-                      .get(META_VERSION_TAG), fetchVariables));
+                      .get(PeaTaskMeta.PROCESS_VERSION_TAG), fetchVariables));
     } catch (final Exception e) {
       // the core rolled the local transaction back - fail the task so the
       // underlying engine applies its retry semantics
@@ -249,7 +233,7 @@ public class PeaTaskHandler implements TaskHandler {
   private String determineBpmnProcessId(
       final TaskInformation taskInformation) {
 
-    final var fromMeta = taskInformation.getMeta().get(META_BPMN_PROCESS_ID);
+    final var fromMeta = taskInformation.getMeta().get(PeaTaskMeta.BPMN_PROCESS_ID);
     if (fromMeta != null) {
       return fromMeta;
     }
@@ -269,7 +253,7 @@ public class PeaTaskHandler implements TaskHandler {
             .formatted(
                 taskInformation.getTaskId(),
                 taskDefinition,
-                META_BPMN_PROCESS_ID,
+                PeaTaskMeta.BPMN_PROCESS_ID,
                 workflowModuleId,
                 distinct));
 

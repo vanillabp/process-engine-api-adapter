@@ -465,6 +465,35 @@ public class InMemoryProcessEngine implements DeploymentApi, StartProcessApi, Co
       final String bpmnProcessId,
       final Map<String, Object> payload) {
 
+    deliverTask(taskId, taskDefinition, bpmnProcessId, payload, Map.of());
+
+  }
+
+  /**
+   * Delivers a task the way an engine does which fills its meta map generously: next to
+   * the BPMN process id the subscriber gets whatever this engine knows about the task -
+   * the element id, the assignee, the candidate users and groups, a due date, the name a
+   * modeller wrote. The reference adapter for an embedded Camunda 7 fills that set, and a
+   * test asserting what a subscriber makes of it needs an engine which can produce it.
+   * <p>
+   * The keys are the engine's own words. What they are called on the adapter's side is
+   * {@code PeaTaskMeta}, which the mock cannot reach: the adapter depends on this module,
+   * not the other way round.
+   *
+   * @param taskId The delivered task's ID
+   * @param taskDefinition The task definition (matched against subscriptions)
+   * @param bpmnProcessId The BPMN process the task belongs to
+   * @param payload The task's payload variables
+   * @param meta What else this engine says about the task; an entry named
+   *          <code>bpmnProcessId</code> is overwritten by the argument above
+   */
+  public void deliverTask(
+      final String taskId,
+      final String taskDefinition,
+      final String bpmnProcessId,
+      final Map<String, Object> payload,
+      final Map<String, String> meta) {
+
     openTaskIds.add(taskId);
     final var subscription = subscriptionFor(taskDefinition);
     // which subscription a task was given to, so that a completion can tell the same one
@@ -475,11 +504,31 @@ public class InMemoryProcessEngine implements DeploymentApi, StartProcessApi, Co
     subscription
         .handler()
         .accept(
-            new TaskInformation(
-                taskId, Map.of("bpmnProcessId", bpmnProcessId)),
+            new TaskInformation(taskId, metaOf(bpmnProcessId, meta)),
             // an engine hands the subscriber what the subscription asked for, and the
             // adapter's derivation is only worth anything if the mock does the same
             subscription.narrow(payload));
+
+  }
+
+  /**
+   * The meta map of a delivery or a termination: what the caller said about the task, plus
+   * the BPMN process id this engine always names where it knows one.
+   *
+   * @param bpmnProcessId The BPMN process, or <code>null</code> for an engine which fills
+   *          none
+   * @param meta What else the engine says
+   * @return The meta map
+   */
+  private static Map<String, String> metaOf(
+      final String bpmnProcessId,
+      final Map<String, String> meta) {
+
+    final var all = new LinkedHashMap<String, String>(meta);
+    if (bpmnProcessId != null) {
+      all.put("bpmnProcessId", bpmnProcessId);
+    }
+    return Map.copyOf(all);
 
   }
 
@@ -503,10 +552,32 @@ public class InMemoryProcessEngine implements DeploymentApi, StartProcessApi, Co
       final String bpmnProcessId,
       final String reason) {
 
+    terminateTask(taskId, taskDefinition, bpmnProcessId, reason, Map.of());
+
+  }
+
+  /**
+   * Withdraws a task and says as much about it as {@link #deliverTask(String, String,
+   * String, Map, Map)} does - an engine which fills its meta map generously fills it for a
+   * termination too.
+   *
+   * @param taskId The terminated task's ID
+   * @param taskDefinition The task definition (matched against subscriptions)
+   * @param bpmnProcessId The BPMN process the task belonged to, or <code>null</code>
+   * @param reason The engine's reason
+   * @param meta What else this engine says about the task
+   */
+  public void terminateTask(
+      final String taskId,
+      final String taskDefinition,
+      final String bpmnProcessId,
+      final String reason,
+      final Map<String, String> meta) {
+
     openTaskIds.remove(taskId);
     deliveredTo.remove(taskId);
     deliveredAs.remove(taskId);
-    terminate(subscriptionFor(taskDefinition), taskId, bpmnProcessId, reason);
+    terminate(subscriptionFor(taskDefinition), taskId, bpmnProcessId, reason, meta);
 
   }
 
@@ -529,7 +600,7 @@ public class InMemoryProcessEngine implements DeploymentApi, StartProcessApi, Co
       // a task completed without ever having been delivered here: nobody to tell
       return;
     }
-    terminate(subscription, taskId, bpmnProcessId, reason);
+    terminate(subscription, taskId, bpmnProcessId, reason, Map.of());
 
   }
 
@@ -537,14 +608,12 @@ public class InMemoryProcessEngine implements DeploymentApi, StartProcessApi, Co
       final ActiveSubscription subscription,
       final String taskId,
       final String bpmnProcessId,
-      final String reason) {
+      final String reason,
+      final Map<String, String> meta) {
 
-    final var meta = bpmnProcessId == null
-        ? Map.<String, String>of()
-        : Map.of("bpmnProcessId", bpmnProcessId);
     subscription
         .termination()
-        .accept(new TaskInformation(taskId, meta).withReason(reason));
+        .accept(new TaskInformation(taskId, metaOf(bpmnProcessId, meta)).withReason(reason));
 
   }
 

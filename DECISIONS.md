@@ -141,3 +141,31 @@ stays addable then: it narrows what an observer is handed and breaks nobody.
 The two platform registrations rely on this, and so does the shape of the observation. What
 the seam promises beyond it is in the type javadoc of `PeaUserTaskObserver` and in
 [Observing the user tasks of an application](./README.md#observing-the-user-tasks-of-an-application).
+
+### 10. The models read at deployment are indexed once, and the meta keys are spelled once
+
+Nothing can be read back from this engine, so what the deployment pipeline read at boot is all
+there is, and `PeaDeployedProcesses` already held it per adapter id. It now answers by the BPMN
+element id of a user task and by its external form reference as well, next to the process id it
+always answered by. That is an index over the models it holds, not a second store: whoever asks
+cannot get an answer which disagrees with what was deployed, and a redeployment cannot leave an
+entry of a user task the new model does not carry.
+
+The answer carries the model rather than a trimmed record, because whoever asks reads more of it
+than such a record would carry and the adapter holds it anyway. A form reference is not unique
+inside a workflow module, so that lookup answers a collection and the caller decides; the
+element id answers one, because nothing keeps two processes of one module from using the same
+one. The same pass which reads the process id now also reads the name the modeller wrote on the
+process, next to the user-task names it already read, so nobody has to walk the same bytes a
+second time for them.
+
+The keys of `TaskInformation.meta` moved the same way. The Process-Engine-API names the keys a
+subscription may be restricted by and none of the keys a delivery carries, so the vocabulary is
+a convention, and this adapter wrote two of its keys as string literals of its handlers while
+whoever watches its user tasks wrote them again. `PeaTaskMeta` is where they live now, with the
+readers which answer "the engine filled none" rather than throwing. What the keys mean stays the
+Process-Engine-API's business ([`GAPS.md`](./GAPS.md), entry 6, and entry 3 of the Business
+Cockpit adapter's).
+
+See [What the adapter remembers about the deployed models](./README.md#what-the-adapter-remembers-about-the-deployed-models)
+and [The meta a delivered task carries](./README.md#the-meta-a-delivered-task-carries).

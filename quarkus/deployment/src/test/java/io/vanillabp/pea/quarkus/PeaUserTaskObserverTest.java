@@ -14,6 +14,8 @@ import org.junit.jupiter.api.extension.RegisterExtension;
 import dev.bpmcrafters.processengineapi.task.TaskInformation;
 import io.quarkus.test.QuarkusExtensionTest;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
+import io.vanillabp.pea.deployment.PeaDeployedProcesses;
+import io.vanillabp.pea.deployment.PeaDeployedProcessesRegistry;
 import io.vanillabp.pea.mock.InMemoryProcessEngine;
 import io.vanillabp.pea.observation.PeaUserTaskObserver;
 import io.vanillabp.pea.quarkus.observersample.ObserverAggregate;
@@ -49,6 +51,9 @@ public class PeaUserTaskObserverTest {
   @Inject
   InMemoryProcessEngine inMemoryProcessEngine;
 
+  @Inject
+  PeaDeployedProcessesRegistry deployedProcesses;
+
   @BeforeEach
   public void clearState() {
 
@@ -75,6 +80,38 @@ public class PeaUserTaskObserverTest {
         subscribed.containsAll(List.of("quarkusObserved", "quarkusUnclaimed")),
         "expected a subscription per user task but got: "
             + subscribed);
+
+  }
+
+  @Test
+  public void deployedProcessesAnswerByBothUserTaskKeys() {
+
+    final var deployed = deployedProcesses.forAdapter("pea");
+
+    final var process = deployed.deployedVersionOf("pea-test-module", "QuarkusObserverProcess");
+    Assertions.assertEquals("Observed process", process.processName());
+
+    final var byElementId = process.userTaskByElementId("t_observed");
+    Assertions.assertEquals("quarkusObserved", byElementId.taskDefinition());
+    Assertions.assertEquals("The observed task", byElementId.name());
+    Assertions.assertEquals(List.of(byElementId), process.userTasksByFormReference("quarkusObserved"));
+
+    Assertions.assertEquals(
+        List.of("QuarkusObserverProcess"),
+        deployed
+            .byUserTaskElementId("pea-test-module", "t_unclaimed")
+            .stream()
+            .map(PeaDeployedProcesses.DeployedProcess::bpmnProcessId)
+            .toList());
+    Assertions.assertEquals(
+        "The unclaimed task",
+        deployed
+            .byUserTaskFormReference("pea-test-module", "quarkusUnclaimed")
+            .getFirst()
+            .userTasksByFormReference("quarkusUnclaimed")
+            .getFirst()
+            .name(),
+        "a user task no @WorkflowTask method claims is in the index like every other");
 
   }
 

@@ -162,7 +162,7 @@ public class PeaUserTaskHandler implements TaskHandler {
               adapterId, taskDefinition, String
                   .valueOf(aggregateId), taskId, payload, taskInformation
                       .getMeta()
-                      .get(PeaTaskHandler.META_VERSION_TAG), fetchVariables));
+                      .get(PeaTaskMeta.PROCESS_VERSION_TAG), fetchVariables));
       if (outcome.kind() == WorkflowTaskOutcome.Kind.BPMN_ERROR) {
         throw new IllegalStateException(
             ("The @WorkflowTask method notified about user task '%s' (BPMN process '%s' of "
@@ -325,7 +325,7 @@ public class PeaUserTaskHandler implements TaskHandler {
             .formatted(
                 taskInformation.getTaskId(),
                 externalFormReference,
-                PeaTaskHandler.META_BPMN_PROCESS_ID,
+                PeaTaskMeta.BPMN_PROCESS_ID,
                 workflowModuleId,
                 bpmnProcessIds
                     .stream()
@@ -352,7 +352,7 @@ public class PeaUserTaskHandler implements TaskHandler {
   private String bpmnProcessIdOrNull(
       final TaskInformation taskInformation) {
 
-    final var fromMeta = taskInformation.getMeta().get(PeaTaskHandler.META_BPMN_PROCESS_ID);
+    final var fromMeta = taskInformation.getMeta().get(PeaTaskMeta.BPMN_PROCESS_ID);
     if (fromMeta != null) {
       return NameClashAvoidanceSupport.plainProcessId(scoping, workflowModuleId, fromMeta, adapterId);
     }
