@@ -366,6 +366,12 @@ event the engine fires on its own - where the workflow could not run at all - th
 runs perfectly well here and only the notification is missing, so failing the boot would be
 out of proportion. A "process instance ended" subscription in the API would resolve it.
 
+Both gaps are one half of a larger absence: the API has no listener concept at all, so a model
+whose element hands an application a moment of the engine's own - a Camunda 7
+`camunda:executionListener` or a Camunda 8 `zeebe:taskListener`, served by a `@WorkflowTask`
+method where the adapter's `allow-listeners` says so - cannot move to this adapter, and there is
+nothing here to map it onto.
+
 ## 18. The payload of a running process instance cannot be updated
 
 **Needed by VanillaBP:** an application may tell the BPMS that the workflow aggregate
