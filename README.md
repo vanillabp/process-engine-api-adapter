@@ -384,6 +384,58 @@ none in its meta map and the subscription serves several processes.
 `UserTaskObserverIntegrationTest` (Spring Boot) and `PeaUserTaskObserverTest` (Quarkus and
 core) hold all of it.
 
+## What the adapter remembers about the deployed models
+
+The Process-Engine-API has no repository API: a deployed process cannot be read back, not even
+right after the deployment ([`GAPS.md`](GAPS.md), entry 12). So what VanillaBP's deployment
+pipeline read at boot is the only source there is, and this adapter keeps it in
+`PeaDeployedProcesses`, one per configured adapter id.
+
+What it answers comes out of those models and nothing else:
+
+- a process by its workflow module and its BPMN process id, with the name a modeller wrote on
+  it,
+- a user task by the BPMN element id, which is one of the two keys a form is picked by,
+- a user task by the external form reference, which is the other one and the key this adapter
+  subscribes it under.
+
+The answer carries the model rather than a copy of a few fields: whoever asks usually reads more
+of it than a small record would carry, and the adapter holds it anyway. A form reference is NOT
+unique inside a workflow module - two processes may show the same form - so that lookup answers
+a collection and the caller decides. A BPMN element id is unique within a file and is treated
+the same way, because nothing keeps two processes of one module apart there either.
+
+The identifiers are the plain ones the application wrote, never the scoped ones the deployed
+bytes carry (decision 2 in [`DECISIONS.md`](DECISIONS.md)), which is what a delivery is
+translated back to as well.
+
+A workflow module's processes are in the store from the moment this adapter deployed that
+module. VanillaBP deploys every module before it starts workflow processing for any of them, so
+anything asking at runtime - a task delivery, an observer, the viewer API - sees all of them.
+An extension wiring its own half while the pipeline is still walking the modules sees the ones
+deployed so far and not the ones behind it.
+
+`PeaDeployedProcessesTest` holds the lookups, `UserTaskObserverIntegrationTest` (Spring Boot)
+and `PeaUserTaskObserverTest` (Quarkus) hold that a booted application answers them.
+
+## The meta a delivered task carries
+
+The Process-Engine-API names the keys a subscription may be RESTRICTED by (`CommonRestrictions`)
+and none of the keys a delivered task carries: `TaskInformation` itself defines `reason` and
+`retries`, and beyond those an engine adapter fills whatever it has.
+
+`PeaTaskMeta` spells out the set the API's own reference adapter for an embedded Camunda 7
+fills - the element id, the process instance, the version tag, the task name, the assignee, the
+candidate users and groups, the due and the follow-up date - plus `bpmnProcessId`, which is this
+adapter's own convention ([`GAPS.md`](GAPS.md), entry 6). The adapter reads two of them itself
+and hands the rest on untouched, and it reads them from there rather than from string literals
+of its handlers, so that whoever watches its user tasks reads the same names the adapter writes.
+
+What the keys MEAN stays the Process-Engine-API's business. A key an engine leaves out is never
+an error: it is one detail less about a task worth reporting anyway, which is why the three
+readers next to the constants answer `null` or an empty list instead of throwing, and why a due
+date which is not a date is logged and dropped rather than costing the task.
+
 ## Outbound operations: one handler per operation
 
 Everything this adapter sends to the engine is a `PhaseOperationHandler`, contributed per

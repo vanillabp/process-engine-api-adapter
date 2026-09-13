@@ -285,6 +285,30 @@ public class PeaDeploymentServiceTest {
   }
 
   @Test
+  public void readBpmnCarriesTheProcessNameTheModellerWrote() {
+
+    final var xml = """
+        <?xml version="1.0" encoding="UTF-8"?>
+        <bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL">
+          <bpmn:process id="NamedProcess" name="Loan approval" isExecutable="true" />
+          <bpmn:process id="UnnamedProcess" isExecutable="true" />
+          <bpmn:process id="BlankProcess" name="  " isExecutable="true" />
+        </bpmn:definitions>
+        """;
+
+    final var models = service.readBpmn("mod", "names.bpmn", bpmn(xml), true);
+
+    // the name is read in the pass which reads the process id anyway, so nobody has to
+    // walk the same bytes a second time for it
+    Assertions.assertEquals("Loan approval", models.get(0).getValue().processName());
+    // a process the modeller did not name has none, and so has one named with nothing
+    // but whitespace
+    Assertions.assertNull(models.get(1).getValue().processName());
+    Assertions.assertNull(models.get(2).getValue().processName());
+
+  }
+
+  @Test
   public void readBpmnCarriesTheUserTaskNameTheModellerWrote() {
 
     final var xml = """

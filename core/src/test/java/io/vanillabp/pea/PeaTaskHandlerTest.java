@@ -26,6 +26,7 @@ import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 import io.vanillabp.pea.mock.InMemoryProcessEngine;
 import io.vanillabp.pea.wiring.PeaFetchVariables;
 import io.vanillabp.pea.wiring.PeaTaskHandler;
+import io.vanillabp.pea.wiring.PeaTaskMeta;
 
 /**
  * Routing and failure edge cases of the {@link PeaTaskHandler} which
@@ -195,7 +196,7 @@ public class PeaTaskHandlerTest {
     assertEquals(1, engine.getFailedTasks().size());
     final var reason = engine.getFailedTasks().getFirst().reason();
     assertTrue(
-        reason.contains(PeaTaskHandler.META_BPMN_PROCESS_ID) && reason.contains("ProcessA"),
+        reason.contains(PeaTaskMeta.BPMN_PROCESS_ID) && reason.contains("ProcessA"),
         "expected a guiding failure naming the meta key and the candidate processes but got: "
             + reason);
 
@@ -210,7 +211,7 @@ public class PeaTaskHandlerTest {
     engine.getOpenTaskIds().add("task-4");
     handler(List.of("OnlyProcess"))
         .accept(
-            new TaskInformation("task-4", Map.of(PeaTaskHandler.META_VERSION_TAG, "release-2024")),
+            new TaskInformation("task-4", Map.of(PeaTaskMeta.PROCESS_VERSION_TAG, "release-2024")),
             Map.of("id", "4711"));
 
     assertEquals("release-2024", invoker.invokedProcessVersion);

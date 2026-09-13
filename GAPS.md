@@ -250,6 +250,11 @@ deployment and the process service) and serves the viewer API from it:
 - a workflow running on a definition deployed by a PREVIOUS application version is served
   with the currently deployed model.
 
+That record is also what an extension asks instead of reading the deployed bytes a second time:
+it answers a process by its workflow module and process id, and a user task by its BPMN element
+id or by its external form reference (decision 10 in the repository's `DECISIONS.md`). It still
+says only what this application version deployed, which is the part of the gap no index closes.
+
 A lightweight repository API (list deployed processes, fetch a resource by process
 definition id/version) would resolve this.
 
