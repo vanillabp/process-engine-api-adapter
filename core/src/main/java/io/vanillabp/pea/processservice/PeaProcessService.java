@@ -836,7 +836,7 @@ public class PeaProcessService<A> implements MigratableProcessService<A> {
    * The Process-Engine-API cannot probe a workflow's existence at all (GAPS.md
    * entry 11), so the honest answer is
    * {@link WorkflowAwareness#UNKNOWN_TO_BPMS}: the recovered start proceeds and
-   * {@link #startWorkflowPhaseTwo}'s at-least-once contract applies (a duplicate
+   * the at-least-once contract of the phase-two start applies (a duplicate
    * is the accepted residual - the election's optimistic ACTIVE would instead
    * SKIP the start and LOSE the workflow).
    */
