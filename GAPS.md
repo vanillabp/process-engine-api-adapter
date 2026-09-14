@@ -11,6 +11,16 @@ implemented.
 Each entry states: what VanillaBP needs, what the Process-Engine-API offers (or lacks),
 and the consequence for the adapter.
 
+## When these go to bpm-crafters
+
+Not one at a time. Stephan decided on 2026-09-14 that the whole list is taken upstream once
+VanillaBP 2.0 is finished, so the request arrives with everything we learned rather than as a
+stream of single asks. Until then this file is the record, and an entry which is ready to be
+sent says so and carries the wording.
+
+Nothing here blocks the adapter. Where an entry names a way to live without the API change,
+that way is built and the entry says which.
+
 ## 1. The Process-Engine-API has no BPMN model type
 
 **Needed by VanillaBP:** the adapter SPI is generic over a BPMN *model type*
@@ -111,11 +121,24 @@ sufficient: the same task definition may legally appear in several processes.
 
 **Consequence for the adapter:** adapter convention - the engine (the mock, and any
 real PEA implementation used underneath) is expected to supply the meta entry
-`bpmnProcessId` (`PeaTaskHandler.META_BPMN_PROCESS_ID`). Without it the adapter
+`bpmnProcessId` (`PeaTaskMeta.BPMN_PROCESS_ID`). Without it the adapter
 falls back to routing by task definition, which only works while the definition is
 unique across the module's processes; an ambiguous definition without the meta
 entry fails the delivery with a guiding message. A defined meta-key vocabulary in
 the API would remove this convention.
+
+**Ready to be sent.** The smallest thing which unblocks us is a defined meta key
+carrying the BPMN process id of the delivered task, filled by the engine adapters.
+The constant for it already exists, `CommonRestrictions.PROCESS_DEFINITION_KEY`,
+documented as the definition attribute of a BPMN process from XML holding the id of
+the element, so no new vocabulary is needed. An alternative which would also work:
+let `subscribeForTask` honour `restrictions[PROCESS_DEFINITION_KEY]` and list that
+key in `getSupportedRestrictions()`, so one subscription per BPMN process id can be
+opened and the deliveries are told apart by the subscription instead. Both the
+restriction map and the capability query are already in the API, so that is support
+in the engine adapters rather than a change of the interface. We would prefer the
+meta key, because it helps every delivery we cannot place rather than only the
+renamed process of gap 23.
 
 ## 7. BPMN task-definition naming is not defined by the API
 
@@ -539,7 +562,21 @@ prefix its identifiers, a task of the old id may still be delivered through a su
 of the same task definition, and it is then attributed to a deployed process: the delivery's
 `bpmnProcessId` meta key (gap 6) is what would tell them apart, and without it the routing
 guesses. The way out that asks nothing of the API is to keep deploying the old model under
-its old id until its workflows have ended. The checks VanillaBP runs over a declared id go
+its old id until its workflows have ended.
+
+**Most of this is buildable today, measured on 2026-09-12.** The core already answers
+which BPMN process ids a module declares without a model and which task definitions
+the application serves for each of them, through `taskWiringOfProcessesNobodyDeployed`,
+and the Camunda 8 adapter composes its workers from exactly that. This adapter can
+compose its subscriptions the same way and calls the method today only for a warning.
+Where a module prefixes its identifiers, which is the default, a task definition
+carries the id of the process it was deployed with, so the name of an old-id task is
+composable from the old id alone and a subscription for it serves exactly one process.
+The behaviour is then correct rather than only honest, and no API change is involved.
+What stays blocked is the other mode: under `none`, and under `use-prefix` with
+`prefix-task-definitions-per-process: false`, the old and the new process share one
+task definition and one subscription, and only the meta key of gap 6 tells the
+deliveries apart. A repository API is NOT needed for any of this. The checks VanillaBP runs over a declared id go
 silent for the same reason: what its held versions start on and where they fork cannot be read
 here, so nothing is said about either (gaps 16 and 21). A repository API (gap 12) would
 open the same path the Camunda adapters take.
