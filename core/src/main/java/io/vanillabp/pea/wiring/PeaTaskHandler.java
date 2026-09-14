@@ -39,8 +39,9 @@ import lombok.extern.slf4j.Slf4j;
  * </ul>
  * The BPMN process a task belongs to is read from the {@link TaskInformation}
  * meta key {@link PeaTaskMeta#BPMN_PROCESS_ID} (adapter convention - the API does
- * not define it, see {@code GAPS.md}); without it the task definition has to be
- * unique across the module's processes.
+ * not define it, see {@code GAPS.md}) and translated back to the plain id the core is
+ * keyed by; without the entry the task definition has to be unique across the module's
+ * processes.
  * <p>
  * Why this path swallows nothing but also needs no outbox, unlike the phase-two operations of the
  * process service, is decision 5 in the repository's DECISIONS.md.
@@ -233,7 +234,10 @@ public class PeaTaskHandler implements TaskHandler {
   private String determineBpmnProcessId(
       final TaskInformation taskInformation) {
 
-    final var fromMeta = taskInformation.getMeta().get(PeaTaskMeta.BPMN_PROCESS_ID);
+    // the entry carries the id the ENGINE knows, which is prefixed under 'use-prefix' -
+    // PeaTaskMeta translates it back, because the core is keyed by the plain id
+    final var fromMeta = PeaTaskMeta
+        .plainBpmnProcessId(taskInformation, scoping, workflowModuleId, adapterId);
     if (fromMeta != null) {
       return fromMeta;
     }

@@ -341,10 +341,11 @@ public class PeaUserTaskHandler implements TaskHandler {
    * which ends a delivery in {@link #ambiguousRouting} and is a fact of life for a termination
    * - see {@link #terminated(TaskInformation)}.
    * <p>
-   * The meta entry is what the ENGINE knows the process as, so it is unscoped: the core's
-   * registries are keyed by the plain id and so is everything this adapter hands out
-   * (decision 2 in the repository's DECISIONS.md). The single process of a subscription is
-   * plain already, being the one this adapter subscribed for.
+   * The meta entry is what the ENGINE knows the process as, so
+   * {@link PeaTaskMeta#plainBpmnProcessId} translates it back: the core's registries are
+   * keyed by the plain id and so is everything this adapter hands out (decision 2 in the
+   * repository's DECISIONS.md). The single process of a subscription is plain already,
+   * being the one this adapter subscribed for.
    *
    * @param taskInformation What the engine says about the task
    * @return The plain BPMN process id, or <code>null</code>
@@ -352,9 +353,10 @@ public class PeaUserTaskHandler implements TaskHandler {
   private String bpmnProcessIdOrNull(
       final TaskInformation taskInformation) {
 
-    final var fromMeta = taskInformation.getMeta().get(PeaTaskMeta.BPMN_PROCESS_ID);
+    final var fromMeta = PeaTaskMeta
+        .plainBpmnProcessId(taskInformation, scoping, workflowModuleId, adapterId);
     if (fromMeta != null) {
-      return NameClashAvoidanceSupport.plainProcessId(scoping, workflowModuleId, fromMeta, adapterId);
+      return fromMeta;
     }
     final var distinct = bpmnProcessIds
         .stream()

@@ -7,6 +7,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mockito;
@@ -19,6 +20,8 @@ import ch.qos.logback.core.read.ListAppender;
 import dev.bpmcrafters.processengineapi.task.ServiceTaskCompletionApi;
 import dev.bpmcrafters.processengineapi.task.TaskInformation;
 import io.vanillabp.integration.adapter.spi.AggregateSyncMode;
+import io.vanillabp.integration.adapter.spi.NameClashAvoidance;
+import io.vanillabp.integration.adapter.spi.NameClashAvoidanceSupport;
 import io.vanillabp.integration.adapter.spi.workflowtask.TaskInvocationContext;
 import io.vanillabp.integration.adapter.spi.workflowtask.WorkflowTaskInvoker;
 import io.vanillabp.integration.adapter.spi.workflowtask.WorkflowTaskOutcome;
@@ -151,6 +154,27 @@ public class PeaTaskHandlerTest {
 
   }
 
+  /**
+   * The handler of a subscription whose module avoids name clashes the given way - which
+   * decides what the engine's meta entry looks like and what has to be stripped off it.
+   */
+  private PeaTaskHandler handler(
+      final List<String> bpmnProcessIds,
+      final NameClashAvoidance mode) {
+
+    return PeaTaskHandler
+        .builder()
+        .adapterId("pea")
+        .workflowModuleId("test-module")
+        .taskDefinition("someTask")
+        .bpmnProcessIds(bpmnProcessIds)
+        .workflowTaskInvoker(invoker)
+        .serviceTaskCompletionApi(engine)
+        .scoping(TestScoping.of(mode, "test-module"))
+        .build();
+
+  }
+
   private PeaTaskHandler handler(
       final List<String> bpmnProcessIds,
       final PeaFetchVariables.Selection fetchVariables) {
@@ -199,6 +223,61 @@ public class PeaTaskHandlerTest {
         reason.contains(PeaTaskMeta.BPMN_PROCESS_ID) && reason.contains("ProcessA"),
         "expected a guiding failure naming the meta key and the candidate processes but got: "
             + reason);
+
+  }
+
+  @Test
+  @DisplayName("A scoped meta entry is routed to the plain process the core is keyed by")
+  public void aScopedMetaEntryIsRoutedToThePlainProcess() {
+
+    // an engine which fills the meta entry fills it with the id IT knows, and under
+    // use-prefix that id carries the workflow module. The core's registries are keyed
+    // by the plain id, so a value handed on unstripped matches nothing at all
+    engine.getOpenTaskIds().add("task-scoped");
+    handler(List.of("OnlyProcess"), NameClashAvoidance.USE_PREFIX)
+        .accept(
+            new TaskInformation(
+                "task-scoped", Map.of(
+                    PeaTaskMeta.BPMN_PROCESS_ID,
+                    "test-module"
+                        + NameClashAvoidanceSupport.SEPARATOR
+                        + "OnlyProcess")),
+            Map.of("id", "4711"));
+
+    assertEquals("OnlyProcess", invoker.invokedBpmnProcessId);
+    assertEquals(
+        List.of(new InMemoryProcessEngine.CompletedTask("task-scoped")),
+        engine.getCompletedTasks());
+
+  }
+
+  @Test
+  @DisplayName("Under 'none' the meta entry passes through as the engine spelled it")
+  public void underNoneTheMetaEntryPassesThrough() {
+
+    engine.getOpenTaskIds().add("task-plain");
+    handler(List.of("OnlyProcess", "AnotherProcess"), NameClashAvoidance.NONE)
+        .accept(
+            new TaskInformation("task-plain", Map.of(PeaTaskMeta.BPMN_PROCESS_ID, "AnotherProcess")),
+            Map.of("id", "4711"));
+
+    assertEquals("AnotherProcess", invoker.invokedBpmnProcessId);
+
+  }
+
+  @Test
+  @DisplayName("Without a meta entry the single process of the subscription still answers, prefixes or not")
+  public void withoutAMetaEntryTheSingleProcessStillAnswersUnderPrefixes() {
+
+    // the fallback reads the subscription rather than the delivery, and what a
+    // subscription was opened for is plain already
+    engine.getOpenTaskIds().add("task-fallback");
+    handler(List.of("OnlyProcess"), NameClashAvoidance.USE_PREFIX)
+        .accept(
+            new TaskInformation("task-fallback", Map.of()),
+            Map.of("id", "4711"));
+
+    assertEquals("OnlyProcess", invoker.invokedBpmnProcessId);
 
   }
 

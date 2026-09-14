@@ -127,6 +127,14 @@ unique across the module's processes; an ambiguous definition without the meta
 entry fails the delivery with a guiding message. A defined meta-key vocabulary in
 the API would remove this convention.
 
+**The value is the id the ENGINE knows, not the one the application wrote.** Where a
+workflow module prefixes its identifiers, the engine holds the process under
+`<module>__<process>` and fills the meta entry with that, while everything VanillaBP
+is keyed by uses the plain id. So the entry has to be translated back before anything
+is looked up with it, which `PeaTaskMeta.plainBpmnProcessId` is the one place for. The
+two task handlers read the entry differently once, and a service-task delivery of an
+engine filling it was routed nowhere for as long as that lasted.
+
 **Ready to be sent.** The smallest thing which unblocks us is a defined meta key
 carrying the BPMN process id of the delivered task, filled by the engine adapters.
 The constant for it already exists, `CommonRestrictions.PROCESS_DEFINITION_KEY`,
