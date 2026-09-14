@@ -169,3 +169,55 @@ Cockpit adapter's).
 
 See [What the adapter remembers about the deployed models](./README.md#what-the-adapter-remembers-about-the-deployed-models)
 and [The meta a delivered task carries](./README.md#the-meta-a-delivered-task-carries).
+
+### 11. The subscriptions of a declared process id are composed from what the application serves
+
+A workflow module may declare a BPMN process id it deploys nothing under, which is how a renamed
+process keeps being served. Under `use-prefix` a task definition reaches the engine as
+`<module>__<process>__<task>`, so the tasks of the workflows under the old id carry a name no
+subscription of the deployed processes asks for, and nobody notices: a task nobody subscribed for
+is not a failed task, it is a workflow standing still. Those workflows need one more subscription
+each, and the question is where the names come from.
+
+They are COMPOSED from what the application serves. The core names it
+(`taskWiringOfProcessesNobodyDeployed`, decision 34 of the platform's own DECISIONS.md), today the
+task definition of every `@WorkflowTask` method registered for the declared id, and the adapter
+scopes each of them by that id, exactly as the deployment scoped the ones it deployed. Camunda 8
+composes the same way and for the same reason, which is its decision 19. Reading the models the
+engine still holds is the alternative, the one Camunda 7 takes, and this API has no repository to
+read them from ([`GAPS.md`](./GAPS.md), entry 12). So composing is not the cheaper of two ways
+here, it is the only one, and it turns out to be enough for the mode which is the default.
+
+What composing costs shows in two places, and both are a price paid on purpose:
+
+- a task definition may belong to a service task or to a user task, and nothing outside the model
+  says which. Both subscriptions are opened, and the one whose kind the task never was stays idle.
+  An idle subscription of this API costs nothing at all, not even an activation request;
+- a `@WorkflowTask` method wired to a BPMN element id (`@WorkflowTask(id = ...)`) names no task
+  definition, so no name can be composed for it. Those workflows are the one case which stands
+  still after all, and the start says so, naming both ways out: wire the method by task
+  definition, or keep deploying the old model under its old id until its workflows have ended.
+
+Where a name is already served nothing of its own is opened, which is every mode but `use-prefix`
+and `use-prefix` with `prefix-task-definitions-per-process: false`. The declared id still joins
+that subscription, because the payload the subscription asks for has to cover what the old id's
+methods read, and because a delivery which cannot be routed has to name the old id as one of the
+reasons. It does NOT join as a routing candidate: a delivery over a shared name would then be
+ambiguous for every workflow, the ones served correctly today included. What such a delivery gets
+is what it got before, attribution to a deployed process, and the start says that too. Telling the
+two apart needs the `bpmnProcessId` meta entry of [`GAPS.md`](./GAPS.md) entry 6, which no engine
+behind this API fills today.
+
+The boot is not refused over any of this, and no property is added to refuse it. Whether a
+declaration is a defect depends on whether workflows still run under the old id, and that is the
+one thing this API cannot answer: no repository, no query, no history. Decision 38 of the
+platform's DECISIONS.md puts that case first, a check which cannot see every model that could
+carry its answer stays silent rather than refusing. A refusal would also hit the case this adapter
+exists for: the declared ids are module level, so in a migration where the other BPMS serves the
+old workflows, a refusing adapter would end the boot over workflows another adapter is serving
+correctly.
+
+`PeaDeclaredProcessSubscriptionsTest` holds which subscriptions are opened per mode, what the
+start says and that a delivery of the old id's task reaches the methods of the old id.
+
+See [What an id without a model still gets](./README.md#what-an-id-without-a-model-still-gets).

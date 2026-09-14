@@ -12,10 +12,13 @@ import org.junit.jupiter.api.extension.ExtendWith;
 
 import dev.bpmcrafters.processengineapi.task.TaskInformation;
 import io.vanillabp.integration.adapter.spi.AggregateSyncMode;
+import io.vanillabp.integration.adapter.spi.NameClashAvoidance;
+import io.vanillabp.integration.adapter.spi.NameClashAvoidanceSupport;
 import io.vanillabp.integration.adapter.spi.workflowtask.TaskInvocationContext;
 import io.vanillabp.integration.adapter.spi.workflowtask.WorkflowTaskInvoker;
 import io.vanillabp.integration.adapter.spi.workflowtask.WorkflowTaskOutcome;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
+import io.vanillabp.pea.wiring.PeaTaskMeta;
 import io.vanillabp.pea.wiring.PeaUserTaskHandler;
 import io.vanillabp.spi.service.TaskEvent;
 
@@ -120,6 +123,58 @@ public class PeaUserTaskHandlerTest {
         .bpmnProcessIds(bpmnProcessIds)
         .workflowTaskInvoker(invoker)
         .build();
+
+  }
+
+  /**
+   * The handler of a subscription whose module avoids name clashes the given way - the
+   * mirror of the service-task side, so neither of the two can start reading the engine's
+   * meta entry differently again.
+   */
+  private PeaUserTaskHandler handler(
+      final List<String> bpmnProcessIds,
+      final NameClashAvoidance mode) {
+
+    return PeaUserTaskHandler
+        .builder()
+        .adapterId("pea")
+        .workflowModuleId("test-module")
+        .externalFormReference("approve")
+        .bpmnProcessIds(bpmnProcessIds)
+        .workflowTaskInvoker(invoker)
+        .scoping(TestScoping.of(mode, "test-module"))
+        .build();
+
+  }
+
+  @Test
+  @DisplayName("A scoped meta entry is routed to the plain process the core is keyed by")
+  public void aScopedMetaEntryIsRoutedToThePlainProcess() {
+
+    handler(List.of("OnlyProcess"), NameClashAvoidance.USE_PREFIX)
+        .accept(
+            new TaskInformation(
+                "utask-scoped", Map.of(
+                    PeaTaskMeta.BPMN_PROCESS_ID,
+                    "test-module"
+                        + NameClashAvoidanceSupport.SEPARATOR
+                        + "OnlyProcess")),
+            Map.of("id", "4711"));
+
+    assertEquals("OnlyProcess", invoker.invokedBpmnProcessId);
+
+  }
+
+  @Test
+  @DisplayName("Under 'none' the meta entry passes through as the engine spelled it")
+  public void underNoneTheMetaEntryPassesThrough() {
+
+    handler(List.of("OnlyProcess", "AnotherProcess"), NameClashAvoidance.NONE)
+        .accept(
+            new TaskInformation("utask-plain", Map.of(PeaTaskMeta.BPMN_PROCESS_ID, "AnotherProcess")),
+            Map.of("id", "4711"));
+
+    assertEquals("AnotherProcess", invoker.invokedBpmnProcessId);
 
   }
 

@@ -418,6 +418,51 @@ deployed so far and not the ones behind it.
 `PeaDeployedProcessesTest` holds the lookups, `UserTaskObserverIntegrationTest` (Spring Boot)
 and `PeaUserTaskObserverTest` (Quarkus) hold that a booted application answers them.
 
+## What an id without a model still gets
+
+A workflow module may declare a BPMN process id it deploys nothing under. That is what renaming
+a BPMN process leaves behind: the engine still holds the old model with workflows running on it,
+while the application brings the new model only and declares the old id through
+`@WorkflowService(secondaryBpmnProcesses = ...)` so its methods keep serving those workflows.
+
+The adapter cannot read the old model back, because this API has no repository
+([`GAPS.md`](GAPS.md), entry 12). What it can do is ask the core which ids a module declares
+without a model and which task definitions the application serves for each of them, and compose
+the names from that, exactly as the deployment composed the names of the models it deployed
+(decision 11 in [`DECISIONS.md`](DECISIONS.md)).
+
+What that means per mode:
+
+|                              Mode                              |    The name an old-id task carries    |                          What the start does                          |
+|----------------------------------------------------------------|---------------------------------------|-----------------------------------------------------------------------|
+| `use-prefix`, task definitions per process (the default)       | the OLD process id is part of it      | one subscription per name, and every delivery is routed to the old id |
+| `use-prefix` with `prefix-task-definitions-per-process: false` | the same name as the deployed process | nothing of its own, and the start says what that costs                |
+| `none`                                                         | the same name as the deployed process | nothing of its own, and the start says what that costs                |
+| `by-adapter`                                                   | does not arise                        | this adapter refuses the mode while deploying                         |
+
+Each composed name is subscribed twice, once as an asynchronous task and once as a user task:
+nothing outside the model says which of the two the task was, and an idle subscription of this
+API costs nothing, not even an activation request.
+
+Where the name is shared with a deployed process, the old id joins that subscription without
+becoming a routing candidate. It joins so that the payload the subscription asks for covers what
+the old id's methods read with `@TaskParam`, and so that a delivery which cannot be routed names
+the old id as one of the reasons. A delivery over a shared name is attributed to a deployed
+process, as it was before: telling the two apart needs the `bpmnProcessId` meta entry
+([`GAPS.md`](GAPS.md), entry 6), which no engine behind this API fills today.
+
+One case stands still after all. A `@WorkflowTask` method wired to a BPMN element id
+(`@WorkflowTask(id = ...)`) names no task definition, and a name cannot be composed from a model
+this application no longer has. The start warns and names both ways out: wire the method by task
+definition, or keep deploying the old model under its old id until its workflows have ended.
+
+What such an id does NOT get: the `@WorkflowEnded` notification, which this adapter cannot report
+for any process (entry 17), and anything the viewer API would show about its model, which needs
+the model. Both are said at the start respectively when a viewer asks, rather than being answered
+with silence.
+
+`PeaDeclaredProcessSubscriptionsTest` holds all of it.
+
 ## The meta a delivered task carries
 
 The Process-Engine-API names the keys a subscription may be RESTRICTED by (`CommonRestrictions`)

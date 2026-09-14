@@ -6,7 +6,6 @@ import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -29,9 +28,6 @@ import dev.bpmcrafters.processengineapi.task.SubscribeForTaskCmd;
 import dev.bpmcrafters.processengineapi.task.TaskSubscription;
 import dev.bpmcrafters.processengineapi.task.TaskSubscriptionApi;
 import dev.bpmcrafters.processengineapi.task.UnsubscribeFromTaskCmd;
-import io.vanillabp.integration.adapter.migration.config.AdapterConfigProperties;
-import io.vanillabp.integration.adapter.migration.config.MigrationAdapterProperties;
-import io.vanillabp.integration.adapter.migration.config.WorkflowModuleAdapterProperties;
 import io.vanillabp.integration.adapter.migration.scoping.NameClashAvoidanceService;
 import io.vanillabp.integration.adapter.spi.AggregateSyncMode;
 import io.vanillabp.integration.adapter.spi.BpmnParseException;
@@ -709,21 +705,7 @@ public class PeaDeploymentServiceTest {
       final NameClashAvoidance mode,
       final String... workflowModuleIds) {
 
-    final var adapter = AdapterConfigProperties
-        .ofType("process-engine-api");
-    adapter.setNameClashAvoidance(mode);
-    final var workflowModules = new LinkedHashMap<String, WorkflowModuleAdapterProperties>();
-    for (final var workflowModuleId : workflowModuleIds) {
-      workflowModules.put(workflowModuleId, new WorkflowModuleAdapterProperties());
-    }
-    final var properties = MigrationAdapterProperties
-        .builder()
-        .adapters(Map.of("pea", adapter))
-        .prioritizedAdapters(List.of("pea"))
-        .workflowModules(workflowModules)
-        .build();
-    properties.validateAndLink();
-    return new NameClashAvoidanceService(properties);
+    return TestScoping.of(mode, workflowModuleIds);
 
   }
 

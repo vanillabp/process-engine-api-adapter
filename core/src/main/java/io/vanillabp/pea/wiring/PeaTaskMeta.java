@@ -7,6 +7,7 @@ import java.util.List;
 
 import dev.bpmcrafters.processengineapi.CommonRestrictions;
 import dev.bpmcrafters.processengineapi.task.TaskInformation;
+import io.vanillabp.integration.adapter.spi.NameClashAvoidanceSupport;
 import lombok.extern.slf4j.Slf4j;
 
 /**
@@ -37,6 +38,12 @@ public final class PeaTaskMeta {
    * than the engine's: the Process-Engine-API names no such key (see {@code GAPS.md}, entry
    * 6), and without it a task definition has to be unique across the processes of a
    * workflow module for a delivery to be routable.
+   * <p>
+   * The value is the id the ENGINE knows, so it carries the prefix under
+   * {@code use-prefix}. Read it through
+   * {@link #plainBpmnProcessId(TaskInformation, NameClashAvoidanceSupport, String, String)}
+   * rather than from the map, because everything this adapter hands the core is keyed by
+   * the plain id (see decision 2 in the repository's DECISIONS.md).
    */
   public static final String BPMN_PROCESS_ID = "bpmnProcessId";
 
@@ -88,6 +95,41 @@ public final class PeaTaskMeta {
     return (value == null) || value.isBlank()
         ? null
         : value;
+
+  }
+
+  /**
+   * Which BPMN process a delivery says it belongs to, in the form the core's registries are
+   * keyed by.
+   * <p>
+   * The engine fills {@link #BPMN_PROCESS_ID} with the id IT knows, and under
+   * {@code use-prefix} that id carries the workflow module as a prefix. Everything this
+   * adapter hands over - the registry lookup of a handler, the process id an observer reads,
+   * the id a viewer asks about - uses the plain id the application wrote, so the value is
+   * translated back here.
+   * <p>
+   * Both task handlers read this one entry, and they used to read it differently: the
+   * user-task side translated and the service-task side did not, which broke every
+   * service-task delivery of an engine filling the entry while the module prefixed its
+   * identifiers. The rule lives here now so the two cannot drift apart again.
+   *
+   * @param taskInformation What the engine delivered
+   * @param scoping The core's name-clash-avoidance support, or <code>null</code>
+   * @param workflowModuleId The workflow module the subscription belongs to
+   * @param adapterId The adapter which was delivered the task
+   * @return The plain BPMN process id, or <code>null</code> where the engine filled none
+   */
+  public static String plainBpmnProcessId(
+      final TaskInformation taskInformation,
+      final NameClashAvoidanceSupport scoping,
+      final String workflowModuleId,
+      final String adapterId) {
+
+    final var fromMeta = text(taskInformation, BPMN_PROCESS_ID);
+    if (fromMeta == null) {
+      return null;
+    }
+    return NameClashAvoidanceSupport.plainProcessId(scoping, workflowModuleId, fromMeta, adapterId);
 
   }
 

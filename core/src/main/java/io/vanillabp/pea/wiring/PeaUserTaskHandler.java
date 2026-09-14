@@ -48,6 +48,14 @@ public class PeaUserTaskHandler implements TaskHandler {
 
   private final List<String> bpmnProcessIds;
 
+  /**
+   * The BPMN process ids the workflow module declares without deploying a model under
+   * them, whose task definitions compose the same name as this subscription's. Not routing
+   * candidates, only what a notification which cannot be routed has to name as a further
+   * possibility. Never <code>null</code>.
+   */
+  private final List<String> declaredBpmnProcessIds;
+
   private final WorkflowTaskInvoker workflowTaskInvoker;
 
   /**
@@ -64,13 +72,15 @@ public class PeaUserTaskHandler implements TaskHandler {
 
   /**
    * The user-task subscription this handler serves. Built through the generated
-   * <code>PeaUserTaskHandler.builder()</code>: three of these seven values may be left out and
+   * <code>PeaUserTaskHandler.builder()</code>: some of these values may be left out and
    * a positional list of that length no longer says which is which.
    *
    * @param adapterId The adapter whose subscription delivers here
    * @param workflowModuleId The workflow module the subscribed user tasks belong to
    * @param externalFormReference The form reference the engine delivers under
    * @param bpmnProcessIds The BPMN processes this subscription may deliver from
+   * @param declaredBpmnProcessIds The ids the module declares without a model which share
+   *          this subscription's name, or <code>null</code> for none
    * @param workflowTaskInvoker The core's runtime entry point
    * @param scoping Translates the engine's identifiers back, or <code>null</code>
    * @param fetchVariables What the subscription asked for, or <code>null</code> for everything
@@ -82,6 +92,7 @@ public class PeaUserTaskHandler implements TaskHandler {
       final String workflowModuleId,
       final String externalFormReference,
       final List<String> bpmnProcessIds,
+      final List<String> declaredBpmnProcessIds,
       final WorkflowTaskInvoker workflowTaskInvoker,
       final NameClashAvoidanceSupport scoping,
       final PeaFetchVariables.Selection fetchVariables,
@@ -91,6 +102,9 @@ public class PeaUserTaskHandler implements TaskHandler {
     this.workflowModuleId = workflowModuleId;
     this.externalFormReference = externalFormReference;
     this.bpmnProcessIds = bpmnProcessIds;
+    this.declaredBpmnProcessIds = declaredBpmnProcessIds == null
+        ? List.of()
+        : List.copyOf(declaredBpmnProcessIds);
     this.workflowTaskInvoker = workflowTaskInvoker;
     this.scoping = scoping;
     this.fetchVariables = fetchVariables == null
@@ -320,8 +334,9 @@ public class PeaUserTaskHandler implements TaskHandler {
 
     return new IllegalStateException(
         ("User task '%s' (form reference '%s') carries no meta entry '%s' and the form reference "
-            + "is used by several BPMN processes of workflow module '%s' (%s) - the notification "
-            + "cannot be routed!")
+            + "is used by several BPMN processes of workflow module '%s' (%s)%s - the notification "
+            + "cannot be routed! Either the Process-Engine-API implementation supplies the meta "
+            + "entry or the form reference has to be unique across the module's processes%s.")
             .formatted(
                 taskInformation.getTaskId(),
                 externalFormReference,
@@ -330,7 +345,9 @@ public class PeaUserTaskHandler implements TaskHandler {
                 bpmnProcessIds
                     .stream()
                     .distinct()
-                    .toList()));
+                    .toList(),
+                PeaRenamedProcesses.andTheIdsTheModuleOnlyDeclares(declaredBpmnProcessIds),
+                PeaRenamedProcesses.orKeepDeployingTheOldModel(declaredBpmnProcessIds)));
 
   }
 
@@ -341,10 +358,11 @@ public class PeaUserTaskHandler implements TaskHandler {
    * which ends a delivery in {@link #ambiguousRouting} and is a fact of life for a termination
    * - see {@link #terminated(TaskInformation)}.
    * <p>
-   * The meta entry is what the ENGINE knows the process as, so it is unscoped: the core's
-   * registries are keyed by the plain id and so is everything this adapter hands out
-   * (decision 2 in the repository's DECISIONS.md). The single process of a subscription is
-   * plain already, being the one this adapter subscribed for.
+   * The meta entry is what the ENGINE knows the process as, so
+   * {@link PeaTaskMeta#plainBpmnProcessId} translates it back: the core's registries are
+   * keyed by the plain id and so is everything this adapter hands out (decision 2 in the
+   * repository's DECISIONS.md). The single process of a subscription is plain already,
+   * being the one this adapter subscribed for.
    *
    * @param taskInformation What the engine says about the task
    * @return The plain BPMN process id, or <code>null</code>
@@ -352,9 +370,10 @@ public class PeaUserTaskHandler implements TaskHandler {
   private String bpmnProcessIdOrNull(
       final TaskInformation taskInformation) {
 
-    final var fromMeta = taskInformation.getMeta().get(PeaTaskMeta.BPMN_PROCESS_ID);
+    final var fromMeta = PeaTaskMeta
+        .plainBpmnProcessId(taskInformation, scoping, workflowModuleId, adapterId);
     if (fromMeta != null) {
-      return NameClashAvoidanceSupport.plainProcessId(scoping, workflowModuleId, fromMeta, adapterId);
+      return fromMeta;
     }
     final var distinct = bpmnProcessIds
         .stream()
