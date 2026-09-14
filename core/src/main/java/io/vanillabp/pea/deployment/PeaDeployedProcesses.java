@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 import io.vanillabp.integration.adapter.spi.workflowtask.BpmnTaskSpec;
@@ -157,6 +158,44 @@ public class PeaDeployedProcesses {
         definitionId(workflowModuleId, model.bpmnProcessId()),
         new DeployedProcess(workflowModuleId, model, deploymentKey));
     reindex();
+
+  }
+
+  /**
+   * The BPMN process ids a workflow module DECLARES without deploying a model under them -
+   * the old id of a renamed process. Filled while the module starts processing, from what
+   * the core answers about the application's own methods.
+   */
+  private final Set<String> declaredWithoutDeployment = ConcurrentHashMap.newKeySet();
+
+  /**
+   * Remembers that a workflow module serves a BPMN process id it deployed nothing under.
+   * Nothing of the model behind that id is known here, which is exactly what makes the
+   * memory worth keeping: a caller asking about such a workflow gets an empty answer, and
+   * this is what tells an empty answer about a renamed process apart from an empty answer
+   * about an id nobody ever used.
+   *
+   * @param workflowModuleId The workflow module id
+   * @param bpmnProcessId The plain BPMN process id
+   */
+  public void recordDeclaredWithoutDeployment(
+      final String workflowModuleId,
+      final String bpmnProcessId) {
+
+    declaredWithoutDeployment.add(definitionId(workflowModuleId, bpmnProcessId));
+
+  }
+
+  /**
+   * @param workflowModuleId The workflow module id
+   * @param bpmnProcessId The plain BPMN process id
+   * @return Whether the module declares that id without deploying a model under it
+   */
+  public boolean isDeclaredWithoutDeployment(
+      final String workflowModuleId,
+      final String bpmnProcessId) {
+
+    return declaredWithoutDeployment.contains(definitionId(workflowModuleId, bpmnProcessId));
 
   }
 

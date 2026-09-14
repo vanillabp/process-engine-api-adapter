@@ -9,6 +9,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 
 import io.vanillabp.integration.spi.AggregatePersistenceAware;
+import io.vanillabp.integration.test.utils.CapturedOutput;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 import io.vanillabp.pea.deployment.PeaDeployedProcesses;
 import io.vanillabp.pea.deployment.PeaDeploymentService;
@@ -161,6 +162,37 @@ public class PeaViewerApiTest {
             .isEmpty());
     Assertions.assertNull(
         processService.getWorkflowHistory("test-module", "OtherProcess", persistence(), "42", null));
+
+  }
+
+  @Test
+  @DisplayName("An id the application declares without a model is an empty answer with a reason")
+  public void aDeclaredIdIsAnsweredWithAReason(
+      final CapturedOutput output) {
+
+    deploy();
+    // what the start does for every BPMN process id a workflow module serves without
+    // bringing a model for it - the old id of a renamed process
+    deployedProcesses.recordDeclaredWithoutDeployment("test-module", "RenamedAwayProcess");
+
+    Assertions.assertTrue(
+        processService
+            .getProcessDefinitions("test-module", "RenamedAwayProcess", persistence(), "42", null)
+            .isEmpty());
+    Assertions.assertNull(
+        processService.getWorkflowHistory("test-module", "RenamedAwayProcess", persistence(), "42", null));
+    Assertions.assertNull(
+        processService.getBpmnXml("test-module", "RenamedAwayProcess", "test-module|RenamedAwayProcess"));
+
+    final var logged = output.getOut() + output.getErr();
+    Assertions.assertTrue(
+        logged.contains("RenamedAwayProcess"),
+        () -> "a cockpit showing nothing for a workflow which is running deserves the reason: "
+            + logged);
+    Assertions.assertTrue(
+        logged.contains("declares that id without deploying a model under it"),
+        () -> "and the reason is the rename, not an id nobody ever used: "
+            + logged);
 
   }
 

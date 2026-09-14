@@ -289,6 +289,7 @@ public class PeaProcessService<A> implements MigratableProcessService<A> {
 
     final var deployed = deployedProcesses.deployedVersionOf(workflowModuleId, bpmnProcessId);
     if (deployed == null) {
+      sayWhyThereIsNothingToShow(workflowModuleId, bpmnProcessId, "process definitions");
       return List.of();
     }
     return List.of(
@@ -305,12 +306,55 @@ public class PeaProcessService<A> implements MigratableProcessService<A> {
       final String processDefinitionId) {
 
     final var deployed = deployedProcesses.byDefinitionId(processDefinitionId);
-    return deployed == null
-        ? null
-        : new ByteArrayInputStream(
-            deployed
-                .model()
-                .resource());
+    if (deployed == null) {
+      sayWhyThereIsNothingToShow(workflowModuleId, bpmnProcessId, "the BPMN XML");
+      return null;
+    }
+    return new ByteArrayInputStream(
+        deployed
+            .model()
+            .resource());
+
+  }
+
+  /**
+   * Says why a viewer gets nothing for a workflow whose BPMN process this application
+   * DECLARES without deploying a model under it - the old id of a renamed process.
+   * <p>
+   * The workflow itself may be running perfectly well and its tasks may be served (see
+   * decision 11 in the repository's DECISIONS.md), but the model behind that id was
+   * deployed by an earlier application version and the Process-Engine-API has no
+   * repository to read it back from (see {@code GAPS.md}). An empty answer is all there
+   * is, and without this line it is an empty answer nobody can explain.
+   * <p>
+   * Every other empty answer stays silent: a process id this adapter never heard of is a
+   * question for whoever asked it, not a limitation worth a log line.
+   *
+   * @param workflowModuleId The workflow module the caller asked about
+   * @param bpmnProcessId The plain BPMN process id the caller asked about
+   * @param what What the caller wanted, as a noun phrase
+   */
+  private void sayWhyThereIsNothingToShow(
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final String what) {
+
+    if (!deployedProcesses.isDeclaredWithoutDeployment(workflowModuleId, bpmnProcessId)) {
+      return;
+    }
+    log.warn(
+        """
+            Process-Engine-API adapter '{}': no {} for BPMN process '{}' of workflow module '{}'. \
+            The application declares that id without deploying a model under it, which is what \
+            renaming a BPMN process leaves behind, and the model the engine still holds for it \
+            cannot be read back through this API (see GAPS.md). Their tasks are served as far as \
+            the start of this workflow module said they are, only nothing about their model can be \
+            shown. Keep deploying the old model under its old id as long as a viewer has to show \
+            it.""",
+        adapterId,
+        what,
+        bpmnProcessId,
+        workflowModuleId);
 
   }
 
@@ -333,6 +377,7 @@ public class PeaProcessService<A> implements MigratableProcessService<A> {
     }
     final var deployed = deployedProcesses.deployedVersionOf(workflowModuleId, bpmnProcessId);
     if (deployed == null) {
+      sayWhyThereIsNothingToShow(workflowModuleId, bpmnProcessId, "a workflow history");
       return null;
     }
     return new WorkflowHistory(

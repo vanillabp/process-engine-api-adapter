@@ -57,6 +57,16 @@ public class PeaTaskHandler implements TaskHandler {
 
   private final List<String> bpmnProcessIds;
 
+  /**
+   * The BPMN process ids the workflow module declares without deploying a model under
+   * them, whose task definitions compose the same name as this subscription's. They are
+   * not routing candidates - a delivery over a shared name is attributed to a deployed
+   * process - but a delivery which cannot be routed has to name them, because a workflow
+   * still running under the old id of a renamed process is one of the reasons. Never
+   * <code>null</code>.
+   */
+  private final List<String> declaredBpmnProcessIds;
+
   private final WorkflowTaskInvoker workflowTaskInvoker;
 
   private final ServiceTaskCompletionApi serviceTaskCompletionApi;
@@ -76,13 +86,15 @@ public class PeaTaskHandler implements TaskHandler {
 
   /**
    * The subscription this handler serves. Built through the generated
-   * <code>PeaTaskHandler.builder()</code>: three of these seven values may be left out and a
+   * <code>PeaTaskHandler.builder()</code>: some of these values may be left out and a
    * positional list of that length no longer says which is which.
    *
    * @param adapterId The adapter whose subscription delivers here
    * @param workflowModuleId The workflow module the subscribed tasks belong to
    * @param taskDefinition The task definition as the engine knows it
    * @param bpmnProcessIds The BPMN processes this subscription may deliver from
+   * @param declaredBpmnProcessIds The ids the module declares without a model which share
+   *          this subscription's name, or <code>null</code> for none
    * @param workflowTaskInvoker The core's runtime entry point
    * @param serviceTaskCompletionApi Where the outcome of a delivery is reported
    * @param scoping Translates the engine's identifiers back, or <code>null</code>
@@ -94,6 +106,7 @@ public class PeaTaskHandler implements TaskHandler {
       final String workflowModuleId,
       final String taskDefinition,
       final List<String> bpmnProcessIds,
+      final List<String> declaredBpmnProcessIds,
       final WorkflowTaskInvoker workflowTaskInvoker,
       final ServiceTaskCompletionApi serviceTaskCompletionApi,
       final NameClashAvoidanceSupport scoping,
@@ -103,6 +116,9 @@ public class PeaTaskHandler implements TaskHandler {
     this.workflowModuleId = workflowModuleId;
     this.taskDefinition = taskDefinition;
     this.bpmnProcessIds = bpmnProcessIds;
+    this.declaredBpmnProcessIds = declaredBpmnProcessIds == null
+        ? List.of()
+        : List.copyOf(declaredBpmnProcessIds);
     this.workflowTaskInvoker = workflowTaskInvoker;
     this.serviceTaskCompletionApi = serviceTaskCompletionApi;
     this.scoping = scoping;
@@ -251,15 +267,17 @@ public class PeaTaskHandler implements TaskHandler {
     throw new IllegalStateException(
         """
             Task '%s' (definition '%s') carries no meta entry '%s' and the task definition is used \
-            by several BPMN processes of workflow module '%s' (%s) - the task cannot be routed! \
+            by several BPMN processes of workflow module '%s' (%s)%s - the task cannot be routed! \
             Either the Process-Engine-API implementation supplies the meta entry or the task \
-            definition has to be unique across the module's processes."""
+            definition has to be unique across the module's processes%s."""
             .formatted(
                 taskInformation.getTaskId(),
                 taskDefinition,
                 PeaTaskMeta.BPMN_PROCESS_ID,
                 workflowModuleId,
-                distinct));
+                distinct,
+                PeaRenamedProcesses.andTheIdsTheModuleOnlyDeclares(declaredBpmnProcessIds),
+                PeaRenamedProcesses.orKeepDeployingTheOldModel(declaredBpmnProcessIds)));
 
   }
 

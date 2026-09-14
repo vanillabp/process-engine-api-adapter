@@ -38,6 +38,7 @@ import dev.bpmcrafters.processengineapi.task.TaskInformation;
 import dev.bpmcrafters.processengineapi.task.TaskSubscription;
 import dev.bpmcrafters.processengineapi.task.TaskSubscriptionApi;
 import dev.bpmcrafters.processengineapi.task.TaskTerminationHandler;
+import dev.bpmcrafters.processengineapi.task.TaskType;
 import dev.bpmcrafters.processengineapi.task.UnsubscribeFromTaskCmd;
 import dev.bpmcrafters.processengineapi.task.UserTaskCompletionApi;
 
@@ -398,6 +399,8 @@ public class InMemoryProcessEngine implements DeploymentApi, StartProcessApi, Co
    * variables it asked for and the handler task deliveries are dispatched to.
    *
    * @param taskDescriptionKey The subscribed task definition
+   * @param taskType Whether the subscriber asked for asynchronous tasks or for user tasks -
+   *          one name may be subscribed as both, and then the two are told apart by this
    * @param payloadDescription The payload variables the subscription asked for - an
    *          EMPTY set is the API's way of asking for everything
    * @param handler The subscriber's task handler
@@ -405,6 +408,7 @@ public class InMemoryProcessEngine implements DeploymentApi, StartProcessApi, Co
    */
   public record ActiveSubscription(
                                    String taskDescriptionKey,
+                                   TaskType taskType,
                                    Set<String> payloadDescription,
                                    TaskHandler handler,
                                    TaskTerminationHandler termination) implements TaskSubscription {
@@ -617,6 +621,59 @@ public class InMemoryProcessEngine implements DeploymentApi, StartProcessApi, Co
 
   }
 
+  /**
+   * Delivers a task to the subscription of that name AND of that kind. One task definition
+   * may be subscribed as an asynchronous task and as a user task at the same time, which is
+   * what an application does for a BPMN process id it declares without a model: it cannot
+   * tell which of the two the task was. An engine knows, so a test which is about that case
+   * says which one it delivers.
+   *
+   * @param taskId The delivered task's ID
+   * @param taskDefinition The task definition (matched against subscriptions)
+   * @param taskType Whether an asynchronous task or a user task is delivered
+   * @param bpmnProcessId The BPMN process the task belongs to, or <code>null</code> for an
+   *          engine which names none
+   * @param payload The task's payload variables
+   */
+  public void deliverTask(
+      final String taskId,
+      final String taskDefinition,
+      final TaskType taskType,
+      final String bpmnProcessId,
+      final Map<String, Object> payload) {
+
+    openTaskIds.add(taskId);
+    final var subscription = subscriptionFor(taskDefinition, taskType);
+    deliveredTo.put(taskId, subscription);
+    if (bpmnProcessId != null) {
+      deliveredAs.put(taskId, bpmnProcessId);
+    }
+    subscription
+        .handler()
+        .accept(
+            new TaskInformation(taskId, metaOf(bpmnProcessId, Map.of())),
+            subscription.narrow(payload));
+
+  }
+
+  private ActiveSubscription subscriptionFor(
+      final String taskDefinition,
+      final TaskType taskType) {
+
+    return subscriptions
+        .stream()
+        .filter(candidate -> candidate.taskDescriptionKey().equals(taskDefinition))
+        .filter(candidate -> candidate.taskType() == taskType)
+        .findFirst()
+        .orElseThrow(() -> new IllegalStateException(
+            "No %s subscription for task definition '%s' - subscribed: %s"
+                .formatted(taskType, taskDefinition, subscriptions
+                    .stream()
+                    .map(ActiveSubscription::taskDescriptionKey)
+                    .toList())));
+
+  }
+
   private ActiveSubscription subscriptionFor(
       final String taskDefinition) {
 
@@ -639,7 +696,8 @@ public class InMemoryProcessEngine implements DeploymentApi, StartProcessApi, Co
 
     record("TaskSubscriptionApi", "subscribeForTask", cmd);
     final var subscription = new ActiveSubscription(
-        cmd.getTaskDescriptionKey(), cmd.getPayloadDescription(), cmd.getAction(), cmd.getTermination());
+        cmd.getTaskDescriptionKey(), cmd.getTaskType(), cmd.getPayloadDescription(), cmd.getAction(), cmd
+            .getTermination());
     subscriptions.add(subscription);
     return CompletableFuture.completedFuture(subscription);
 

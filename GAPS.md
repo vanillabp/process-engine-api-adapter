@@ -124,8 +124,11 @@ real PEA implementation used underneath) is expected to supply the meta entry
 `bpmnProcessId` (`PeaTaskMeta.BPMN_PROCESS_ID`). Without it the adapter
 falls back to routing by task definition, which only works while the definition is
 unique across the module's processes; an ambiguous definition without the meta
-entry fails the delivery with a guiding message. A defined meta-key vocabulary in
-the API would remove this convention.
+entry fails the delivery with a guiding message. That message also names the BPMN
+process ids the module declares without deploying a model under them, because a
+delivery nobody can place may belong to a workflow still running under the old id of
+a renamed process (entry 23). A defined meta-key vocabulary in the API would remove
+this convention.
 
 **The value is the id the ENGINE knows, not the one the application wrote.** Where a
 workflow module prefixes its identifiers, the engine holds the process under
@@ -545,7 +548,7 @@ modules deployed to that engine, the way it would have to for every identifier i
 had no isolation at all (gap 15 is the same story one level up). A binding this adapter could
 read, or a deployment which took a namespace, would close this gap.
 
-## 23. The workflows of a renamed process' old id cannot be served
+## 23. The workflows of a renamed process' old id can only be served where the name says so
 
 **Needed by VanillaBP:** a workflow module may declare a BPMN process id it deploys nothing
 under - the old id of a renamed process, declared by
@@ -554,40 +557,43 @@ the workflows running on them, and both Camunda adapters keep serving those work
 read the models their BPMS holds under the declared id and compose their subscriptions
 respectively connectables from them. The rule behind it is decision 38 of the platform's
 DECISIONS.md: a check or a delivery must not depend on which application version deployed
-the model.
+the model. How they find the tasks of the old id differs: Camunda 7 reads the models its
+engine holds, Camunda 8 composes its workers from what the application serves and reads no
+model for it (decision 19 of its own DECISIONS.md).
 
-**Offered by the Process-Engine-API:** nothing to read. There is no repository (gap 12), so
-the models the engine holds under the old id cannot be fetched, and task subscriptions are
-composed from the models of the CURRENT deployment only. Task definitions are scoped per
-process where a module prefixes its identifiers, so the tasks of the old id's workflows
-carry names no subscription of the renamed application asks for.
+**Offered by the Process-Engine-API:** nothing to read. There is no repository (gap 12), so the
+models the engine holds under the old id cannot be fetched. What is left is what the application
+itself still serves, and the core answers that without any model:
+`taskWiringOfProcessesNobodyDeployed` names the declared ids and the task definitions the
+`@WorkflowTask` methods serve for each of them.
 
-**Consequence for the adapter:** the workflows under a declared-only id are not served, and
-the adapter says so while the module starts processing, once per declared id - together with
-the warning that their end is not reported (gap 17), which needs no model and is therefore
-warned about for declared ids the same way as for deployed ones. Where a module does NOT
-prefix its identifiers, a task of the old id may still be delivered through a subscription
-of the same task definition, and it is then attributed to a deployed process: the delivery's
-`bpmnProcessId` meta key (gap 6) is what would tell them apart, and without it the routing
-guesses. The way out that asks nothing of the API is to keep deploying the old model under
-its old id until its workflows have ended.
+**Consequence for the adapter:** the subscriptions of a declared id are COMPOSED from that
+answer, the way the Camunda 8 adapter composes its workers (decision 11 of `DECISIONS.md`).
+Where a module prefixes its identifiers, which is the default, a task definition carries the id
+of the process it was deployed with, so the name of an old-id task is composable from the old id
+alone, one subscription for it serves exactly one process, and every such delivery is routed
+correctly. Each composed name is subscribed twice, as an asynchronous task and as a user task,
+because nothing outside the model says which of the two it was.
 
-**Most of this is buildable today, measured on 2026-09-12.** The core already answers
-which BPMN process ids a module declares without a model and which task definitions
-the application serves for each of them, through `taskWiringOfProcessesNobodyDeployed`,
-and the Camunda 8 adapter composes its workers from exactly that. This adapter can
-compose its subscriptions the same way and calls the method today only for a warning.
-Where a module prefixes its identifiers, which is the default, a task definition
-carries the id of the process it was deployed with, so the name of an old-id task is
-composable from the old id alone and a subscription for it serves exactly one process.
-The behaviour is then correct rather than only honest, and no API change is involved.
-What stays blocked is the other mode: under `none`, and under `use-prefix` with
-`prefix-task-definitions-per-process: false`, the old and the new process share one
-task definition and one subscription, and only the meta key of gap 6 tells the
-deliveries apart. A repository API is NOT needed for any of this. The checks VanillaBP runs over a declared id go
-silent for the same reason: what its held versions start on and where they fork cannot be read
-here, so nothing is said about either (gaps 16 and 21). A repository API (gap 12) would
-open the same path the Camunda adapters take.
+**What stays open is the other mode.** Under `none`, and under `use-prefix` with
+`prefix-task-definitions-per-process: false`, the old and the new process share one task
+definition and therefore one subscription. Nothing of its own is opened, the old id joins the
+existing subscription so that its `@TaskParam` names are asked for, and a delivery is attributed
+to a deployed process as before. Only the meta key of gap 6 can tell those apart, which is why
+that entry helps this one. The start says which of the two cases a declared id is in, and a
+delivery which cannot be routed at all names the old id as one of the reasons.
+
+One case is served by nothing: a declared id whose methods are all wired by BPMN element id
+(`@WorkflowTask(id = ...)`) names no task definition, so no name can be composed. The start warns
+and names both ways out, wiring those methods by task definition or keeping the old model
+deployed under its old id until its workflows have ended.
+
+The rest of what a declared id cannot get stays as it was. Its end is not reported (gap 17),
+which needs no model and is warned about the same way as for a deployed process. What its held
+versions start on and where they fork cannot be read (gaps 16 and 21), so nothing is said about
+either. And the viewer API has nothing to show for it, because showing it needs the model; since
+2026-09-14 it says so instead of answering an empty list without a word. A repository API
+(gap 12) would close those, and none of them is what this entry was about.
 
 ## 24. The engine cannot be asked which identifiers it already holds
 
