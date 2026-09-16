@@ -48,6 +48,9 @@ public class PeaWorkflowLifecycleTest {
 
   @RegisterExtension
   static final QuarkusProdModeTest prodModeTest = new QuarkusProdModeTest()
+      // the lines below are the deployment, not the directory: classes travel by package,
+      // every resource travels by a line of its own, so a BPMN file added to
+      // src/main/resources reaches this application only once it is listed here
       .withApplicationRoot(jar -> jar
           .addPackage("io.vanillabp.pea.quarkus.test")
           .addAsResource("application.yaml")
