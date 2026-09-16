@@ -1,0 +1,92 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:zeebe="http://camunda.org/schema/zeebe/1.0" id="Definitions_peaparams" targetNamespace="http://bpmn.io/schema/bpmn">
+  <bpmn:process id="PeaParamProcess" isExecutable="true">
+    <bpmn:startEvent id="start">
+      <bpmn:outgoing>f1</bpmn:outgoing>
+    </bpmn:startEvent>
+    <bpmn:sequenceFlow id="f1" sourceRef="start" targetRef="t_totalAsBigDecimal" />
+    <bpmn:serviceTask id="t_totalAsBigDecimal">
+      <bpmn:extensionElements>
+        <zeebe:taskDefinition type="totalAsBigDecimal" />
+      </bpmn:extensionElements>
+      <bpmn:incoming>f1</bpmn:incoming>
+      <bpmn:outgoing>f2</bpmn:outgoing>
+    </bpmn:serviceTask>
+    <bpmn:sequenceFlow id="f2" sourceRef="t_totalAsBigDecimal" targetRef="t_totalAsDouble" />
+    <bpmn:serviceTask id="t_totalAsDouble">
+      <bpmn:extensionElements>
+        <zeebe:taskDefinition type="totalAsDouble" />
+      </bpmn:extensionElements>
+      <bpmn:incoming>f2</bpmn:incoming>
+      <bpmn:outgoing>f3</bpmn:outgoing>
+    </bpmn:serviceTask>
+    <bpmn:sequenceFlow id="f3" sourceRef="t_totalAsDouble" targetRef="t_totalAsInt" />
+    <bpmn:serviceTask id="t_totalAsInt">
+      <bpmn:extensionElements>
+        <zeebe:taskDefinition type="totalAsInt" />
+      </bpmn:extensionElements>
+      <bpmn:incoming>f3</bpmn:incoming>
+      <bpmn:outgoing>f4</bpmn:outgoing>
+    </bpmn:serviceTask>
+    <bpmn:sequenceFlow id="f4" sourceRef="t_totalAsInt" targetRef="t_rateAsDouble" />
+    <bpmn:serviceTask id="t_rateAsDouble">
+      <bpmn:extensionElements>
+        <zeebe:taskDefinition type="rateAsDouble" />
+      </bpmn:extensionElements>
+      <bpmn:incoming>f4</bpmn:incoming>
+      <bpmn:outgoing>f5</bpmn:outgoing>
+    </bpmn:serviceTask>
+    <bpmn:sequenceFlow id="f5" sourceRef="t_rateAsDouble" targetRef="t_countAsLong" />
+    <bpmn:serviceTask id="t_countAsLong">
+      <bpmn:extensionElements>
+        <zeebe:taskDefinition type="countAsLong" />
+      </bpmn:extensionElements>
+      <bpmn:incoming>f5</bpmn:incoming>
+      <bpmn:outgoing>f6</bpmn:outgoing>
+    </bpmn:serviceTask>
+    <bpmn:sequenceFlow id="f6" sourceRef="t_countAsLong" targetRef="t_countAsInt" />
+    <bpmn:serviceTask id="t_countAsInt">
+      <bpmn:extensionElements>
+        <zeebe:taskDefinition type="countAsInt" />
+      </bpmn:extensionElements>
+      <bpmn:incoming>f6</bpmn:incoming>
+      <bpmn:outgoing>f7</bpmn:outgoing>
+    </bpmn:serviceTask>
+    <bpmn:sequenceFlow id="f7" sourceRef="t_countAsInt" targetRef="t_hugeAsLong" />
+    <bpmn:serviceTask id="t_hugeAsLong">
+      <bpmn:extensionElements>
+        <zeebe:taskDefinition type="hugeAsLong" />
+      </bpmn:extensionElements>
+      <bpmn:incoming>f7</bpmn:incoming>
+      <bpmn:outgoing>f8</bpmn:outgoing>
+    </bpmn:serviceTask>
+    <bpmn:sequenceFlow id="f8" sourceRef="t_hugeAsLong" targetRef="t_hugeAsDouble" />
+    <bpmn:serviceTask id="t_hugeAsDouble">
+      <bpmn:extensionElements>
+        <zeebe:taskDefinition type="hugeAsDouble" />
+      </bpmn:extensionElements>
+      <bpmn:incoming>f8</bpmn:incoming>
+      <bpmn:outgoing>f9</bpmn:outgoing>
+    </bpmn:serviceTask>
+    <bpmn:sequenceFlow id="f9" sourceRef="t_hugeAsDouble" targetRef="t_orderAsBigDecimal" />
+    <bpmn:serviceTask id="t_orderAsBigDecimal">
+      <bpmn:extensionElements>
+        <zeebe:taskDefinition type="orderAsBigDecimal" />
+      </bpmn:extensionElements>
+      <bpmn:incoming>f9</bpmn:incoming>
+      <bpmn:outgoing>f10</bpmn:outgoing>
+    </bpmn:serviceTask>
+    <bpmn:sequenceFlow id="f10" sourceRef="t_orderAsBigDecimal" targetRef="t_orderAsObject" />
+    <bpmn:serviceTask id="t_orderAsObject">
+      <bpmn:extensionElements>
+        <zeebe:taskDefinition type="orderAsObject" />
+      </bpmn:extensionElements>
+      <bpmn:incoming>f10</bpmn:incoming>
+      <bpmn:outgoing>f11</bpmn:outgoing>
+    </bpmn:serviceTask>
+    <bpmn:sequenceFlow id="f11" sourceRef="t_orderAsObject" targetRef="end" />
+    <bpmn:endEvent id="end">
+      <bpmn:incoming>f11</bpmn:incoming>
+    </bpmn:endEvent>
+  </bpmn:process>
+</bpmn:definitions>
