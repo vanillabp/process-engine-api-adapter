@@ -323,6 +323,44 @@ asserted and never exercised. `PeaFetchVariablesTest` holds all of it, from
 `theSubscriptionNamesWhatItReads` and `theUnionCoversEverythingTheSubscriptionServes`
 through `theEscapeHatchAsksForEverything` to `anUnknownAggregateFallsBackToEverything`.
 
+## What a `@TaskParam` receives
+
+Binding a delivered value to the type a parameter declares is the platform's job, not this
+adapter's. The invocation context of `PeaTaskHandler` answers `getTaskParameter` with what the
+delivered payload holds under that name and converts nothing. The platform's `ValueConversion`
+takes it from there. Which types it accepts, and why a number it cannot hold fails the invocation
+instead of arriving cut down, is written once in
+[What a `@TaskParam` may be declared as](https://github.com/vanillabp/adapter-platform-integration/blob/main/migration-adapter/README.md#what-a-taskparam-may-be-declared-as-valueconversion)
+of `migration-adapter/README.md`. The table there is the full answer and is not copied here.
+
+What belongs here is what this engine does to a value on the way, and the answer is: nothing. The
+Process-Engine-API carries a payload as `Map<String, Object>` from the start command through to the
+delivery, and the in-memory mock hands back the objects it was given. So a `BigDecimal` of `120.50`
+reaches a `BigDecimal` parameter with its scale. The same value bound to a `Double` reads `120.5`,
+which is the same number without the scale, and bound to an `int` it fails the task, because 120 is
+a different number.
+
+All of that is measured, on 2026-09-16, against the in-memory mock in this repository's Spring Boot
+module. `TaskParameterTypesIntegrationTest` starts a workflow whose aggregate shares a decimal, a
+big integer, a float and a long, takes the payload the start command carried and delivers it back
+as a task, one test per variable and declared type.
+
+What was NOT measured is a real Process-Engine-API backend. One running on Camunda 7 or Camunda 8
+stores a variable in a format of its own, and a decimal which went through that format can come
+back without its scale. The sentence about the scale therefore holds for the mock, and anywhere
+else it is an assumption.
+
+A refused value costs the task, like any other failure of a handler: the local transaction is
+rolled back and the message the platform wrote is handed to `failTask` as the reason, so the engine
+applies its retry semantics and whoever reads the incident reads what to change.
+
+This adapter has no input mapping. A `@TaskParam` names a process variable directly, which is also
+what the subscription asks the engine for (see
+[What a subscription asks the engine for](#what-a-subscription-asks-the-engine-for)). A value
+nested inside another one is therefore only reachable as the whole map. A parameter declared as
+`Object` is served with that map, and every other type is refused with the message about a value
+which cannot be converted at all.
+
 ## Observing the user tasks of an application
 
 A task list, a cockpit or anything else which wants to WATCH the user tasks of an application
