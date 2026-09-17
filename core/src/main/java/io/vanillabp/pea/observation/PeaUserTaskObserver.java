@@ -13,9 +13,11 @@ package io.vanillabp.pea.observation;
  * can arrange that. This is where that happens.
  * <p>
  * <b>It observes.</b> An observer is told what the engine delivered and what the engine
- * withdrew, and nothing it does reaches the engine: it cannot claim, complete, cancel or
- * change a task, and it cannot stop a delivery from reaching the application. Completing a
- * user task goes through {@code ProcessService#completeUserTask} like everywhere else.
+ * withdrew, and it acts on neither the task nor the engine: it cannot claim, complete,
+ * cancel or change a task, and it cannot stop a delivery from reaching the application.
+ * Completing a user task goes through {@code ProcessService#completeUserTask} like everywhere
+ * else. The one thing of an observer the engine gets to see is a failure, and what that means
+ * is said below.
  * <p>
  * <b>Every delivery, not only the served ones.</b> The adapter calls the observers BEFORE it
  * checks whether a {@code @WorkflowTask} method of the application claims the task, because
@@ -27,9 +29,20 @@ package io.vanillabp.pea.observation;
  * came from, which is what an observer reports under. See decision 9 in the repository's
  * DECISIONS.md.
  * <p>
- * <b>Failing is the observer's own business.</b> An observer which throws is logged with its
- * class and its task; the delivery reaches the application and the remaining observers are
- * called anyway.
+ * <b>An observer which fails disturbs.</b> One which throws is logged with its class, its
+ * task and its workflow module, the other observers are told all the same, and then the
+ * delivery fails towards the engine. A failure while describing the task for the observers
+ * does the same. What the engine makes of a failed delivery is its own business: the API
+ * says nothing about it ({@code GAPS.md}, entry 25), and its reference implementation for an
+ * embedded Camunda 7 pulls the task again on its next cycle, which leaves the user task where
+ * it was and gives the observer another try. So an observer has to survive being called
+ * again after it failed, and what it does must not depend on how often it ran.
+ * See decision 12 in the repository's DECISIONS.md.
+ * <p>
+ * The application's own notification is not what pays for this. The adapter runs the
+ * {@code @WorkflowTask} method of a delivery before the failure of an observer leaves the
+ * handler, and the core recognizes a repeated delivery by its task id, so the method is not
+ * called twice for one task.
  * <p>
  * On Spring Boot an observer is a bean of this type, on Quarkus a CDI bean of it. Both
  * platform modules collect them and hand them to the deployment service, which passes them

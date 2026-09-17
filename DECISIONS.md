@@ -221,3 +221,53 @@ correctly.
 start says and that a delivery of the old id's task reaches the methods of the old id.
 
 See [What an id without a model still gets](./README.md#what-an-id-without-a-model-still-gets).
+
+### 12. An observer which fails disturbs the delivery
+
+The user-task observers used to cost the delivery nothing. `PeaUserTaskObservers` caught what
+an observer threw, wrote an ERROR line and handed the task on, and the javadoc of
+`PeaUserTaskObserver` promised that this is how it works. The promise is withdrawn. It was
+never written down as an entry here, it lived in that javadoc and in
+[Observing the user tasks of an application](./README.md#observing-the-user-tasks-of-an-application),
+and both of them now say what this entry says.
+
+What changed is the kind of work an observer does. The first one this seam was built for is a
+cockpit extension, and it used to only note that a task had arrived, with the work of
+describing it done later, from a stored entry which was repeated until it went through. Today
+that work runs inside the observer call. A failure there leaves nothing behind to repeat, so a
+swallowed failure is a report which never arrives and an ERROR line nobody reads. On an
+embedded Camunda 7 or on Camunda 8 the question does not come up: the adapter watches such a
+task from a listener which holds the transition, so a failure there becomes an incident
+somebody has to look at. This API offers no listener and no incident, so the disturbance has
+to come from the delivery itself.
+
+An observer which throws therefore fails the delivery. What happens next is the engine's
+business, and the API says nothing about it ([`GAPS.md`](./GAPS.md), entry 25), so it was
+measured rather than assumed. Against the API's own reference implementation for an embedded
+Camunda 7 (`process-engine-adapter-camunda-platform-c7-embedded-core` 2025.11.1 on Camunda
+7.24, measured 2026-09-17) a delivery which throws is logged, the task is dropped from the
+list of delivered ones, and the next pull hands it to the subscription again as a new
+delivery. The user task stays in the engine and nothing raises an incident. The repetition
+stops as soon as the observer works, so the failure is loud while it lasts and the
+application loses nothing over it. A termination which throws is not repeated there, and
+it disturbs all the same: an observer which loses a termination has a defect either way, and a
+rule with an exception for the quiet half would be the old promise again.
+
+Four smaller answers go with it:
+
+- The other observers are told before the failure leaves. Otherwise who hears about a task
+  would depend on the order the platform happened to resolve the beans in.
+- Several failures travel together. The first one is thrown and the others are attached to it
+  as suppressed exceptions, so none of them is lost.
+- A failure while describing the task for the observers disturbs as well. An observer which
+  gets nothing to see is in the same position as one which could do nothing.
+- There is no way back to the old behaviour, not per application and not per observer. A
+  promise which can be switched off is not one.
+
+The application does not pay for any of this. `PeaUserTaskHandler` runs the
+`@WorkflowTask` notification before it lets the failure out, and the core recognizes a
+repeated delivery by its task id, so the method is called once per task however often the
+engine delivers it.
+
+`PeaUserTaskObserverTest` (core), `UserTaskObserverIntegrationTest` (Spring Boot) and
+`PeaUserTaskObserverTest` (Quarkus) hold all of it.

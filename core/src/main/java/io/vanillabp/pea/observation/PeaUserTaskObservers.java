@@ -10,16 +10,17 @@ import org.slf4j.LoggerFactory;
 
 /**
  * The {@link PeaUserTaskObserver}s of one adapter id and the one place they are called from,
- * so that what an observer may cost the task it watches is decided once for both platforms.
+ * so that what an observer costs the task it watches is decided once for both platforms.
  * <p>
- * Two properties this class is here for. Nothing which happens here reaches the caller: an
- * observer which throws is caught, logged with its class and its task, and the next one is
- * called anyway, and so is a failure while DESCRIBING the task, which would otherwise land in
- * the handler's own catch and cost the application its notification. The user task is the
- * application's business and must not depend on who watches it.
+ * An observer which throws makes the delivery fail. Every other observer is told first, so
+ * who hears about a task does not depend on the order the list happens to be in, and then the
+ * first failure leaves this class, with the failures of the others attached as suppressed
+ * exceptions. A failure while DESCRIBING the task is the same case: an observer which gets
+ * nothing to see could do nothing either. See decision 12 in the repository's DECISIONS.md
+ * for why a swallowed failure was worse than a disturbed delivery.
  * <p>
- * And an application which registered no observer never builds an observation at all: the
- * callers hand over a {@link Supplier}, which stays unread while the list is empty.
+ * An application which registered no observer never builds an observation at all: the callers
+ * hand over a {@link Supplier}, which stays unread while the list is empty.
  * <p>
  * The order is the one the platform resolved - on Spring Boot the ordered bean stream, on
  * Quarkus the order ArC lists the beans in. Observers are told about the same task
@@ -82,31 +83,44 @@ public final class PeaUserTaskObservers {
   }
 
   /**
-   * @param taskId The delivered task, for the line said when nobody can be told
+   * @param workflowModuleId The workflow module the task belongs to, for the message of a
+   *          failure
+   * @param taskId The delivered task, for the message of a failure
    * @param observation What the engine delivered, built only if somebody watches
+   * @throws PeaUserTaskObserverFailure If an observer failed or the task could not be
+   *           described
    */
   public void delivered(
+      final String workflowModuleId,
       final String taskId,
       final Supplier<PeaUserTaskObservation> observation) {
 
-    notifyEach("delivery", taskId, observation, PeaUserTaskObserver::userTaskDelivered);
+    notifyEach(
+        "delivery", workflowModuleId, taskId, observation, PeaUserTaskObserver::userTaskDelivered);
 
   }
 
   /**
-   * @param taskId The terminated task, for the line said when nobody can be told
+   * @param workflowModuleId The workflow module the task belongs to, for the message of a
+   *          failure
+   * @param taskId The terminated task, for the message of a failure
    * @param observation What the engine withdrew, built only if somebody watches
+   * @throws PeaUserTaskObserverFailure If an observer failed or the task could not be
+   *           described
    */
   public void terminated(
+      final String workflowModuleId,
       final String taskId,
       final Supplier<PeaUserTaskObservation> observation) {
 
-    notifyEach("termination", taskId, observation, PeaUserTaskObserver::userTaskTerminated);
+    notifyEach(
+        "termination", workflowModuleId, taskId, observation, PeaUserTaskObserver::userTaskTerminated);
 
   }
 
   private void notifyEach(
       final String what,
+      final String workflowModuleId,
       final String taskId,
       final Supplier<PeaUserTaskObservation> supplier,
       final BiConsumer<PeaUserTaskObserver, PeaUserTaskObservation> call) {
@@ -118,35 +132,68 @@ public final class PeaUserTaskObservers {
     try {
       observation = supplier.get();
     } catch (final Exception e) {
-      // describing the task failed, so there is nothing to hand anybody - and letting this
-      // out would reach the handler's catch and cost the application the notification it
-      // would otherwise have got
-      log.error(
-          "Process-Engine-API adapter '{}': the {} of user task '{}' could not be described for "
-              + "its observers! Nobody was told about it and the task itself is unaffected.",
-          adapterId,
-          what,
-          taskId,
-          e);
-      return;
+      throw reported(
+          new PeaUserTaskObserverFailure(
+              ("Process-Engine-API adapter '%s': the %s of user task '%s' of workflow module '%s' "
+                  + "could not be described for its observers (%s)! None of them was told, so this "
+                  + "%s is reported as failed.")
+                  .formatted(adapterId, what, taskId, workflowModuleId, String.join(", ", names()), what), e));
     }
+    PeaUserTaskObserverFailure firstFailure = null;
     for (final var observer : observers) {
       try {
         call.accept(observer, observation);
       } catch (final Exception e) {
-        log.error(
-            "Process-Engine-API adapter '{}': the user-task observer '{}' failed on the {} of "
-                + "task '{}' (task definition '{}' of workflow module '{}')! The task itself is "
-                + "unaffected and the remaining observers are called.",
-            observation.adapterId(),
-            observer.getClass().getName(),
-            what,
-            observation.taskId(),
-            observation.taskDefinition(),
-            observation.workflowModuleId(),
-            e);
+        final var failure = failedOn(what, observer, observation, e);
+        if (firstFailure == null) {
+          firstFailure = failure;
+        } else {
+          firstFailure.addSuppressed(failure);
+        }
       }
     }
+    if (firstFailure != null) {
+      throw reported(firstFailure);
+    }
+
+  }
+
+  private PeaUserTaskObserverFailure failedOn(
+      final String what,
+      final PeaUserTaskObserver observer,
+      final PeaUserTaskObservation observation,
+      final Exception cause) {
+
+    return new PeaUserTaskObserverFailure(
+        ("Process-Engine-API adapter '%s': the user-task observer '%s' failed on the %s of task "
+            + "'%s' (task definition '%s' of workflow module '%s')! The other observers were told, "
+            + "and this %s is reported as failed rather than passed off as done.")
+            .formatted(
+                observation.adapterId(),
+                observer.getClass().getName(),
+                what,
+                observation.taskId(),
+                observation.taskDefinition(),
+                observation.workflowModuleId(),
+                what), cause);
+
+  }
+
+  /**
+   * Says the failure here as well as throwing it. What an engine behind this API makes of a
+   * handler which throws is up to that engine, and the API's own reference implementation for
+   * an embedded Camunda 7 logs the message of the failure without its stack trace and without
+   * the observers suppressed behind it. That is too little to find the observer which broke,
+   * so the whole failure is written where it was built.
+   *
+   * @param failure What the delivery or termination fails with
+   * @return The same failure, to be thrown by the caller
+   */
+  private static PeaUserTaskObserverFailure reported(
+      final PeaUserTaskObserverFailure failure) {
+
+    log.error(failure.getMessage(), failure);
+    return failure;
 
   }
 

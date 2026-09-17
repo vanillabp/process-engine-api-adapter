@@ -18,9 +18,11 @@ import io.vanillabp.pea.deployment.PeaDeployedProcesses;
 import io.vanillabp.pea.deployment.PeaDeployedProcessesRegistry;
 import io.vanillabp.pea.mock.InMemoryProcessEngine;
 import io.vanillabp.pea.observation.PeaUserTaskObserver;
+import io.vanillabp.pea.observation.PeaUserTaskObserverFailure;
 import io.vanillabp.pea.quarkus.observersample.ObserverAggregate;
 import io.vanillabp.pea.quarkus.observersample.ObserverWorkflowService;
 import io.vanillabp.pea.quarkus.observersample.RecordingUserTaskObserver;
+import io.vanillabp.pea.quarkus.observersample.ThrowingUserTaskObserver;
 import jakarta.inject.Inject;
 
 /**
@@ -28,7 +30,8 @@ import jakarta.inject.Inject;
  * by the extension (which declares the type unremovable, since nothing of the application
  * injects it), handed to the deployment services while they are produced, and told about
  * every delivery of every user-task subscription plus the terminations the engine reports.
- * A second observer which throws costs neither the task nor the recording one.
+ * A second observer which throws fails the delivery towards the engine, and the recording
+ * one hears about the task before that happens.
  * <p>
  * The full matrix - the order observers are called in, what an observation carries where the
  * delivery leaves something open - runs in the core's {@code PeaUserTaskObserverTest} and on
@@ -60,6 +63,7 @@ public class PeaUserTaskObserverTest {
     ObserverWorkflowService.AGGREGATES.clear();
     RecordingUserTaskObserver.DELIVERED.clear();
     RecordingUserTaskObserver.TERMINATED.clear();
+    ThrowingUserTaskObserver.broken = false;
     inMemoryProcessEngine.clearTaskRecordings();
 
     final var aggregate = new ObserverAggregate();
@@ -133,11 +137,43 @@ public class PeaUserTaskObserverTest {
     Assertions.assertEquals("q-5001", observation.workflowAggregateId());
     Assertions.assertEquals("q-obs-1", observation.taskId());
 
-    // the observer which throws is registered next to the recording one and changes
-    // nothing: the notification ran too
+    // the observer which throws is registered next to the recording one and is quiet
+    // here, so the notification ran like on any other delivery
     Assertions.assertEquals(
         "notified:q-obs-1",
         ObserverWorkflowService.AGGREGATES.get("q-5001").results);
+
+  }
+
+  @Test
+  public void throwingObserverFailsTheDelivery() {
+
+    ThrowingUserTaskObserver.broken = true;
+
+    final var failure = Assertions
+        .assertThrows(
+            PeaUserTaskObserverFailure.class,
+            () -> inMemoryProcessEngine.deliverTask(
+                "q-obs-4",
+                "quarkusObserved",
+                "QuarkusObserverProcess",
+                Map.of("id", "q-5001")));
+
+    Assertions.assertTrue(
+        failure.getMessage().contains(ThrowingUserTaskObserver.class.getName()),
+        "the message has to name the observer: "
+            + failure.getMessage());
+    Assertions.assertTrue(failure.getMessage().contains("q-obs-4"), "and the task");
+    Assertions.assertTrue(failure.getMessage().contains("pea-test-module"), "and the workflow module");
+
+    Assertions.assertEquals(
+        1,
+        RecordingUserTaskObserver.DELIVERED.size(),
+        "the other observer was told, whichever order ArC listed the two in");
+    Assertions.assertEquals(
+        "notified:q-obs-4",
+        ObserverWorkflowService.AGGREGATES.get("q-5001").results,
+        "the application keeps its notification: the failure goes out after it");
 
   }
 
