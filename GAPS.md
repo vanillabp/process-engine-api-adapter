@@ -446,9 +446,13 @@ deployment key and time, not the versions the deployment produced, and no API an
 versions of this process".
 
 **Consequence for the adapter:** the version tag from the task's meta map is reported where
-the engine supplies it, so `version = "release-2024"` works there; the adapter registers no
-version catalog, so a RANGE over tags (`>release-2024`, `v1.0..v2.0`) and any specification
-made of numbers matches nothing and is reported once with a guiding message. Applications
+the engine supplies it, so `version = "release-2024"` works there. The adapter has no version
+catalog and says so while it wires a process
+(`WorkflowTaskWiring#reportNoProcessVersionCatalog`, `ReportedProcessVersion.VERSION_TAG`), so
+the start names the methods whose version a delivery here can never meet: a RANGE over tags
+(`>release-2024`, `v1.0..v2.0`) and any specification made of numbers. One warning per BPMN
+process, and the application keeps booting, because the same method can be the right one on a
+BPMS of the prioritized list which does count versions. Applications
 which do not use the attribute are unaffected: a method without `version` keeps serving
 every version, and where the engine supplies no tag it is the only kind of method a
 delivery reaches at all - a task whose every method names versions fails the delivery
@@ -475,7 +479,9 @@ same gap.
 the whole check off for it - the core skips a BPMS which counts no versions rather than
 guessing. Outfading is equally without effect here, since there is no version to name. An
 application on this adapter learns about a dropped task definition the way it did before:
-when a workflow reaches it.
+when a workflow reaches it. What the adapter does say is that the catalog is missing at all
+(gap 19), which is a different statement: it is about the methods of the application, not
+about the versions of the engine.
 
 A catalog is asked more than the task definitions of a version, and this adapter answers
 none of those questions either: `startEventsOfVersion` for the start events a held version

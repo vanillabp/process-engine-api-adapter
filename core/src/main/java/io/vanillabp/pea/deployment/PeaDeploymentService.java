@@ -33,6 +33,7 @@ import io.vanillabp.integration.adapter.spi.AdapterDeploymentService;
 import io.vanillabp.integration.adapter.spi.AdapterPlatformVersion;
 import io.vanillabp.integration.adapter.spi.BpmnParseException;
 import io.vanillabp.integration.adapter.spi.NameClashAvoidanceSupport;
+import io.vanillabp.integration.adapter.spi.version.ReportedProcessVersion;
 import io.vanillabp.integration.adapter.spi.workflowend.WorkflowEndedInvoker;
 import io.vanillabp.integration.adapter.spi.workflowtask.BpmnTaskSpec;
 import io.vanillabp.integration.adapter.spi.workflowtask.WorkflowTaskInvoker;
@@ -702,6 +703,7 @@ public class PeaDeploymentService implements AdapterDeploymentService<PeaBpmnMod
 
     failOnBpmsInitiatedStartEvents(workflowModuleId, filename, bpmnProcessId, model);
     warnAboutUnservedWorkflowEndedHandlers(workflowModuleId, bpmnProcessId);
+    reportTheMissingVersionCatalog(workflowModuleId, bpmnProcessId);
 
     log.info(
         "Process-Engine-API adapter '{}': wired {} task(s) of BPMN process '{}' (file '{}', workflow module '{}')",
@@ -710,6 +712,39 @@ public class PeaDeploymentService implements AdapterDeploymentService<PeaBpmnMod
         bpmnProcessId,
         filename,
         workflowModuleId);
+
+  }
+
+  /**
+   * Tells the core that this BPMS keeps no catalog of the versions of a process, and
+   * what a delivery carries instead.
+   * <p>
+   * The Process-Engine-API has no version notion (see entries 19 and 20 of
+   * <code>GAPS.md</code>): no numeric version, no deployment order, no way to ask which
+   * versions of a process the engine still holds. What a delivered task may carry is the
+   * version tag of its process definition, in the <code>meta</code> map and only where the
+   * engine behind the API fills it, which is why the answer is
+   * {@link ReportedProcessVersion#VERSION_TAG}.
+   * <p>
+   * Registering no catalog would say the same thing to a machine and something else to a
+   * person. It is what the core sees before an adapter was asked, so it kept quiet about
+   * the methods of such a process and its messages about a version spoke of a BPMS which
+   * could not be reached. Saying it lets the core name, while the application boots, the
+   * methods whose version a delivery here can never meet.
+   *
+   * @param workflowModuleId The workflow module ID
+   * @param bpmnProcessId The BPMN process ID
+   */
+  private void reportTheMissingVersionCatalog(
+      final String workflowModuleId,
+      final String bpmnProcessId) {
+
+    workflowTaskWiring
+        .reportNoProcessVersionCatalog(
+            adapterId,
+            workflowModuleId,
+            bpmnProcessId,
+            ReportedProcessVersion.VERSION_TAG);
 
   }
 
