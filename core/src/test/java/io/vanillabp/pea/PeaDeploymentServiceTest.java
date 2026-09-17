@@ -35,6 +35,7 @@ import io.vanillabp.integration.adapter.spi.NameClashAvoidance;
 import io.vanillabp.integration.adapter.spi.NameClashAvoidanceSupport;
 import io.vanillabp.integration.adapter.spi.NameClashAvoidanceSupport.ModelIdentifier;
 import io.vanillabp.integration.adapter.spi.NameClashAvoidanceSupport.ScopedIdentifierKind;
+import io.vanillabp.integration.adapter.spi.version.ReportedProcessVersion;
 import io.vanillabp.integration.adapter.spi.workflowtask.BpmnTaskSpec;
 import io.vanillabp.integration.adapter.spi.workflowtask.TaskInvocationContext;
 import io.vanillabp.integration.adapter.spi.workflowtask.WorkflowTaskInvoker;
@@ -660,6 +661,41 @@ public class PeaDeploymentServiceTest {
 
   }
 
+
+  /**
+   * Records what the adapter says about the version catalog it does not keep.
+   */
+  static class VersionCatalogRecordingInvoker extends PermissiveInvoker {
+
+    final List<String> reported = new ArrayList<>();
+
+    @Override
+    public void reportNoProcessVersionCatalog(
+        final String adapterId,
+        final String workflowModuleId,
+        final String bpmnProcessId,
+        final ReportedProcessVersion reportedVersion) {
+
+      reported.add("%s|%s|%s|%s".formatted(adapterId, workflowModuleId, bpmnProcessId, reportedVersion));
+
+    }
+
+  }
+
+  @Test
+  @DisplayName("Wiring says that this engine keeps no version catalog and carries a version tag")
+  public void wiringSaysThereIsNoVersionCatalog() {
+
+    final var core = new VersionCatalogRecordingInvoker();
+    final var recording = new PeaDeploymentService("pea", engine, TestCollaborators.of(core), engine, engine);
+    final var context = contextWithOneTask(recording);
+
+    recording
+        .wireBpmn("mod", "one.bpmn", "TaskedProcess", context.getModels().get(0), context);
+
+    Assertions.assertEquals(List.of("pea|mod|TaskedProcess|VERSION_TAG"), core.reported);
+
+  }
 
   @Test
   @DisplayName("Two adapter ids of this type cannot address different engines - the boot fails guiding")

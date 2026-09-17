@@ -254,11 +254,18 @@ replaces the mock with a real Process-Engine-API implementation.
   holds starts on that event needs the model, which this adapter cannot read, so the check
   stays silent for that id.
 - **Versions of a process** ([`GAPS.md`](GAPS.md), entry 19): the API knows no version of a
-  deployed process definition, so the adapter registers no version catalog and reports only
+  deployed process definition, so the adapter keeps no version catalog and reports only
   the version TAG from the task meta (key `processDefinitionVersionTag`, named by the API's
   `CommonRestrictions`) where the engine supplies it. An exact tag therefore works, while a
-  range over tags and any specification made of numbers matches nothing and is reported once
-  (`PeaTaskHandlerTest#theVersionTagOfTheTaskMetaIsReported`). Registering no catalog leaves
+  range over tags and any specification made of numbers matches nothing
+  (`PeaTaskHandlerTest#theVersionTagOfTheTaskMetaIsReported`). The adapter SAYS that the
+  catalog is missing while it wires a process
+  (`WorkflowTaskWiring#reportNoProcessVersionCatalog` with
+  `ReportedProcessVersion.VERSION_TAG`,
+  `PeaDeploymentServiceTest#wiringSaysThereIsNoVersionCatalog`), which is more than
+  registering none: the core then names those methods while the application boots, in one
+  warning per BPMN process, instead of leaving the developer with messages about a BPMS
+  which could not be reached. Registering no catalog leaves
   every question about a version the engine still holds unanswered as well - its task
   definitions, its start events, the elements which can fork one of its workflows, and how
   many workflows still run on it - so each check reading one says nothing for this adapter
