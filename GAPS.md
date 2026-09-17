@@ -459,6 +459,24 @@ delivery reaches at all - a task whose every method names versions fails the del
 with a message saying so. A `processDefinitionVersion` in the task meta plus a "versions
 of this process" query would resolve it.
 
+The same start warning reaches the methods of an extension, and one case still slips through.
+The Business Cockpit picks the details provider of a user task or of a workflow by the version
+of the process, with the same attribute and the same matching. The extension tells the core
+that its calls carry the version of the process, so the core asks its methods the same question
+it asks a `@WorkflowTask` method, and a provider naming a number or a range is named at the
+start like any other method. A provider naming exactly a tag gets through that check, because a
+delivery here can carry a tag. The delivery then finds nothing, whenever the engine fills no
+tag, and that is the usual case.
+
+What keeps this quiet is the difference to a `@WorkflowTask` method. A task whose every method
+names versions fails the delivery and says why. For a details provider no matching method is an
+ALLOWED answer: the cockpit sends the details it prefilled, which is what it does for every
+workflow module bringing no provider at all. So a provider chosen by version never runs here,
+and nothing is logged about it. The application loses the enrichment it wrote, and the only
+sign is a case showing less in the cockpit than the developer expected. The two additions named
+above resolve this one too: with a version per task and a query for the versions of a process,
+such a provider is picked here like on any other BPMS.
+
 ## 20. No way to check the older versions the engine still holds
 
 **Needed by VanillaBP:** a BPMS keeps every version of a process it was ever given, and
