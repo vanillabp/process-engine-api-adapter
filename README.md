@@ -510,9 +510,22 @@ and none of the keys a delivered task carries: `TaskInformation` itself defines 
 `PeaTaskMeta` spells out the set the API's own reference adapter for an embedded Camunda 7
 fills - the element id, the process instance, the version tag, the task name, the assignee, the
 candidate users and groups, the due and the follow-up date - plus `bpmnProcessId`, which is this
-adapter's own convention ([`GAPS.md`](GAPS.md), entry 6). The adapter reads two of them itself
+adapter's own convention ([`GAPS.md`](GAPS.md), entry 6). The adapter reads four of them itself
 and hands the rest on untouched, and it reads them from there rather than from string literals
 of its handlers, so that whoever watches its user tasks reads the same names the adapter writes.
+
+Three of the four travel into the delivery record VanillaBP writes: the version tag, the element
+id (`activityId`) and the workflow id (`processInstanceId`). Neither of the last two steers
+anything. They are what somebody addresses a task by outside VanillaBP, an operator in the
+engine's own tooling or an extension linking a task to a place in the model. Both handlers answer
+them, the service-task one and the user-task one, and both answer them the same way.
+
+Where an engine fills neither key the record carries neither, and that is the normal case rather
+than a defect: the API defines no vocabulary for what a delivered task carries, so this adapter
+can report what an engine filled and nothing else. The adapter SPI has a default of `null` for
+exactly this, meaning "this adapter names none".
+`TaskProcessingIntegrationTest#theRecordNamesWhatTheEngineNamed` and
+`#anEngineWhichNamesNeitherLeavesBothEmpty` hold both halves.
 
 What the keys MEAN stays the Process-Engine-API's business. A key an engine leaves out is never
 an error: it is one detail less about a task worth reporting anyway, which is why the three
