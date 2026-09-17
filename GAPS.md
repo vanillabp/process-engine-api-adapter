@@ -671,3 +671,40 @@ the other. What stays invisible is every identifier somebody else put into the e
 together with gap 15: an engine which isolates nothing and cannot be asked what it holds leaves
 the uniqueness of identifiers to the application, across every module deployed to it. A
 repository API (gap 12) would open the same path the Camunda adapters take.
+
+## 25. The API does not say what a failing task handler means
+
+**Needed by VanillaBP:** a delivery which cannot be finished has to be repeatable. Since
+decision 12 in the repository's DECISIONS.md an observer which fails lets the user-task
+delivery fail, and that only works if the engine behind this API does something with a failed
+delivery. Offering it again later is the recovery. Taking the task away from the application,
+or pushing the workflow on as if nothing had happened, would be worse than the swallowed
+failure this replaced.
+
+**Offered by the Process-Engine-API:** nothing in writing. `TaskHandler` is a `BiConsumer`
+whose documentation says what it receives and nothing about what an exception out of it
+means, `TaskTerminationHandler` is the same, and `SubscribeForTaskCmd` has no place to say
+what a subscriber wants to happen. There is no way to answer a delivery either: no command
+reports one as failed, and nothing counts attempts. So each engine adapter decides for
+itself, and a subscriber cannot read anywhere what it will get.
+
+**Consequence for the adapter:** the adapter measures instead of assuming, and it relies on
+as little as possible. Measured on 2026-09-17 against the API's own reference implementation
+for an embedded Camunda 7 (`process-engine-adapter-camunda-platform-c7-embedded-core`
+2025.11.1, Camunda 7.24 on H2): a delivery whose handler throws is logged as
+`PROCESS-ENGINE-C7-EMBEDDED-038`, the task is deactivated for its subscription, and the next
+pull cycle hands it over again as a new delivery, over and over until the handler returns
+normally. The task itself is untouched in the engine and no incident appears. A termination whose handler throws is reported once, the failure travels
+out of the pull cycle, and the same termination is not offered again.
+
+What the adapter takes from that: it logs the failure where it builds it, so an engine which
+prints the message alone still leaves the stack trace and the other observers behind. And the
+javadoc of `PeaUserTaskObserver` asks an observer to survive being called again, since a
+repeated delivery is what a working engine produces here. An engine which drops a failed
+delivery silently costs that observer its notification, and the log line is what is left.
+
+**Ready to be sent to bpm-crafters:** yes. The ask is one paragraph on `TaskHandler` and
+`TaskTerminationHandler` saying what an exception out of them means for the task, plus the
+same paragraph in the guide for engine adapter authors, so that a subscriber can write code
+against it. A command to answer a delivery as failed, with the engine deciding whether to
+repeat it, would be more than we need.

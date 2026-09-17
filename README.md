@@ -409,15 +409,34 @@ adapter passes it on uninterpreted: the reference adapter for an embedded Camund
 `complete` where a task was finished through the completion API and `delete` for everything
 else it notices, so a task somebody finished in a task list looks like a cancelled one there.
 
-Nothing an observer does reaches the engine. It observes: it cannot claim, complete, cancel or
+An observer acts on neither the task nor the engine. It cannot claim, complete, cancel or
 change a task, and it cannot stop a delivery from reaching the application. Completing a user
 task goes through `ProcessService#completeUserTask` like everywhere else.
 
-One which throws is logged with its class and its task, and then the delivery reaches the
-application and the remaining observers are called anyway. So does a failure while describing
-the task for them, which would otherwise cost the application the notification it was about to
-get. An application which registered no observer builds no observation at all and behaves
-exactly as it did before the seam existed.
+The one thing of an observer the engine gets to see is a failure. One which throws makes the
+delivery fail. Every other observer is told first, so who hears about a task does not depend
+on the order the list is in, and then the first failure leaves the handler with the failures
+of the others attached to it as suppressed exceptions. A failure while describing the task
+for the observers does the same, because an observer which sees nothing could do nothing
+either. The message names the observer, the task and the workflow module, and it is written
+to the log as well as thrown, since an engine may print the message of a failed delivery
+without its stack trace.
+
+The application does not pay for that. Its `@WorkflowTask` notification runs before the
+failure leaves the handler, and the core recognizes a repeated delivery by its task id, so
+the method is called once per task however often the engine delivers it.
+
+What an engine does with a failed delivery is that engine's business, and the API says
+nothing about it ([`GAPS.md`](GAPS.md), entry 25). The API's reference implementation for an
+embedded Camunda 7 logs the failure and offers the task to the subscription again on its next
+pull, as a new delivery, until it goes through. The user task stays where it is and no
+incident is raised. A termination is not offered again there, so an observer which fails on
+one does not hear about that task a second time. Write an observer so that it survives being
+called again, and read decision 12 in [`DECISIONS.md`](DECISIONS.md) for why a swallowed
+failure was the worse of the two.
+
+An application which registered no observer builds no observation at all and behaves exactly
+as it did before the seam existed.
 
 What an observation leaves open is said rather than guessed. `workflowAggregateId` is `null`
 where the BPMN process has no workflow aggregate in this application, where the subscription

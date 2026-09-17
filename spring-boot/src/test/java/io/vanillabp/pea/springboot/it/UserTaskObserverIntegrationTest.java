@@ -2,6 +2,7 @@ package io.vanillabp.pea.springboot.it;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.ArrayList;
@@ -38,6 +39,7 @@ import io.vanillabp.pea.deployment.PeaDeployedProcessesRegistry;
 import io.vanillabp.pea.mock.InMemoryProcessEngine;
 import io.vanillabp.pea.observation.PeaUserTaskObservation;
 import io.vanillabp.pea.observation.PeaUserTaskObserver;
+import io.vanillabp.pea.observation.PeaUserTaskObserverFailure;
 import io.vanillabp.pea.springboot.TestPersistenceConfiguration;
 import io.vanillabp.spi.process.ProcessService;
 import io.vanillabp.spi.service.BpmnProcess;
@@ -50,7 +52,8 @@ import io.vanillabp.spi.service.WorkflowTask;
  * of the application are collected at startup and every delivery of every user-task
  * subscription reaches them - the ones a {@code @WorkflowTask} method claims and the ones it
  * does not - as does the termination the engine reports, with the reason it gave. An observer
- * which throws costs neither the task nor the observers behind it.
+ * which throws is told about first and reaches the engine as a failed delivery, and the
+ * observers behind it are told all the same.
  */
 @SpringBootTest(
     classes = UserTaskObserverIntegrationTest.UserTaskObserverApplication.class,
@@ -133,16 +136,20 @@ public class UserTaskObserverIntegrationTest {
 
   /**
    * Registered FIRST, so what the two behind it see proves that a broken observer stops
-   * nothing.
+   * nobody from being told. It breaks only where a test says so: every other test of this
+   * class is about a delivery which works, and a delivery this one broke would fail there
+   * too.
    */
   @Order(1)
   public static class ThrowingObserver implements PeaUserTaskObserver {
+
+    static boolean broken = false;
 
     @Override
     public void userTaskDelivered(
         final PeaUserTaskObservation observation) {
 
-      throw new IllegalStateException("boom-observer");
+      boom();
 
     }
 
@@ -150,7 +157,15 @@ public class UserTaskObserverIntegrationTest {
     public void userTaskTerminated(
         final PeaUserTaskObservation observation) {
 
-      throw new IllegalStateException("boom-observer");
+      boom();
+
+    }
+
+    private void boom() {
+
+      if (broken) {
+        throw new IllegalStateException("boom-observer");
+      }
 
     }
 
@@ -322,6 +337,7 @@ public class UserTaskObserverIntegrationTest {
     UserTaskObserverConfiguration.AGGREGATES.clear();
     UserTaskObserverConfiguration.FIRST.clear();
     UserTaskObserverConfiguration.SECOND.clear();
+    ThrowingObserver.broken = false;
     engine.clearTaskRecordings();
     final var aggregate = new ObserverAggregate();
     aggregate.id = "5001";
@@ -399,11 +415,54 @@ public class UserTaskObserverIntegrationTest {
     assertEquals("obs-1", observation.taskId());
     assertEquals(Map.of("id", "5001"), observation.payload());
 
-    // the throwing observer runs first and changes nothing: the notification ran too
     assertEquals(
         "notified:obs-1",
         UserTaskObserverConfiguration.AGGREGATES.get("5001").results,
-        "the @WorkflowTask notification has to have run despite the failing observer");
+        "the @WorkflowTask notification runs on a delivery nobody broke");
+
+  }
+
+  @Test
+  @DisplayName("An observer which throws lets the delivery fail, and names itself while doing it")
+  public void aThrowingObserverFailsTheDelivery() {
+
+    ThrowingObserver.broken = true;
+
+    // the mock engine hands a failing delivery back to whoever delivered, which is what a
+    // real engine behind this API sees as well
+    final var failure = assertThrows(
+        PeaUserTaskObserverFailure.class,
+        () -> engine.deliverTask("obs-5", "peaObserved", PROCESS, Map.of("id", "5001")));
+
+    assertTrue(
+        failure.getMessage().contains(ThrowingObserver.class.getName()),
+        "the message has to name the observer: "
+            + failure.getMessage());
+    assertTrue(failure.getMessage().contains("obs-5"), "the message has to name the task");
+    assertTrue(failure.getMessage().contains(MODULE), "the message has to name the workflow module");
+
+    assertEquals(1, UserTaskObserverConfiguration.FIRST.delivered.size(), "told all the same");
+    assertEquals(1, UserTaskObserverConfiguration.SECOND.delivered.size(), "told all the same");
+    assertEquals(
+        "notified:obs-5",
+        UserTaskObserverConfiguration.AGGREGATES.get("5001").results,
+        "the application keeps its notification: the failure goes out after it");
+
+  }
+
+  @Test
+  @DisplayName("An observer which throws lets the termination fail as well")
+  public void aThrowingObserverFailsTheTermination() {
+
+    engine.deliverTask("obs-6", "peaObserved", PROCESS, Map.of("id", "5001"));
+    ThrowingObserver.broken = true;
+
+    assertThrows(
+        PeaUserTaskObserverFailure.class,
+        () -> engine.terminateTask("obs-6", "peaObserved", PROCESS, TaskInformation.DELETE));
+
+    assertEquals(1, UserTaskObserverConfiguration.FIRST.terminated.size(), "told all the same");
+    assertEquals(1, UserTaskObserverConfiguration.SECOND.terminated.size(), "told all the same");
 
   }
 

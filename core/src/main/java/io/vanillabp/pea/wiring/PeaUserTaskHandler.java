@@ -12,6 +12,7 @@ import io.vanillabp.integration.adapter.spi.workflowtask.WorkflowTaskInvoker;
 import io.vanillabp.integration.adapter.spi.workflowtask.WorkflowTaskOutcome;
 import io.vanillabp.pea.observation.PeaUserTaskObservation;
 import io.vanillabp.pea.observation.PeaUserTaskObserver;
+import io.vanillabp.pea.observation.PeaUserTaskObserverFailure;
 import io.vanillabp.pea.observation.PeaUserTaskObservers;
 import io.vanillabp.spi.service.TaskEvent;
 import lombok.Builder;
@@ -123,6 +124,11 @@ public class PeaUserTaskHandler implements TaskHandler {
 
     final var taskId = taskInformation.getTaskId();
 
+    // an observer which failed makes this delivery fail, but only once the application has
+    // had its notification: the engine repeats a failed delivery, and a repetition is what
+    // the observer needs, while the application's @WorkflowTask method is called for a task
+    // exactly once because the core recognizes the repeated delivery by its task id
+    PeaUserTaskObserverFailure observerFailure = null;
     try {
       final var bpmnProcessId = bpmnProcessIdOrNull(taskInformation);
       // what the payload holds the workflow aggregate's id under, asked once and answered
@@ -142,8 +148,13 @@ public class PeaUserTaskHandler implements TaskHandler {
       // failures below drop a delivery which cannot be routed and one no @WorkflowTask
       // method claims, and a task list shows a user task in both cases
       final var observedAggregateIdName = aggregateIdName;
-      observers.delivered(
-          taskId, () -> observationOf(bpmnProcessId, observedAggregateIdName, taskInformation, payload));
+      try {
+        observers.delivered(
+            workflowModuleId, taskId,
+            () -> observationOf(bpmnProcessId, observedAggregateIdName, taskInformation, payload));
+      } catch (final PeaUserTaskObserverFailure failure) {
+        observerFailure = failure;
+      }
       if (bpmnProcessId == null) {
         throw ambiguousRouting(taskInformation);
       }
@@ -194,6 +205,9 @@ public class PeaUserTaskHandler implements TaskHandler {
           externalFormReference,
           e);
     }
+    if (observerFailure != null) {
+      throw observerFailure;
+    }
 
   }
 
@@ -207,6 +221,7 @@ public class PeaUserTaskHandler implements TaskHandler {
    * the termination to the observers, reason included.
    *
    * @param taskInformation What the engine says about the terminated task
+   * @throws PeaUserTaskObserverFailure If an observer failed on this termination
    */
   public void terminated(
       final TaskInformation taskInformation) {
@@ -221,11 +236,15 @@ public class PeaUserTaskHandler implements TaskHandler {
             .getOrDefault(TaskInformation.REASON, "no reason given"));
     try {
       final var bpmnProcessId = bpmnProcessIdOrNull(taskInformation);
-      observers.terminated(taskId, () -> new PeaUserTaskObservation(
+      observers.terminated(workflowModuleId, taskId, () -> new PeaUserTaskObservation(
           adapterId, workflowModuleId, bpmnProcessId, plainTaskDefinition(bpmnProcessId),
           // a termination carries no payload, so the aggregate-id variable is not among
           // the things the engine hands over
           null, taskInformation, Map.of()));
+    } catch (final PeaUserTaskObserverFailure failure) {
+      // the observers are the only reason this callback exists, so a failure of one of them
+      // is the whole callback failing - and it goes out for the same reason as on a delivery
+      throw failure;
     } catch (final Exception e) {
       // like a failing notification: nobody is served by a termination callback which
       // throws back into the engine's delivery thread

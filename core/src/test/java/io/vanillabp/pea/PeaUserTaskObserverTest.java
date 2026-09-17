@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
@@ -19,13 +20,14 @@ import dev.bpmcrafters.processengineapi.task.TaskInformation;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 import io.vanillabp.pea.observation.PeaUserTaskObservation;
 import io.vanillabp.pea.observation.PeaUserTaskObserver;
+import io.vanillabp.pea.observation.PeaUserTaskObserverFailure;
 import io.vanillabp.pea.observation.PeaUserTaskObservers;
 import io.vanillabp.pea.wiring.PeaUserTaskHandler;
 
 /**
  * The observer seam of the user-task subscription: who is told about a delivery, in which
  * order, what the observation carries where the delivery leaves something open, and what an
- * observer which throws costs the task and the other observers.
+ * observer which throws costs the delivery and the other observers.
  * <p>
  * The end-to-end proof that a bean of the application arrives here runs on both platforms
  * ({@code UserTaskObserverIntegrationTest} on Spring Boot,
@@ -86,11 +88,26 @@ public class PeaUserTaskObserverTest {
    */
   static class ThrowingObserver implements PeaUserTaskObserver {
 
+    private final String boom;
+
+    ThrowingObserver() {
+
+      this("boom-observer");
+
+    }
+
+    ThrowingObserver(
+        final String boom) {
+
+      this.boom = boom;
+
+    }
+
     @Override
     public void userTaskDelivered(
         final PeaUserTaskObservation observation) {
 
-      throw new IllegalStateException("boom-observer");
+      throw new IllegalStateException(boom);
 
     }
 
@@ -98,7 +115,7 @@ public class PeaUserTaskObserverTest {
     public void userTaskTerminated(
         final PeaUserTaskObservation observation) {
 
-      throw new IllegalStateException("boom-observer");
+      throw new IllegalStateException(boom);
 
     }
 
@@ -192,16 +209,52 @@ public class PeaUserTaskObserverTest {
   }
 
   @Test
-  @DisplayName("A throwing observer changes nothing for the task and nothing for the next observer")
-  public void aThrowingObserverIsHarmless() {
+  @DisplayName("A throwing observer fails the delivery, after everybody else was told")
+  public void aThrowingObserverFailsTheDelivery() {
 
     final var after = new RecordingObserver("after", callLog);
+    final var handler = handler(List.of("OnlyProcess"), new ThrowingObserver(), after);
 
-    handler(List.of("OnlyProcess"), new ThrowingObserver(), after)
-        .accept(new TaskInformation("utask-3", Map.of()), Map.of("id", "4713"));
+    final var failure = assertThrows(
+        PeaUserTaskObserverFailure.class,
+        () -> handler.accept(new TaskInformation("utask-3", Map.of()), Map.of("id", "4713")));
 
     assertEquals(1, after.delivered.size(), "the next observer is called anyway");
     assertEquals("OnlyProcess", invoker.invokedBpmnProcessId, "the notification ran anyway");
+    assertTrue(
+        failure.getMessage().contains(ThrowingObserver.class.getName()),
+        "the message has to name the observer: "
+            + failure.getMessage());
+    assertTrue(failure.getMessage().contains("utask-3"), "the message has to name the task");
+    assertTrue(
+        failure.getMessage().contains("test-module"),
+        "the message has to name the workflow module");
+    assertEquals("boom-observer", failure.getCause().getMessage(), "what the observer threw");
+
+  }
+
+  @Test
+  @DisplayName("Several failures travel as one, the first reported and the rest suppressed")
+  public void severalFailuresTravelAsOne() {
+
+    final var between = new RecordingObserver("between", callLog);
+    final var handler = handler(
+        List.of("OnlyProcess"),
+        new ThrowingObserver("boom-first"),
+        between,
+        new ThrowingObserver("boom-second"));
+
+    final var failure = assertThrows(
+        PeaUserTaskObserverFailure.class,
+        () -> handler.accept(new TaskInformation("utask-13", Map.of()), Map.of("id", "4723")));
+
+    assertEquals("boom-first", failure.getCause().getMessage(), "the first failure is reported");
+    assertEquals(1, failure.getSuppressed().length, "the second one comes along");
+    assertEquals(
+        "boom-second",
+        failure.getSuppressed()[0].getCause().getMessage(),
+        "attached as suppressed, so neither is lost");
+    assertEquals(1, between.delivered.size(), "the observer between the two was told");
 
   }
 
@@ -240,10 +293,16 @@ public class PeaUserTaskObserverTest {
     final var first = new RecordingObserver("first", callLog);
     final var second = new RecordingObserver("second", callLog);
 
-    handler(List.of("OnlyProcess"), first, new ThrowingObserver(), second)
-        .terminated(
-            new TaskInformation("utask-6", Map.of("bpmnProcessId", "OnlyProcess"))
-                .withReason(TaskInformation.DELETE));
+    final var handler = handler(List.of("OnlyProcess"), first, new ThrowingObserver(), second);
+
+    // a broken observer between the two makes the termination fail as well, and both of
+    // them heard about the task before it did
+    assertThrows(
+        PeaUserTaskObserverFailure.class,
+        () -> handler
+            .terminated(
+                new TaskInformation("utask-6", Map.of("bpmnProcessId", "OnlyProcess"))
+                    .withReason(TaskInformation.DELETE)));
 
     assertEquals(List.of("first:terminated:utask-6", "second:terminated:utask-6"), callLog);
 
@@ -281,9 +340,11 @@ public class PeaUserTaskObserverTest {
     assertTrue(nobody.isEmpty());
     assertTrue(nobody.names().isEmpty());
     nobody.delivered(
-        "utask-nobody", () -> fail("an application without an observer pays nothing for the seam"));
+        "test-module", "utask-nobody",
+        () -> fail("an application without an observer pays nothing for the seam"));
     nobody.terminated(
-        "utask-nobody", () -> fail("an application without an observer pays nothing for the seam"));
+        "test-module", "utask-nobody",
+        () -> fail("an application without an observer pays nothing for the seam"));
 
     // and a handler built without any observer at all behaves like one built with an empty
     // list - the platform modules hand over what they found, which may be nothing
@@ -321,18 +382,26 @@ public class PeaUserTaskObserverTest {
   }
 
   @Test
-  @DisplayName("A failure while describing the task costs the application nothing")
-  public void aFailingDescriptionCostsTheApplicationNothing() {
+  @DisplayName("A failure while describing the task disturbs like an observer which throws")
+  public void aFailingDescriptionDisturbsTheSameWay() {
 
     final var observers = PeaUserTaskObservers.of("pea", List.of(new RecordingObserver("only", callLog)));
-    observers.delivered("utask-11", () -> {
-      throw new IllegalStateException("boom-description");
-    });
+
+    final var failure = assertThrows(
+        PeaUserTaskObserverFailure.class,
+        () -> observers.delivered("test-module", "utask-11", () -> {
+          throw new IllegalStateException("boom-description");
+        }));
 
     assertTrue(callLog.isEmpty(), "there was nothing to hand anybody");
+    assertTrue(failure.getMessage().contains("utask-11"), "the message has to name the task");
+    assertTrue(
+        failure.getMessage().contains("test-module"),
+        "the message has to name the workflow module");
+    assertEquals("boom-description", failure.getCause().getMessage());
 
-    // and the same failure inside a delivery leaves the notification untouched: the
-    // observation is built lazily, so a broken description is caught where it happens
+    // the same failure inside a delivery: the observation is built lazily, so the handler
+    // meets it where the observers are called and reports it like any other observer failure
     final var handler = PeaUserTaskHandler
         .builder()
         .adapterId("pea")
@@ -356,7 +425,9 @@ public class PeaUserTaskObserverTest {
 
         })))
         .build();
-    handler.accept(new TaskInformation("utask-12", Map.of()), Map.of("id", "4721"));
+    assertThrows(
+        PeaUserTaskObserverFailure.class,
+        () -> handler.accept(new TaskInformation("utask-12", Map.of()), Map.of("id", "4721")));
 
     assertEquals("OnlyProcess", invoker.invokedBpmnProcessId, "the notification ran anyway");
 
