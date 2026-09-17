@@ -37,6 +37,8 @@ import io.vanillabp.pea.mock.InMemoryProcessEngine;
 import io.vanillabp.pea.springboot.TestPersistenceConfiguration;
 import io.vanillabp.spi.process.ProcessService;
 import io.vanillabp.spi.service.BpmnProcess;
+import io.vanillabp.spi.service.NoSyncWithBPMS;
+import io.vanillabp.spi.service.SyncWithBPMS;
 import io.vanillabp.spi.service.TaskParam;
 import io.vanillabp.spi.service.WorkflowService;
 import io.vanillabp.spi.service.WorkflowTask;
@@ -88,23 +90,36 @@ public class TaskParameterTypesIntegrationTest {
   public static class TaskParameterTypesApplication {
   }
 
+  /**
+   * A task of <code>pea-param-test.bpmn</code> reads each value below, so the aggregate
+   * names them one by one. These tests are about which value reaches a handler, and the
+   * list of what travels is part of that. A configuration line allowing the whole
+   * aggregate would say less. The ID is not on the list because it travels anyway: it is
+   * how VanillaBP finds the workflow again.
+   */
+  @NoSyncWithBPMS
   public static class PeaParamAggregate {
 
     @Getter
     String id;
 
+    @SyncWithBPMS
     @Getter
     BigDecimal total;
 
+    @SyncWithBPMS
     @Getter
     BigInteger huge;
 
+    @SyncWithBPMS
     @Getter
     Float rate;
 
+    @SyncWithBPMS
     @Getter
     Long count;
 
+    @SyncWithBPMS
     @Getter
     PeaParamOrder order;
 
