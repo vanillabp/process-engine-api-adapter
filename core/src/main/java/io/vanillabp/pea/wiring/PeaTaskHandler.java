@@ -168,9 +168,7 @@ public class PeaTaskHandler implements TaskHandler {
           bpmnProcessId,
           new PeaTaskInvocationContext(
               adapterId, plainTaskDefinition(bpmnProcessId), String
-                  .valueOf(aggregateId), taskId, payload, taskInformation
-                      .getMeta()
-                      .get(PeaTaskMeta.PROCESS_VERSION_TAG), fetchVariables));
+                  .valueOf(aggregateId), taskId, payload, taskInformation, fetchVariables));
     } catch (final Exception e) {
       // the core rolled the local transaction back - fail the task so the
       // underlying engine applies its retry semantics
@@ -347,10 +345,11 @@ public class PeaTaskHandler implements TaskHandler {
     private final Map<String, ?> payload;
 
     /**
-     * The version tag of the deployed process definition or <code>null</code> - the
-     * Process-Engine-API knows no version number (GAPS.md).
+     * What the engine said about this task. Everything the context answers out of the
+     * engine's own words is read from here, which keeps the spelling of those words in
+     * {@link PeaTaskMeta} and nowhere else.
      */
-    private final String processVersion;
+    private final TaskInformation taskInformation;
 
     /**
      * The adapter delivering this task.
@@ -369,7 +368,7 @@ public class PeaTaskHandler implements TaskHandler {
         final String workflowAggregateId,
         final String taskId,
         final Map<String, ?> payload,
-        final String processVersion,
+        final TaskInformation taskInformation,
         final PeaFetchVariables.Selection fetchVariables) {
 
       this.adapterId = adapterId;
@@ -377,7 +376,7 @@ public class PeaTaskHandler implements TaskHandler {
       this.workflowAggregateId = workflowAggregateId;
       this.taskId = taskId;
       this.payload = payload;
-      this.processVersion = processVersion;
+      this.taskInformation = taskInformation;
       this.fetchVariables = fetchVariables;
 
     }
@@ -392,7 +391,30 @@ public class PeaTaskHandler implements TaskHandler {
     @Override
     public String getProcessVersion() {
 
-      return processVersion;
+      // the version tag of the deployed process definition, or null - the
+      // Process-Engine-API knows no version number (GAPS.md)
+      return PeaTaskMeta.text(taskInformation, PeaTaskMeta.PROCESS_VERSION_TAG);
+
+    }
+
+    @Override
+    public String getBpmnElementId() {
+
+      // the element id the engine named. An engine which names none leaves the delivery
+      // record without an element, which is what the default of the SPI means: the
+      // Process-Engine-API defines no vocabulary for the keys a delivered task carries,
+      // so this adapter can report what an engine filled and nothing else
+      return PeaTaskMeta.text(taskInformation, PeaTaskMeta.BPMN_TASK_ID);
+
+    }
+
+    @Override
+    public String getWorkflowId() {
+
+      // the engine's own id of the running instance. An engine which names none leaves
+      // the delivery record without a workflow id, and that is not a defect either: the
+      // API defines no vocabulary for what a delivered task carries
+      return PeaTaskMeta.text(taskInformation, PeaTaskMeta.WORKFLOW_ID);
 
     }
 

@@ -22,7 +22,7 @@ import lombok.extern.slf4j.Slf4j;
  * can expect anything. A key an engine leaves out is never an error - it means one detail
  * less about a task worth reporting anyway.
  * <p>
- * This adapter reads two of them itself and hands the rest on untouched. They are spelled out
+ * This adapter reads four of them itself and hands the rest on untouched. They are spelled out
  * here rather than in the handlers so that whoever watches this adapter's user tasks
  * ({@link io.vanillabp.pea.observation.PeaUserTaskObserver}) reads the same names the adapter
  * writes: one value, one spelling, and the spelling which matters is the engine's.
@@ -47,10 +47,18 @@ public final class PeaTaskMeta {
    */
   public static final String BPMN_PROCESS_ID = "bpmnProcessId";
 
-  /** The BPMN element id of the task, what a modeller wrote as the element's id. */
+  /**
+   * The BPMN element id of the task, what a modeller wrote as the element's id. Both task
+   * handlers report it to the core, which writes it into the delivery record; an engine
+   * filling no such key leaves the record without an element.
+   */
   public static final String BPMN_TASK_ID = CommonRestrictions.ACTIVITY_ID;
 
-  /** The engine's own id of the workflow the task belongs to. */
+  /**
+   * The engine's own id of the workflow the task belongs to. It travels into the delivery
+   * record like {@link #BPMN_TASK_ID} and is empty there for the same reason where an engine
+   * names none.
+   */
   public static final String WORKFLOW_ID = CommonRestrictions.PROCESS_INSTANCE_ID;
 
   /**
