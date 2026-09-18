@@ -655,7 +655,7 @@ public class PeaDeploymentServiceTest {
       throw new UnsupportedOperationException();
     }
 
-    // The migration fallback, deprecated for removal in 2.1 and none of this
+    // The migration fallback, deprecated for removal and none of this
     // BPMS's business: a test double implements it as long as the interface declares
     // it, and the mandatory 'removal' lint needs the suppression
     @SuppressWarnings("removal")
