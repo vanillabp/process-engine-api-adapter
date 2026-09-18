@@ -711,6 +711,8 @@ naming both walks two lifecycles per module and reports every compiler warning t
 
 Tests are pure JVM smoke tests (no Docker, no network).
 
+What a pull request needs beyond a green build is in [`CONTRIBUTING.md`](./CONTRIBUTING.md).
+
 ## Test coverage
 
 `mvn install` builds one aggregated JaCoCo report per platform:
