@@ -738,11 +738,11 @@ and `TestClassConventionsTest` next to it keeps every test class on the output s
 printed lines below depend on.
 
 The gate reports what it measured on every run, green ones included, which is the one place in
-VanillaBP where a passing test prints:
+VanillaBP where a passing test prints. The angle brackets stand for the numbers of the run:
 
 ```
-coverage gate | Spring Boot: 90.71 % instructions (484 of 5209 missed) | at the rule of 90 %
-coverage gate | Quarkus: 90.99 % instructions (465 of 5163 missed) | at the rule of 90 %
+coverage gate | Spring Boot: <percent> % instructions (<missed> of <total> missed) | at the rule of 90 %
+coverage gate | Quarkus: <percent> % instructions (<missed> of <total> missed) | <gap> points below the rule of 90 %, build breaks below 85 %
 ```
 
 Both platforms are held to the same line. Coverage is measured per platform because the adapter core
