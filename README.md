@@ -303,8 +303,12 @@ messages a delivery writes when it is asked for something outside it.
 `PeaDeploymentService#fetchVariablesOf` derives the set once per subscription while
 `startWorkflowProcessing` opens them, from a `ServedTask` per BPMN task the subscription serves,
 and it asks the core twice: `resolveWorkflowAggregateIdName` per BPMN process, and
-`taskParameterNames` per task definition. Both service-task and user-task subscriptions go
-through it - a notification carries a payload like every other delivery.
+`taskParameterNames` per BPMN task. The second question is asked with BOTH keys a method can be
+wired by, the task definition and the BPMN element id, because a method carrying
+`@WorkflowTask(id = ...)` never mentions the name the subscription was opened for. Asked with the
+task definition alone, such a method declared a `@TaskParam` nobody fetched, and an unfetched
+parameter fails the delivery here rather than arriving as `null`. Both service-task and user-task
+subscriptions go through it - a notification carries a payload like every other delivery.
 
 The core is the only possible source here. This adapter never sees a BPMN model of a deployed
 process ([`GAPS.md`](GAPS.md), entry 1), so unlike Camunda 8 it could not even have guessed the
@@ -328,7 +332,8 @@ The mock engine narrows a delivered payload to what the subscription asked for
 (`InMemoryProcessEngine.ActiveSubscription#narrow`). Without that the derivation would be
 asserted and never exercised. `PeaFetchVariablesTest` holds all of it, from
 `theSubscriptionNamesWhatItReads` and `theUnionCoversEverythingTheSubscriptionServes`
-through `theEscapeHatchAsksForEverything` to `anUnknownAggregateFallsBackToEverything`.
+through `aParameterOfAnIdWiredMethodIsAskedFor` and `theEscapeHatchAsksForEverything` to
+`anUnknownAggregateFallsBackToEverything`.
 
 ## What a `@TaskParam` receives
 
@@ -541,17 +546,32 @@ and hands the rest on untouched, and it reads them from there rather than from s
 of its handlers, so that whoever watches its user tasks reads the same names the adapter writes.
 
 Three of the four travel into the delivery record VanillaBP writes: the version tag, the element
-id (`activityId`) and the workflow id (`processInstanceId`). Neither of the last two steers
-anything. They are what somebody addresses a task by outside VanillaBP, an operator in the
-engine's own tooling or an extension linking a task to a place in the model. Both handlers answer
-them, the service-task one and the user-task one, and both answer them the same way.
+id (`activityId`) and the workflow id (`processInstanceId`). Both handlers answer them, the
+service-task one and the user-task one, and both answer them the same way.
 
-Where an engine fills neither key the record carries neither, and that is the normal case rather
-than a defect: the API defines no vocabulary for what a delivered task carries, so this adapter
-can report what an engine filled and nothing else. The adapter SPI has a default of `null` for
-exactly this, meaning "this adapter names none".
-`TaskProcessingIntegrationTest#theRecordNamesWhatTheEngineNamed` and
-`#anEngineWhichNamesNeitherLeavesBothEmpty` hold both halves.
+The element id does steer something. It is the second key a `@WorkflowTask` method is wired by,
+so a delivery naming no element never reaches a method carrying `@WorkflowTask(id = ...)`. The
+workflow id steers nothing: it is what somebody addresses a task by outside VanillaBP, an
+operator in the engine's own tooling or an extension linking a task to a place in the model.
+
+Where an engine fills no workflow id the record carries none, and that is the normal case rather
+than a defect: the API defines no vocabulary for what a delivered task carries. The adapter SPI
+has a default of `null` for exactly this, meaning "this adapter names none".
+
+The element is answered even then, because this adapter deployed the models and can read them. A
+subscription asks the engine for one task definition, so once a delivery is routed to a BPMN
+process, the element carrying that name in that process is the element it belongs to. The engine
+still wins where it names one: it says which element THIS delivery came from, under the model it
+is running.
+
+The model has no answer where one name sits on several elements of one process, which is the very
+case a method is wired by the element id for. The start says so, naming the elements and the meta
+entry which would tell them apart ([`GAPS.md`](GAPS.md), entry 26). A declared process id without
+a model has no answer either, for the reason [described above](#what-an-id-without-a-model-still-gets).
+
+`TaskProcessingIntegrationTest#theRecordNamesWhatTheEngineNamed`,
+`#anEngineWhichNamesNeitherIsAnsweredByTheModel` and `#aMethodWiredByItsElementIdIsReached` hold
+it, and `PeaTaskHandlerTest` holds which of the two sources answers.
 
 What the keys MEAN stays the Process-Engine-API's business. A key an engine leaves out is never
 an error: it is one detail less about a task worth reporting anyway, which is why the three

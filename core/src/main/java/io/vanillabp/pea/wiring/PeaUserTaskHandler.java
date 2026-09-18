@@ -57,6 +57,13 @@ public class PeaUserTaskHandler implements TaskHandler {
    */
   private final List<String> declaredBpmnProcessIds;
 
+  /**
+   * The BPMN element each process of this subscription delivers from, keyed by the plain BPMN
+   * process id. Read where the engine names no element of its own - see
+   * {@link #bpmnElementId(String, TaskInformation)}. Never <code>null</code>.
+   */
+  private final Map<String, String> bpmnElementIds;
+
   private final WorkflowTaskInvoker workflowTaskInvoker;
 
   /**
@@ -82,6 +89,8 @@ public class PeaUserTaskHandler implements TaskHandler {
    * @param bpmnProcessIds The BPMN processes this subscription may deliver from
    * @param declaredBpmnProcessIds The ids the module declares without a model which share
    *          this subscription's name, or <code>null</code> for none
+   * @param bpmnElementIds What the deployed models say a delivery of this subscription belongs
+   *          to, per BPMN process, or <code>null</code> where no model says it
    * @param workflowTaskInvoker The core's runtime entry point
    * @param scoping Translates the engine's identifiers back, or <code>null</code>
    * @param fetchVariables What the subscription asked for, or <code>null</code> for everything
@@ -94,6 +103,7 @@ public class PeaUserTaskHandler implements TaskHandler {
       final String externalFormReference,
       final List<String> bpmnProcessIds,
       final List<String> declaredBpmnProcessIds,
+      final Map<String, String> bpmnElementIds,
       final WorkflowTaskInvoker workflowTaskInvoker,
       final NameClashAvoidanceSupport scoping,
       final PeaFetchVariables.Selection fetchVariables,
@@ -106,6 +116,9 @@ public class PeaUserTaskHandler implements TaskHandler {
     this.declaredBpmnProcessIds = declaredBpmnProcessIds == null
         ? List.of()
         : List.copyOf(declaredBpmnProcessIds);
+    this.bpmnElementIds = bpmnElementIds == null
+        ? Map.of()
+        : Map.copyOf(bpmnElementIds);
     this.workflowTaskInvoker = workflowTaskInvoker;
     this.scoping = scoping;
     this.fetchVariables = fetchVariables == null
@@ -161,8 +174,8 @@ public class PeaUserTaskHandler implements TaskHandler {
       // the core's registries are keyed by the plain identifiers, so what this subscription
       // is keyed by is translated back before the core is asked anything
       final var taskDefinition = plainTaskDefinition(bpmnProcessId);
-      if (!workflowTaskInvoker.workflowTaskHandlerExists(
-          workflowModuleId, bpmnProcessId, taskDefinition)) {
+      final var elementId = bpmnElementId(bpmnProcessId, taskInformation);
+      if (!aMethodServesThisUserTask(bpmnProcessId, taskDefinition, elementId)) {
         log.trace(
             "Process-Engine-API adapter '{}': no @WorkflowTask handler for user task '{}' of BPMN "
                 + "process '{}' - skipping the notification",
@@ -184,7 +197,7 @@ public class PeaUserTaskHandler implements TaskHandler {
           workflowModuleId,
           bpmnProcessId,
           new PeaUserTaskInvocationContext(
-              adapterId, taskDefinition, String
+              adapterId, taskDefinition, elementId, String
                   .valueOf(aggregateId), taskId, payload, taskInformation, fetchVariables));
       if (outcome.kind() == WorkflowTaskOutcome.Kind.BPMN_ERROR) {
         throw new IllegalStateException(
@@ -208,6 +221,60 @@ public class PeaUserTaskHandler implements TaskHandler {
     if (observerFailure != null) {
       throw observerFailure;
     }
+
+  }
+
+  /**
+   * Whether a <code>&#64;WorkflowTask</code> method serves this user task, asked with BOTH keys
+   * a task is wired by: the task definition and the element id. A method names either of the
+   * two (<code>&#64;WorkflowTask(taskDefinition = ...)</code> respectively
+   * <code>&#64;WorkflowTask(id = ...)</code>), and the task definition of a user task is its
+   * external FORM REFERENCE here, so the two are different names more often than anywhere
+   * else.
+   * <p>
+   * Asked with the form reference alone, a user task whose handler names the element id
+   * answered "nobody serves this" and the notification was skipped without a word. That is
+   * worse than a notification which fails, because nothing happens at all.
+   *
+   * @param bpmnProcessId The plain BPMN process the delivery was routed to
+   * @param taskDefinition The plain external form reference
+   * @param elementId The BPMN element the delivery belongs to, or <code>null</code>
+   * @return Whether a method serves it
+   */
+  private boolean aMethodServesThisUserTask(
+      final String bpmnProcessId,
+      final String taskDefinition,
+      final String elementId) {
+
+    if (workflowTaskInvoker.workflowTaskHandlerExists(workflowModuleId, bpmnProcessId, taskDefinition)) {
+      return true;
+    }
+    return (elementId != null) && workflowTaskInvoker
+        .workflowTaskHandlerExists(workflowModuleId, bpmnProcessId, elementId);
+
+  }
+
+  /**
+   * Which BPMN element this notification belongs to - the second key a
+   * <code>&#64;WorkflowTask</code> method is wired by, so a notification which names none does
+   * not reach a method carrying <code>&#64;WorkflowTask(id = ...)</code>.
+   * <p>
+   * Read the same way the service-task side reads it, and for the same reasons - see
+   * {@link PeaTaskHandler}. The engine answers where it fills the meta entry, and the deployed
+   * model answers where it does not.
+   *
+   * @param bpmnProcessId The plain BPMN process the delivery was routed to
+   * @param taskInformation What the engine said about the user task
+   * @return The BPMN element id, or <code>null</code> where neither source names one
+   */
+  private String bpmnElementId(
+      final String bpmnProcessId,
+      final TaskInformation taskInformation) {
+
+    final var named = PeaTaskMeta.text(taskInformation, PeaTaskMeta.BPMN_TASK_ID);
+    return named != null
+        ? named
+        : bpmnElementIds.get(bpmnProcessId);
 
   }
 
@@ -409,6 +476,12 @@ public class PeaUserTaskHandler implements TaskHandler {
 
     private final String externalFormReference;
 
+    /**
+     * The BPMN element this notification belongs to, or <code>null</code> - see
+     * {@link PeaUserTaskHandler#bpmnElementId(String, TaskInformation)}.
+     */
+    private final String bpmnElementId;
+
     private final String workflowAggregateId;
 
     private final String taskId;
@@ -436,6 +509,7 @@ public class PeaUserTaskHandler implements TaskHandler {
     PeaUserTaskInvocationContext(
         final String adapterId,
         final String externalFormReference,
+        final String bpmnElementId,
         final String workflowAggregateId,
         final String taskId,
         final Map<String, ?> payload,
@@ -445,6 +519,7 @@ public class PeaUserTaskHandler implements TaskHandler {
       this.adapterId = adapterId;
       this.taskInformation = taskInformation;
       this.externalFormReference = externalFormReference;
+      this.bpmnElementId = bpmnElementId;
       this.workflowAggregateId = workflowAggregateId;
       this.taskId = taskId;
       this.payload = payload;
@@ -471,11 +546,7 @@ public class PeaUserTaskHandler implements TaskHandler {
     @Override
     public String getBpmnElementId() {
 
-      // the element id the engine named. An engine which names none leaves the delivery
-      // record without an element, which is what the default of the SPI means: the
-      // Process-Engine-API defines no vocabulary for the keys a delivered task carries,
-      // so this adapter can report what an engine filled and nothing else
-      return PeaTaskMeta.text(taskInformation, PeaTaskMeta.BPMN_TASK_ID);
+      return bpmnElementId;
 
     }
 

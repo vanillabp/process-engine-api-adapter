@@ -45,9 +45,26 @@
       <bpmn:incoming>f5</bpmn:incoming>
       <bpmn:outgoing>f6</bpmn:outgoing>
     </bpmn:userTask>
-    <bpmn:sequenceFlow id="f6" sourceRef="t_user" targetRef="end" />
-    <bpmn:endEvent id="end">
+    <bpmn:sequenceFlow id="f6" sourceRef="t_user" targetRef="t_wired_by_id" />
+    <bpmn:serviceTask id="t_wired_by_id">
+      <bpmn:extensionElements>
+        <zeebe:taskDefinition type="peaNobodyNamesThis" />
+      </bpmn:extensionElements>
       <bpmn:incoming>f6</bpmn:incoming>
+      <bpmn:outgoing>f7</bpmn:outgoing>
+    </bpmn:serviceTask>
+    <bpmn:sequenceFlow id="f7" sourceRef="t_wired_by_id" targetRef="t_user_wired_by_id" />
+    <bpmn:userTask id="t_user_wired_by_id">
+      <bpmn:extensionElements>
+        <zeebe:userTask />
+        <zeebe:formDefinition externalReference="peaFormNobodyNames" />
+      </bpmn:extensionElements>
+      <bpmn:incoming>f7</bpmn:incoming>
+      <bpmn:outgoing>f8</bpmn:outgoing>
+    </bpmn:userTask>
+    <bpmn:sequenceFlow id="f8" sourceRef="t_user_wired_by_id" targetRef="end" />
+    <bpmn:endEvent id="end">
+      <bpmn:incoming>f8</bpmn:incoming>
     </bpmn:endEvent>
   </bpmn:process>
   <bpmn:message id="Msg_PeaPayment" name="PeaPaymentReceived" />

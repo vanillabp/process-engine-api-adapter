@@ -47,6 +47,7 @@ import io.vanillabp.spi.service.NoSyncWithBPMS;
 import io.vanillabp.spi.service.TaskEvent;
 import io.vanillabp.spi.service.TaskException;
 import io.vanillabp.spi.service.TaskId;
+import io.vanillabp.spi.service.TaskParam;
 import io.vanillabp.spi.service.WorkflowService;
 import io.vanillabp.spi.service.WorkflowTask;
 import lombok.Getter;
@@ -331,6 +332,39 @@ public class TaskProcessingIntegrationTest {
 
       aggregate.taskId = taskId;
       aggregate.appendResult("async-open");
+
+    }
+
+    /**
+     * Wired by the BPMN element id, so the task definition the engine delivers under
+     * ({@code peaNobodyNamesThis}) is a name this method never mentions. The
+     * <code>&#64;TaskParam</code> is part of it: the subscription has to ask the engine for
+     * that variable, and asking with the task definition alone would not have found this
+     * method to ask.
+     */
+    @WorkflowTask(id = "t_wired_by_id")
+    public void peaWiredByElementId(
+        final PeaTaskAggregate aggregate,
+        @TaskParam("amount") final String amount) {
+
+      aggregate.appendResult("by-id-"
+          + amount);
+
+    }
+
+    /**
+     * The same for a user task: the form reference the engine delivers under
+     * ({@code peaFormNobodyNames}) is not what this method names.
+     */
+    @WorkflowTask(id = "t_user_wired_by_id")
+    public void peaUserTaskWiredByElementId(
+        final PeaTaskAggregate aggregate,
+        @TaskId final String taskId,
+        @TaskEvent final TaskEvent.Event event) {
+
+      aggregate.taskId = taskId;
+      aggregate.appendResult("usertask-by-id-"
+          + event.name().toLowerCase());
 
     }
 
@@ -891,19 +925,71 @@ public class TaskProcessingIntegrationTest {
   }
 
   @Test
-  @DisplayName("An engine which names neither leaves both fields of the record empty")
-  public void anEngineWhichNamesNeitherLeavesBothEmpty() {
+  @DisplayName("An engine which names neither leaves the workflow id empty, and the model names the element")
+  public void anEngineWhichNamesNeitherIsAnsweredByTheModel() {
 
     seed("4742");
     // the Process-Engine-API defines no vocabulary for the keys a delivered task carries,
-    // so an engine filling none is a normal engine and not a defect. The record then says
-    // nothing about the element and nothing about the workflow, which is what the default
-    // of the adapter SPI means
+    // so an engine filling none is a normal engine and not a defect. Nothing but the engine
+    // knows the workflow, so the record says nothing about it - which is what the default of
+    // the adapter SPI means. The element is a different matter: the models this adapter
+    // deployed say which element carries this task definition
     engine.deliverTask("task-no-meta", "peaHappy", PROCESS, Map.of("id", "4742"));
 
     final var record = recordOf("task-no-meta");
-    assertNull(record.get("BPMN_ELEMENT_ID"), "no element id was named");
+    assertEquals("t_happy", record.get("BPMN_ELEMENT_ID"), "the element the model names");
     assertNull(record.get("WORKFLOW_ID"), "no workflow id was named");
+
+  }
+
+  @Test
+  @DisplayName("A delivery reaches the @WorkflowTask method wired to its BPMN element id")
+  public void aMethodWiredByItsElementIdIsReached() {
+
+    seed("4750");
+    // the task definition is a name the serving method never mentions, and this engine names
+    // no element of its own: without the element the model holds, the delivery would find no
+    // method and fail
+    engine
+        .deliverTask("task-by-id", "peaNobodyNamesThis", PROCESS, Map.of("id", "4750", "amount", "42"));
+
+    assertEquals("by-id-42", stored("4750").results);
+    assertEquals(
+        List.of(new InMemoryProcessEngine.CompletedTask("task-by-id")),
+        engine.getCompletedTasks());
+
+  }
+
+  @Test
+  @DisplayName("The subscription asks for the variables an id-wired method declares")
+  public void theSubscriptionAsksForWhatAnIdWiredMethodDeclares() {
+
+    final var payload = engine
+        .getSubscriptions()
+        .stream()
+        .filter(subscription -> "peaNobodyNamesThis".equals(subscription.taskDescriptionKey()))
+        .findFirst()
+        .orElseThrow(() -> new AssertionError("no subscription for 'peaNobodyNamesThis'"))
+        .payloadDescription();
+
+    // asked with the element id as well as with the task definition: a method the second
+    // question does not find declares @TaskParam nobody fetches, and an unfetched parameter
+    // fails the delivery here rather than arriving as null
+    assertEquals(java.util.Set.of("amount", "id"), payload);
+
+  }
+
+  @Test
+  @DisplayName("A user task whose handler names the element id is notified instead of skipped")
+  public void aUserTaskWiredByItsElementIdIsNotified() {
+
+    seed("4751");
+    engine.deliverTask("utask-by-id", "peaFormNobodyNames", PROCESS, Map.of("id", "4751"));
+
+    // asked with the form reference alone, nobody served this notification and it was
+    // skipped without a word, which is worse than a notification which fails
+    assertEquals("usertask-by-id-created", stored("4751").results);
+    assertEquals("utask-by-id", stored("4751").taskId);
 
   }
 

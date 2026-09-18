@@ -708,3 +708,37 @@ delivery silently costs that observer its notification, and the log line is what
 same paragraph in the guide for engine adapter authors, so that a subscriber can write code
 against it. A command to answer a delivery as failed, with the engine deciding whether to
 repeat it, would be more than we need.
+
+## 26. A delivered task does not say which BPMN element it belongs to
+
+**Needed by VanillaBP:** a `@WorkflowTask` method is wired by one of two keys, the task
+definition (`@WorkflowTask(taskDefinition = ...)`) or the id of the BPMN element
+(`@WorkflowTask(id = ...)`), and the core routes a delivery by both of them, so an adapter
+which reports only the task definition leaves every method of the second kind unreachable.
+The element id is also what the delivery record names a task in the model by, for an
+operator in the engine's own tooling or an extension linking a task to a place in the
+model.
+
+**Offered by the Process-Engine-API:** nothing in writing. `TaskInformation` carries a
+free-form `meta: Map<String, String>` and defines `reason` and `retries` only, so an engine
+adapter fills whatever it has. The API's own reference adapter for an embedded Camunda 7
+fills `activityId` (`CommonRestrictions.ACTIVITY_ID`), which is the value we want, and no
+engine is obliged to.
+
+**Consequence for the adapter:** the adapter reads the meta entry where an engine fills it
+and falls back to the models it deployed itself. A subscription asks for one task
+definition, so once a delivery is routed to a BPMN process, the element carrying that name
+in that process is the element the delivery belongs to. That covers the normal model and
+needs nothing of the engine.
+
+Two cases it does not cover. A name sitting on SEVERAL elements of one process leaves the
+model without an answer, and that is the very case a method is wired by the element id for;
+the start says so where such a method exists, naming the elements and the meta entry which
+would tell them apart. And a BPMN process id the module declares without deploying a model
+under it has no model to read at all, which entry 23 describes.
+
+**Ready to be sent.** The ask is the same shape as entry 6: a defined meta key carrying the
+BPMN element id of the delivered task, filled by the engine adapters. The constant exists,
+`CommonRestrictions.ACTIVITY_ID`, and the reference adapter already fills it, so this is
+writing down what one engine does rather than adding vocabulary. Both asks are one
+paragraph in the same place, and we would send them together.

@@ -202,6 +202,50 @@ public class PeaFetchVariablesTest {
   }
 
   @Test
+  @DisplayName("A @TaskParam of a method wired by the element id travels too")
+  public void aParameterOfAnIdWiredMethodIsAskedFor() {
+
+    // this core answers names for the ELEMENT id and nothing for the task definition, which
+    // is what a method carrying @WorkflowTask(id = ...) looks like: it never mentions the
+    // name the engine delivers under. Asked with the task definition alone, its variables
+    // stayed unfetched and the delivery failed on the parameter it declares
+    final var service = deploymentService(invoker(
+        bpmnProcessId -> "id",
+        taskDefinitionOrElementId -> "ApproveLoan".equals(taskDefinitionOrElementId)
+            ? List.of("amount")
+            : List.of()));
+
+    service.startWorkflowProcessing(MODULE, wire(service, "two.bpmn", TWO_PROCESSES));
+
+    Assertions.assertEquals(
+        Set.of("amount", "id"),
+        payloadOf("approve"),
+        "the subscription serves the element 'ApproveLoan' as well, so what its method declares "
+            + "has to be asked for");
+
+  }
+
+  @Test
+  @DisplayName("A user task wired by the element id is asked for its parameters as well")
+  public void aParameterOfAnIdWiredUserTaskMethodIsAskedFor() {
+
+    final var service = deploymentService(invoker(
+        bpmnProcessId -> "id",
+        taskDefinitionOrElementId -> "ut1".equals(taskDefinitionOrElementId)
+            ? List.of("decision")
+            : List.of()));
+
+    service.startWorkflowProcessing(MODULE, wire(service, "ut.bpmn", USER_TASK_PROCESS));
+
+    Assertions.assertEquals(
+        Set.of("decision", "id"),
+        payloadOf("utApprove"),
+        "a notification carries a payload like every other delivery, and it is derived the same "
+            + "way");
+
+  }
+
+  @Test
   @DisplayName("'all' makes the subscription ask for the complete payload again")
   public void theEscapeHatchAsksForEverything() {
 
