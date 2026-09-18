@@ -41,9 +41,11 @@ import io.vanillabp.integration.adapter.spi.workflowtask.TaskInvocationContext;
 import io.vanillabp.integration.adapter.spi.workflowtask.WorkflowTaskInvoker;
 import io.vanillabp.integration.adapter.spi.workflowtask.WorkflowTaskOutcome;
 import io.vanillabp.integration.adapter.spi.workflowtask.WorkflowTaskWiring;
+import io.vanillabp.integration.test.utils.CapturedOutput;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 import io.vanillabp.pea.deployment.PeaDeploymentService;
 import io.vanillabp.pea.mock.InMemoryProcessEngine;
+import io.vanillabp.pea.wiring.PeaTaskMeta;
 
 /**
  * Unit tests of {@link PeaDeploymentService}: the StAX-based BPMN parsing of
@@ -400,6 +402,49 @@ public class PeaDeploymentServiceTest {
 
     service.stopWorkflowProcessing("mod", context);
     Assertions.assertTrue(engine.getSubscriptions().isEmpty());
+
+  }
+
+  @Test
+  @DisplayName("Two elements of one process under one name are said to need the engine's own word")
+  public void twoElementsUnderOneNameAreSaidAtTheStart(
+      final CapturedOutput output) {
+
+    // one name on two elements is the very reason to wire a method by @WorkflowTask(id = ...),
+    // and it is also the one case the models cannot answer: which of the two a delivery came
+    // from is something only the engine knows, and this API promises no key for it
+    final var xml = """
+        <?xml version="1.0" encoding="UTF-8"?>
+        <bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:zeebe="http://camunda.org/schema/zeebe/1.0">
+          <bpmn:process id="P1" isExecutable="true">
+            <bpmn:serviceTask id="first">
+              <bpmn:extensionElements>
+                <zeebe:taskDefinition type="shared" />
+              </bpmn:extensionElements>
+            </bpmn:serviceTask>
+            <bpmn:serviceTask id="second">
+              <bpmn:extensionElements>
+                <zeebe:taskDefinition type="shared" />
+              </bpmn:extensionElements>
+            </bpmn:serviceTask>
+          </bpmn:process>
+        </bpmn:definitions>
+        """;
+
+    PeaProcessingContext context = null;
+    for (final var entry : service.readBpmn("mod", "twice.bpmn", bpmn(xml), true)) {
+      context = service.prepareBpmn("mod", context, "twice.bpmn", entry.getKey(), entry.getValue());
+    }
+
+    service.startWorkflowProcessing("mod", context);
+
+    final var said = output.getAll();
+    Assertions
+        .assertTrue(
+            said.contains("first") && said.contains("second") && said.contains(PeaTaskMeta.BPMN_TASK_ID),
+            "expected the start to name both elements and the meta entry which tells them apart, "
+                + "but it said: "
+                + said);
 
   }
 

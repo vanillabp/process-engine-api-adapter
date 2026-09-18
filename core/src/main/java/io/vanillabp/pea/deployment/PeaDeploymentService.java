@@ -201,6 +201,11 @@ public class PeaDeploymentService implements AdapterDeploymentService<PeaBpmnMod
    * One BPMN task a subscription serves - what its payload set is derived from.
    *
    * @param bpmnProcessId The PLAIN BPMN process id
+   * @param elementId The id of the BPMN element, as the modeller wrote it. It is the SECOND
+   *          key a <code>&#64;WorkflowTask</code> method can be wired by
+   *          (<code>&#64;WorkflowTask(id = ...)</code>), so everything asked with the task
+   *          definition is asked with this one too. <code>null</code> where the task comes
+   *          from no model, which is what {@code declaredWithoutAModel} says
    * @param taskDefinition The PLAIN task definition (the external form reference for a
    *          user task)
    * @param declaredWithoutAModel Whether the process is one the module DECLARES without
@@ -209,14 +214,16 @@ public class PeaDeploymentService implements AdapterDeploymentService<PeaBpmnMod
    *          (see decision 11 in the repository's DECISIONS.md)
    */
   record ServedTask(String bpmnProcessId,
+                    String elementId,
                     String taskDefinition,
                     boolean declaredWithoutAModel) {
 
     static ServedTask ofADeployedModel(
         final String bpmnProcessId,
+        final String elementId,
         final String taskDefinition) {
 
-      return new ServedTask(bpmnProcessId, taskDefinition, false);
+      return new ServedTask(bpmnProcessId, elementId, taskDefinition, false);
 
     }
 
@@ -224,7 +231,9 @@ public class PeaDeploymentService implements AdapterDeploymentService<PeaBpmnMod
         final String bpmnProcessId,
         final String taskDefinition) {
 
-      return new ServedTask(bpmnProcessId, taskDefinition, true);
+      // no model, so no element: the name is composed from what the application's methods
+      // serve, and a method wired by an element id names no task definition to compose from
+      return new ServedTask(bpmnProcessId, null, taskDefinition, true);
 
     }
 
@@ -333,13 +342,119 @@ public class PeaDeploymentService implements AdapterDeploymentService<PeaBpmnMod
       }
       variables.add(aggregateIdName);
       // what the handlers of this task read with @TaskParam: the core scanned those
-      // names off the methods while wiring, and this adapter has no model to guess from
+      // names off the methods while wiring, and this adapter has no model to guess from.
+      // Asked with BOTH keys a method can be wired by: a method naming the element id
+      // serves this task too, and asking with the task definition alone left its variables
+      // unfetched - which fails the delivery here rather than passing null, because a
+      // @TaskParam the subscription never asked for is refused
       variables
           .addAll(
               workflowTaskWiring
                   .taskParameterNames(workflowModuleId, task.bpmnProcessId(), task.taskDefinition()));
+      if (task.elementId() != null) {
+        variables
+            .addAll(
+                workflowTaskWiring
+                    .taskParameterNames(workflowModuleId, task.bpmnProcessId(), task.elementId()));
+      }
     }
     return PeaFetchVariables.Selection.of(variables);
+
+  }
+
+  /**
+   * Which BPMN element a delivery of one subscription belongs to, per BPMN process, as far as
+   * the deployed models say it.
+   * <p>
+   * A subscription asks the engine for a task definition, and the engine is free to say
+   * nothing else about a task it delivers (see {@code GAPS.md}, entry 26). The element id is
+   * the SECOND key a <code>&#64;WorkflowTask</code> method is wired by, so a delivery naming no
+   * element reaches no method wired that way. The models this adapter deployed hold the missing
+   * value: once a delivery is routed to a BPMN process, the element carrying this
+   * subscription's name in that process is the element it belongs to.
+   * <p>
+   * Unless the name sits on SEVERAL elements of one process. Then the model answers nothing and
+   * only the engine can tell them apart, which is said while starting - telling two elements of
+   * one name apart is the very reason to wire a method by the element id.
+   *
+   * @param workflowModuleId The workflow module which is about to process workflows
+   * @param served The tasks this subscription serves
+   * @return The plain BPMN process id to the element id, leaving out the processes which
+   *         answer more than one and the ids which have no model at all
+   */
+  private Map<String, String> theElementEachProcessDeliversFrom(
+      final String workflowModuleId,
+      final List<ServedTask> served) {
+
+    final var tasksPerProcess = new LinkedHashMap<String, List<ServedTask>>();
+    served
+        .stream()
+        .filter(task -> task.elementId() != null)
+        .forEach(task -> tasksPerProcess
+            .computeIfAbsent(task.bpmnProcessId(), key -> new ArrayList<>())
+            .add(task));
+    final var oneEach = new LinkedHashMap<String, String>();
+    tasksPerProcess
+        .forEach((
+            bpmnProcessId,
+            tasks) -> {
+          final var elementIds = tasks
+              .stream()
+              .map(ServedTask::elementId)
+              .distinct()
+              .toList();
+          if (elementIds.size() == 1) {
+            oneEach.put(bpmnProcessId, elementIds.getFirst());
+            return;
+          }
+          sayThatOnlyTheEngineTellsTheseElementsApart(
+              workflowModuleId, bpmnProcessId, tasks.getFirst().taskDefinition(), elementIds);
+        });
+    return Map.copyOf(oneEach);
+
+  }
+
+  /**
+   * Says that several BPMN elements of one process carry one task definition, so a delivery
+   * belongs to one of them only where the engine names the element itself.
+   * <p>
+   * Said only where a method is wired by one of those element ids. Everything else is served
+   * by the task definition, which every delivery carries, and there is nothing to warn about.
+   *
+   * @param workflowModuleId The workflow module which is about to process workflows
+   * @param bpmnProcessId The plain BPMN process id
+   * @param taskDefinition The plain task definition the elements share
+   * @param elementIds The elements carrying it, more than one
+   */
+  private void sayThatOnlyTheEngineTellsTheseElementsApart(
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final String taskDefinition,
+      final List<String> elementIds) {
+
+    final var wiredByTheirId = elementIds
+        .stream()
+        .filter(elementId -> workflowTaskInvoker
+            .workflowTaskHandlerExists(workflowModuleId, bpmnProcessId, elementId))
+        .toList();
+    if (wiredByTheirId.isEmpty()) {
+      return;
+    }
+    log.warn(
+        """
+            Process-Engine-API adapter '{}': the BPMN elements {} of process '{}' (workflow \
+            module '{}') all carry the task definition '{}', and a @WorkflowTask method is \
+            wired to the element id of {}. A delivery of that name can be attributed to one \
+            element only where the engine fills the meta entry '{}', which this API does not \
+            promise: where it fills none, such a delivery finds no method and fails. Give \
+            those elements a task definition each, or wire the methods by task definition.""",
+        adapterId,
+        elementIds,
+        bpmnProcessId,
+        workflowModuleId,
+        taskDefinition,
+        wiredByTheirId,
+        PeaTaskMeta.BPMN_TASK_ID);
 
   }
 
@@ -1217,7 +1332,8 @@ public class PeaDeploymentService implements AdapterDeploymentService<PeaBpmnMod
                 .computeIfAbsent(
                     scopedTaskDefinition(workflowModuleId, model.bpmnProcessId(), task.taskDefinition()),
                     key -> new ArrayList<>())
-                .add(ServedTask.ofADeployedModel(model.bpmnProcessId(), task.taskDefinition()))));
+                .add(ServedTask
+                    .ofADeployedModel(model.bpmnProcessId(), task.activityId(), task.taskDefinition()))));
 
     // user-task notifications: one USER-type subscription per distinct
     // external form reference; the handler is a notification-only variant
@@ -1230,7 +1346,8 @@ public class PeaDeploymentService implements AdapterDeploymentService<PeaBpmnMod
                 .computeIfAbsent(
                     scopedTaskDefinition(workflowModuleId, model.bpmnProcessId(), userTask.taskDefinition()),
                     key -> new ArrayList<>())
-                .add(ServedTask.ofADeployedModel(model.bpmnProcessId(), userTask.taskDefinition()))));
+                .add(ServedTask
+                    .ofADeployedModel(model.bpmnProcessId(), userTask.activityId(), userTask.taskDefinition()))));
 
     // and what the application still serves for a BPMN process id it declares without
     // deploying a model under it - the old id of a renamed process. Composed after both
@@ -1263,6 +1380,7 @@ public class PeaDeploymentService implements AdapterDeploymentService<PeaBpmnMod
           .externalFormReference(externalFormReference)
           .bpmnProcessIds(processes.routingCandidates())
           .declaredBpmnProcessIds(processes.declaredSharingTheName())
+          .bpmnElementIds(theElementEachProcessDeliversFrom(workflowModuleId, served))
           .workflowTaskInvoker(workflowTaskInvoker)
           .scoping(scoping)
           .fetchVariables(fetchVariables)
@@ -1312,6 +1430,7 @@ public class PeaDeploymentService implements AdapterDeploymentService<PeaBpmnMod
           .taskDefinition(taskDefinition)
           .bpmnProcessIds(processes.routingCandidates())
           .declaredBpmnProcessIds(processes.declaredSharingTheName())
+          .bpmnElementIds(theElementEachProcessDeliversFrom(workflowModuleId, served))
           .workflowTaskInvoker(workflowTaskInvoker)
           .serviceTaskCompletionApi(serviceTaskCompletionApi)
           .scoping(scoping)

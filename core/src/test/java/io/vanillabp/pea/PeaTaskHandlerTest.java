@@ -46,6 +46,8 @@ public class PeaTaskHandlerTest {
 
     String invokedProcessVersion;
 
+    String invokedBpmnElementId;
+
     String invokedDeliveryId;
 
     String invokedActivationId;
@@ -66,6 +68,7 @@ public class PeaTaskHandlerTest {
 
       invokedBpmnProcessId = bpmnProcessId;
       invokedProcessVersion = context.getProcessVersion();
+      invokedBpmnElementId = context.getBpmnElementId();
       invokedDeliveryId = context.getDeliveryId();
       invokedActivationId = context.getActivationId();
       if (readParameter != null) {
@@ -278,6 +281,75 @@ public class PeaTaskHandlerTest {
             Map.of("id", "4711"));
 
     assertEquals("OnlyProcess", invoker.invokedBpmnProcessId);
+
+  }
+
+  /**
+   * The handler of a subscription which knows what element each of its processes delivers
+   * from - what {@code PeaDeploymentService} reads off the deployed models.
+   */
+  private PeaTaskHandler handler(
+      final List<String> bpmnProcessIds,
+      final Map<String, String> bpmnElementIds) {
+
+    return PeaTaskHandler
+        .builder()
+        .adapterId("pea")
+        .workflowModuleId("test-module")
+        .taskDefinition("someTask")
+        .bpmnProcessIds(bpmnProcessIds)
+        .bpmnElementIds(bpmnElementIds)
+        .workflowTaskInvoker(invoker)
+        .serviceTaskCompletionApi(engine)
+        .build();
+
+  }
+
+  @Test
+  @DisplayName("The element of a delivery is the one its process carries the task definition on")
+  public void theElementComesFromTheProcessTheDeliveryWasRoutedTo() {
+
+    // one subscription, two processes, and the same task definition on a different element
+    // in each of them: which element a delivery belongs to is answered after it was routed,
+    // by the model of the process it was routed to
+    engine.getOpenTaskIds().add("task-element");
+    handler(List.of("ProcessA", "ProcessB"), Map.of("ProcessA", "ApproveInA", "ProcessB", "ApproveInB"))
+        .accept(
+            new TaskInformation("task-element", Map.of(PeaTaskMeta.BPMN_PROCESS_ID, "ProcessB")),
+            Map.of("id", "4711"));
+
+    assertEquals("ProcessB", invoker.invokedBpmnProcessId);
+    assertEquals("ApproveInB", invoker.invokedBpmnElementId);
+
+  }
+
+  @Test
+  @DisplayName("An element the engine names itself is reported instead of the one the model holds")
+  public void theElementTheEngineNamesWins() {
+
+    // the model says which element carries a name, the engine says which element THIS
+    // delivery came from - and the engine is the one running the model it is running
+    engine.getOpenTaskIds().add("task-element-meta");
+    handler(List.of("OnlyProcess"), Map.of("OnlyProcess", "ApproveFromTheModel"))
+        .accept(
+            new TaskInformation("task-element-meta", Map.of(PeaTaskMeta.BPMN_TASK_ID, "ApproveFromTheEngine")),
+            Map.of("id", "4711"));
+
+    assertEquals("ApproveFromTheEngine", invoker.invokedBpmnElementId);
+
+  }
+
+  @Test
+  @DisplayName("A subscription whose models name no element reports none")
+  public void withoutAModelAndWithoutTheEngineNoElementIsReported() {
+
+    engine.getOpenTaskIds().add("task-element-none");
+    handler(List.of("OnlyProcess"))
+        .accept(
+            new TaskInformation("task-element-none", Map.of()),
+            Map.of("id", "4711"));
+
+    assertEquals(null, invoker.invokedBpmnElementId);
 
   }
 

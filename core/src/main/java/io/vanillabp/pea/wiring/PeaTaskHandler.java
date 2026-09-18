@@ -67,6 +67,13 @@ public class PeaTaskHandler implements TaskHandler {
    */
   private final List<String> declaredBpmnProcessIds;
 
+  /**
+   * The BPMN element each process of this subscription delivers from, keyed by the plain BPMN
+   * process id. Read where the engine names no element of its own - see
+   * {@link #bpmnElementId(String, TaskInformation)}. Never <code>null</code>.
+   */
+  private final Map<String, String> bpmnElementIds;
+
   private final WorkflowTaskInvoker workflowTaskInvoker;
 
   private final ServiceTaskCompletionApi serviceTaskCompletionApi;
@@ -95,6 +102,8 @@ public class PeaTaskHandler implements TaskHandler {
    * @param bpmnProcessIds The BPMN processes this subscription may deliver from
    * @param declaredBpmnProcessIds The ids the module declares without a model which share
    *          this subscription's name, or <code>null</code> for none
+   * @param bpmnElementIds What the deployed models say a delivery of this subscription belongs
+   *          to, per BPMN process, or <code>null</code> where no model says it
    * @param workflowTaskInvoker The core's runtime entry point
    * @param serviceTaskCompletionApi Where the outcome of a delivery is reported
    * @param scoping Translates the engine's identifiers back, or <code>null</code>
@@ -107,6 +116,7 @@ public class PeaTaskHandler implements TaskHandler {
       final String taskDefinition,
       final List<String> bpmnProcessIds,
       final List<String> declaredBpmnProcessIds,
+      final Map<String, String> bpmnElementIds,
       final WorkflowTaskInvoker workflowTaskInvoker,
       final ServiceTaskCompletionApi serviceTaskCompletionApi,
       final NameClashAvoidanceSupport scoping,
@@ -119,6 +129,9 @@ public class PeaTaskHandler implements TaskHandler {
     this.declaredBpmnProcessIds = declaredBpmnProcessIds == null
         ? List.of()
         : List.copyOf(declaredBpmnProcessIds);
+    this.bpmnElementIds = bpmnElementIds == null
+        ? Map.of()
+        : Map.copyOf(bpmnElementIds);
     this.workflowTaskInvoker = workflowTaskInvoker;
     this.serviceTaskCompletionApi = serviceTaskCompletionApi;
     this.scoping = scoping;
@@ -138,6 +151,34 @@ public class PeaTaskHandler implements TaskHandler {
     return scoping == null
         ? taskDefinition
         : scoping.plainTaskDefinition(workflowModuleId, bpmnProcessId, taskDefinition, adapterId);
+
+  }
+
+  /**
+   * Which BPMN element this delivery belongs to - the second key a
+   * <code>&#64;WorkflowTask</code> method is wired by, so a delivery which names none does not
+   * reach a method carrying <code>&#64;WorkflowTask(id = ...)</code>.
+   * <p>
+   * The engine answers it where it fills the meta entry, and it is the better answer: it is
+   * about THIS delivery and about the model the engine is running it under. The API promises
+   * no such entry though (see {@code GAPS.md}, entry 26), so where the engine names none the
+   * deployed model answers instead: this subscription asks for one task definition, and the
+   * element carrying that name in the process the delivery was routed to is the element it
+   * belongs to. A process whose model carries that name on several elements answers nothing,
+   * and the start said so.
+   *
+   * @param bpmnProcessId The plain BPMN process the delivery was routed to
+   * @param taskInformation What the engine said about the task
+   * @return The BPMN element id, or <code>null</code> where neither source names one
+   */
+  private String bpmnElementId(
+      final String bpmnProcessId,
+      final TaskInformation taskInformation) {
+
+    final var named = PeaTaskMeta.text(taskInformation, PeaTaskMeta.BPMN_TASK_ID);
+    return named != null
+        ? named
+        : bpmnElementIds.get(bpmnProcessId);
 
   }
 
@@ -167,7 +208,7 @@ public class PeaTaskHandler implements TaskHandler {
           workflowModuleId,
           bpmnProcessId,
           new PeaTaskInvocationContext(
-              adapterId, plainTaskDefinition(bpmnProcessId), String
+              adapterId, plainTaskDefinition(bpmnProcessId), bpmnElementId(bpmnProcessId, taskInformation), String
                   .valueOf(aggregateId), taskId, payload, taskInformation, fetchVariables));
     } catch (final Exception e) {
       // the core rolled the local transaction back - fail the task so the
@@ -338,6 +379,12 @@ public class PeaTaskHandler implements TaskHandler {
 
     private final String taskDefinition;
 
+    /**
+     * The BPMN element this delivery belongs to, or <code>null</code> - see
+     * {@link PeaTaskHandler#bpmnElementId(String, TaskInformation)}.
+     */
+    private final String bpmnElementId;
+
     private final String workflowAggregateId;
 
     private final String taskId;
@@ -365,6 +412,7 @@ public class PeaTaskHandler implements TaskHandler {
     PeaTaskInvocationContext(
         final String adapterId,
         final String taskDefinition,
+        final String bpmnElementId,
         final String workflowAggregateId,
         final String taskId,
         final Map<String, ?> payload,
@@ -373,6 +421,7 @@ public class PeaTaskHandler implements TaskHandler {
 
       this.adapterId = adapterId;
       this.taskDefinition = taskDefinition;
+      this.bpmnElementId = bpmnElementId;
       this.workflowAggregateId = workflowAggregateId;
       this.taskId = taskId;
       this.payload = payload;
@@ -400,11 +449,7 @@ public class PeaTaskHandler implements TaskHandler {
     @Override
     public String getBpmnElementId() {
 
-      // the element id the engine named. An engine which names none leaves the delivery
-      // record without an element, which is what the default of the SPI means: the
-      // Process-Engine-API defines no vocabulary for the keys a delivered task carries,
-      // so this adapter can report what an engine filled and nothing else
-      return PeaTaskMeta.text(taskInformation, PeaTaskMeta.BPMN_TASK_ID);
+      return bpmnElementId;
 
     }
 
