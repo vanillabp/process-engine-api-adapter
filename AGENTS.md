@@ -11,6 +11,17 @@ of the platform repository: the two interfaces, the calls the core expects back,
 promises and what a wrong one costs. Read it before changing anything on the SPI boundary. Where
 this adapter cannot keep a promise the document makes, that is a gap and belongs in `GAPS.md`.
 
+## Why this repository has no `UPGRADE.md`
+
+The other adapter repositories carry one, and it describes the step from VanillaBP 1 to the 2.0
+release: what a version-1 application behaves differently about and what it has to change. There
+was never a version-1 release of this adapter, so there is nobody to write that for, and a file
+here would fill up with changes between two snapshots. Do not add one out of symmetry.
+
+What such a change is worth saying about still has a place. The end state of a feature belongs in
+the wiki, which is where users read. A reasoning several places in this repository rely on belongs
+in [`DECISIONS.md`](./DECISIONS.md), and what this API cannot do belongs in [`GAPS.md`](./GAPS.md).
+
 ## The decision log is binding
 
 [`DECISIONS.md`](./DECISIONS.md) holds the decisions several places in this repository rely on. It
