@@ -540,6 +540,20 @@ public class TaskProcessingIntegrationTest {
 
   }
 
+  /**
+   * How long the engine double is watched after a rolled-back operation, before what did
+   * not reach it counts as something which never will.
+   * <p>
+   * One and a half seconds, against the moment a committed operation takes: the dispatch
+   * of an outbox entry begins right after the commit which wrote it, and the engine here
+   * is an object in the same JVM.
+   * <p>
+   * A guard and not a budget anybody has to be faster than: what is asserted afterwards is
+   * a task which stayed open respectively a list which did not grow, and a machine which
+   * leaves this JVM without a turn only makes the silence longer.
+   */
+  private static final long UNTIL_A_COMMITTED_CALL_WOULD_HAVE_ARRIVED = 1500;
+
   private void awaitUntil(
       final Supplier<Boolean> condition,
       final String description) throws InterruptedException {
@@ -606,7 +620,7 @@ public class TaskProcessingIntegrationTest {
           throw new RuntimeException("test rollback");
         }));
 
-    Thread.sleep(1500);
+    Thread.sleep(UNTIL_A_COMMITTED_CALL_WOULD_HAVE_ARRIVED);
     assertTrue(
         completionModes("completeTask", "task-c2")
             .stream()
@@ -827,7 +841,7 @@ public class TaskProcessingIntegrationTest {
           taskWorkflowService.correlate(stored("4742"), "PeaNeverSent");
           throw new RuntimeException("test rollback");
         }));
-    Thread.sleep(1500);
+    Thread.sleep(UNTIL_A_COMMITTED_CALL_WOULD_HAVE_ARRIVED);
     assertEquals(before, engine.getCorrelatedMessages().size(), "a rollback must not correlate");
 
   }
