@@ -271,3 +271,30 @@ engine delivers it.
 
 `PeaUserTaskObserverTest` (core), `UserTaskObserverIntegrationTest` (Spring Boot) and
 `PeaUserTaskObserverTest` (Quarkus) hold all of it.
+
+### 13. No open-task probe is supplied, because this API cannot say "gone"
+
+The core can work a cancellation out for a BPMS which reports none. At every wake-up of a
+workflow it asks the adapter about the other tasks it believes are open there, one question per
+task, and reports the ones which are gone to the application as canceled. The question is
+`OpenTaskProbe` and its answer has three values: `GONE`, `STILL_THERE`, `CANNOT_SAY`. Only the
+first leads to a cancellation. The third is in the contract so that an adapter which cannot tell
+a refusal from an outage can say so instead of guessing.
+
+This adapter answers none of them, because it cannot reach the first. The Process-Engine-API has
+no operation which asks about a task, and a failed command comes back as one untyped
+`ExecutionException`, so a `PREFLIGHT_CHECK` completion of the task cannot tell a refusal from an
+unreachable engine ([`GAPS.md`](./GAPS.md), entries 10 and 27).
+
+So nothing is supplied, rather than a probe which always says `CANNOT_SAY`. Such a probe would
+buy the application nothing and cost it a round trip per open task at every delivery, and the
+next reader would have to work out again why it never reports anything. A probe which read a
+failure as `GONE` is the worse half of the same choice: an engine which hiccups would cancel the
+open work of every workflow it woke up.
+
+The rule holds until the API can answer. A single operation asking whether the engine still has a
+task, or the typed errors entry 10 asks for, turns the preflight completion into a probe and this
+entry into a superseded one. Until then a change which supplies a probe here has to say which of
+the two it got. `PeaOpenTaskProbeTest` fails when one appears anyway, and
+[What an application hears about a canceled task](./README.md#what-an-application-hears-about-a-canceled-task)
+is what an application reads instead.

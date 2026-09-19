@@ -215,15 +215,20 @@ replaces the mock with a real Process-Engine-API implementation.
   ([`GAPS.md`](GAPS.md), entry 10 - relevant for multi-BPMS migration setups). `@TaskEvent
   CANCELED` cannot be delivered: the subscription's termination callback carries the engine's
   `TaskInformation` - the task id, the reason and the rest of its meta map - but no payload,
-  so the workflow aggregate the notification would run for cannot be told. The mock tracks
-  open tasks (`deliverTask` opens, SYNC completions close) so preflights validate honestly.
+  so the workflow aggregate the notification would run for cannot be told. Nor can the core
+  work the cancellation out for this adapter, since a task cannot be asked about at all - see
+  [What an application hears about a canceled task](#what-an-application-hears-about-a-canceled-task).
+  The mock tracks open tasks (`deliverTask` opens, SYNC completions close) so preflights
+  validate honestly.
 - **User tasks:** user tasks with a `zeebe:formDefinition` EXTERNAL reference (the
   reference is the task definition) are subscribed via the Task Subscription API with
   `TaskType.USER`; a delivered user task is a CREATED notification to an OPTIONAL
   `@WorkflowTask` method (never completing the task; the task's ID arrives as `@TaskId`).
   CANCELED cannot be delivered, because a termination carries no payload and therefore no
   aggregate reference; what it does carry reaches the user-task observers of the application
-  (see [Observing the user tasks of an application](#observing-the-user-tasks-of-an-application)).
+  (see [Observing the user tasks of an application](#observing-the-user-tasks-of-an-application),
+  and [What an application hears about a canceled task](#what-an-application-hears-about-a-canceled-task)
+  for what this leaves an application with).
   `completeUserTask`/`cancelUserTask` run through the `UserTaskCompletionApi` with the same
   PREFLIGHT_CHECK (phase one) / SYNC (phase two) mapping as service tasks; failing
   notifications are logged loudly but never break the user task itself.
@@ -452,6 +457,36 @@ none in its meta map and the subscription serves several processes.
 
 `UserTaskObserverIntegrationTest` (Spring Boot) and `PeaUserTaskObserverTest` (Quarkus and
 core) hold all of it.
+
+## What an application hears about a canceled task
+
+An application on this BPMS is told when a task arrives and never when the workflow walked
+away from it. A `@WorkflowTask` method waiting for a user task or for an async task it left
+open with `@TaskId` gets its CREATED notification, and no `TaskEvent.Event.CANCELED` follows
+it, whatever the workflow does next. A boundary event which takes the task away reaches the
+method as little as a canceled workflow does. The record the application keeps of that task
+is its own to close.
+
+Two things which do happen are easy to mistake for it. The user-task observers DO hear the
+termination, because the engine pushes it to the subscription, but that is the technical
+audience described above and not the workflow's own method. And `cancelUserTask` or
+`cancelTask`, which the application calls itself, work as they always did: the application
+already knows, so there is nothing to notify it of.
+
+The core can close this gap for a BPMS which reports no cancellation. At every delivery it
+would ask the adapter about the other tasks it believes are open in the same workflow, and
+report the ones which are gone. The question has three answers, and a cancellation follows
+only on "gone". This adapter supplies no such probe, because the Process-Engine-API has no
+operation which asks about a task, and a failed command comes back untyped, so a refusal and
+an unreachable engine look alike ([`GAPS.md`](GAPS.md), entry 27). A probe which guessed
+would cancel the open work of every woken workflow whenever the engine hiccups, so none is
+supplied at all (decision 13 in [`DECISIONS.md`](DECISIONS.md), held by
+`PeaOpenTaskProbeTest`).
+
+What an application does instead: model the cancellation. An event subprocess or a boundary
+event with a service task behind it turns the moment into a delivery, and a delivery is the
+one thing this API reports reliably. The same BPMN then behaves the same way on every BPMS,
+which is worth more than a notification only some of them send.
 
 ## What the adapter remembers about the deployed models
 

@@ -742,3 +742,57 @@ BPMN element id of the delivered task, filled by the engine adapters. The consta
 `CommonRestrictions.ACTIVITY_ID`, and the reference adapter already fills it, so this is
 writing down what one engine does rather than adding vocabulary. Both asks are one
 paragraph in the same place, and we would send them together.
+
+## 27. A task cannot be asked about, so a cancellation cannot be worked out
+
+**Needed by VanillaBP:** a BPMS which reports no cancellation leaves an application blind:
+the workflow walked away from a task, and nothing tells the `@WorkflowTask` method which
+waits on it. The core can work that out on its own. Whenever the BPMS wakes the application
+up, it looks at the other tasks it believes are open in the same workflow and asks the
+adapter one question per task: does this BPMS still have it? The answer has three values,
+and the third one is why it is not a boolean. `GONE` reports the task to the application as
+canceled, `STILL_THERE` does nothing, and `CANNOT_SAY` does nothing either. An adapter which
+folds a failed question into `GONE` cancels every open task of a workflow whenever the
+engine hiccups.
+
+**Offered by the Process-Engine-API:** no way to ask. Version 1.7, read on 2026-09-20 and
+the newest on Maven Central, carries nine interfaces with an operation on them: deploy,
+start a process, correlate a message, send a signal, evaluate a decision, subscribe for
+tasks, complete a service task, complete a user task, modify a user task. Not one of them
+can be asked what the engine holds, and a task is no exception. The closest thing to a
+question is therefore a `PREFLIGHT_CHECK` completion, which is what
+`awarenessOfTask` already sends. Its failure says nothing: the futures fail with an untyped
+`ExecutionException`, entry 10 above, so a refusal and an unreachable engine arrive as the
+same thing. A probe built on it could answer `STILL_THERE` and `CANNOT_SAY` and never
+`GONE`, which costs a round trip per open task and reports nothing.
+
+The API does carry the news, once, in the other direction. A subscription registers a
+`TaskTerminationHandler` beside its delivery handler, and the engine pushes the
+`TaskInformation` of a task it had delivered and then took away. Two things keep that from
+answering the question. It is a push and not a question, so a task withdrawn while this
+application was down is never reported, and nothing asks afterwards. And what a termination
+means is not written down: `TaskInformation` names `create`, `assign`, `update`, `complete`
+and `delete` as constants of its free-form `meta` map, and the API nowhere says which of
+them a termination carries, or that it carries one at all. Reading a termination as "the
+task was canceled" would therefore rest on a string one engine happens to fill.
+
+**Consequence for the adapter:** the adapter supplies no probe, which is the supported way
+of saying it cannot answer. An application on this BPMS is told when a user task or an async
+task is created and never when the workflow walked away from it. What the termination does
+reach are the user-task observers, which is a technical audience and not the workflow.
+"What an application hears about a canceled task" in `README.md` says the whole picture for
+an application, decision 13 in the repository's `DECISIONS.md` says why nothing is supplied,
+and `PeaOpenTaskProbeTest` holds it so a later change cannot slip a guessing probe in.
+
+**Ready to be sent.** Two asks, and either of them closes this. The first is an operation
+which asks about one task by its id and answers whether the engine still has it, one round
+trip and no search, so that an engine can serve it without a read model. The second is the
+exception taxonomy entry 10 asks for, because a `PREFLIGHT_CHECK` completion which fails
+with a typed "no such task" is already the question we need. The second is the smaller
+change and helps more places, so it is the one we would put first.
+
+A smaller thing would help even without either of them: say what a termination means. If the
+API wrote down that a termination carries `reason`, and which of the values of
+`TaskInformation` it carries, an adapter could turn the push into a cancellation for the
+tasks it was delivered. That would not cover a task withdrawn while the application was
+down, so it is an addition to the two asks above and not a replacement for them.
