@@ -27,6 +27,12 @@ mvn install
 `install` and not `install verify`: `install` already runs every phase `verify` has, so naming both
 walks two lifecycles per module and reports every compiler warning twice.
 
+The javadoc is checked by two tools with different eyes. The compiler compiles every module with
+`-Xdoclint:all,-missing`, which covers the private and package private code as well, and the javadoc
+plugin, which this repository runs in every build, covers what the published documentation shows and
+stops at protected.
+A broken `{@link}` or a tag HTML no longer knows fails the build in either place.
+
 The tests are pure JVM smoke tests. They need neither Docker nor a network, which makes a full run
 the cheapest in the workspace and is also the reason other repositories boot this adapter as their
 test double. `test-coverage-report/coverage-gate` is the last module of the reactor and fails below

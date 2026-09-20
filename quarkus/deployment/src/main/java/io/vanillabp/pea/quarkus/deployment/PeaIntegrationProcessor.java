@@ -24,7 +24,8 @@ class PeaIntegrationProcessor {
   private static final String FEATURE = "vanillabp-process-engine-api";
 
   /**
-   * Announces the Process-Engine-API adapter type and its {@link PeaProcessService} bean to
+   * Announces the Process-Engine-API adapter type and its
+   * {@link io.vanillabp.pea.processservice.PeaProcessService} bean to
    * the VanillaBP Quarkus integration.
    *
    * @param properties Build-time properties (forces config root registration)

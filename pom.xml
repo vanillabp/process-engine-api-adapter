@@ -185,6 +185,15 @@
           <version>3.16.0</version>
           <configuration>
             <release>${version.java}</release>
+            <compilerArgs>
+              <!-- this adapter talks to an engine through an API of its own, and most of
+                   what explains that talk sits on private fields and package private
+                   classes. The javadoc plugin of this pom never opens those, because it
+                   reads what Maven Central shows. javac does, so a link which points at a
+                   renamed method fails the build here. 'missing' is out: a comment which
+                   was never written stays a warning. -->
+              <arg>-Xdoclint:all,-missing</arg>
+            </compilerArgs>
             <annotationProcessorPaths>
               <path>
                 <groupId>org.projectlombok</groupId>
