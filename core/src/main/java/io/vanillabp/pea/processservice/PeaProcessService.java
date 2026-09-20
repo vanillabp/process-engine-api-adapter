@@ -94,7 +94,8 @@ public class PeaProcessService<A> implements MigratableProcessService<A> {
 
   /**
    * The engine's signal API. Optional: an engine implementation without
-   * it leaves signals unsupported, which {@link #sendSignalPhaseTwo} says.
+   * it leaves signals unsupported, which {@link #signalNotSupported(String, String)}
+   * says.
    */
   private SignalApi signalApi;
 
