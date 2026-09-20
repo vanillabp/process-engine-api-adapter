@@ -66,7 +66,7 @@ starts run through VanillaBP's generic transaction-outbox path, like everything 
 adapter sends to the engine.
 
 That path is drawn twice in `migration-adapter/README.md` of `adapter-platform-integration`, under
-[Two-phase workflow start](https://github.com/vanillabp/adapter-platform-integration/blob/main/migration-adapter/README.md#two-phase-workflow-start-phasetwooutbox-spi):
+[Phase one and phase two](https://github.com/vanillabp/adapter-platform-integration/blob/main/migration-adapter/README.md#phase-one-and-phase-two-phasetwooutbox-spi):
 once as the plain start and once on a time line which crosses a crash. The other mechanisms this
 adapter plugs into are drawn there as well, each in the section describing it, and
 [`diagrams/README.md`](https://github.com/vanillabp/adapter-platform-integration/blob/main/diagrams)
