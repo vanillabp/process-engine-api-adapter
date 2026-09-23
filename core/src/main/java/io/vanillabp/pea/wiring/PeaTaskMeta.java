@@ -91,6 +91,9 @@ public final class PeaTaskMeta {
   }
 
   /**
+   * Reads one meta value. Every key is optional: which of them an engine fills is that
+   * engine's business, so a caller handles an empty answer rather than requiring one.
+   *
    * @param taskInformation What the engine delivered
    * @param key One of the keys above
    * @return The value, or <code>null</code> where the engine filled none
@@ -142,6 +145,10 @@ public final class PeaTaskMeta {
   }
 
   /**
+   * Reads a meta value which names several things, the candidate groups of a user task for
+   * example. The API carries them as one string, so the comma is the separator and nothing
+   * else can be.
+   *
    * @param taskInformation What the engine delivered
    * @param key One of the keys above
    * @return The comma-separated value as a list, empty where the engine filled none

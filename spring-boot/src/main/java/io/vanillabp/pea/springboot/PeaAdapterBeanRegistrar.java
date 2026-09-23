@@ -34,6 +34,14 @@ import io.vanillabp.pea.processservice.PeaProcessService;
  */
 public class PeaAdapterBeanRegistrar implements BeanRegistrar {
 
+  /**
+   * Spring Boot builds the class when the auto-configuration imports it. It holds nothing:
+   * what the adapter ids are is read from the environment while registering.
+   */
+  public PeaAdapterBeanRegistrar() {
+
+  }
+
   @Override
   public void register(
       final BeanRegistry registry,

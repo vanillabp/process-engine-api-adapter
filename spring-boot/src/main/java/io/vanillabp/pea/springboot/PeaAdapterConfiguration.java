@@ -16,6 +16,18 @@ import io.vanillabp.pea.PeaAdapter;
 @AutoConfiguration(before = SpringBootMigrationAdapterAutoConfiguration.class)
 public class PeaAdapterConfiguration extends AdapterConfigurationBase {
 
+  /**
+   * Spring Boot builds the class while it applies the auto-configuration, and that is all
+   * it does: the announcement below is read from the instance.
+   */
+  public PeaAdapterConfiguration() {
+
+  }
+
+  /**
+   * The BPMS type an application writes in <code>vanillabp.adapters.&lt;id&gt;.type</code>
+   * to configure this adapter.
+   */
   public static final String ADAPTER_TYPE = PeaAdapter.ADAPTER_TYPE;
 
   @Override

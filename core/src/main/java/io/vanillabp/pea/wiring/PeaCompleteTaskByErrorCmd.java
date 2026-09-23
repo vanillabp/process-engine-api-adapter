@@ -16,6 +16,14 @@ public class PeaCompleteTaskByErrorCmd extends CompleteTaskByErrorCmd {
 
   private final ExecutionMode executionMode;
 
+  /**
+   * The BPMN error without any values: what a task raises where the model branches on the
+   * error code alone.
+   *
+   * @param taskId The task to cancel
+   * @param errorCode The BPMN error code
+   * @param errorMessage The BPMN error message
+   */
   public PeaCompleteTaskByErrorCmd(
       final String taskId,
       final String errorCode,
@@ -46,6 +54,8 @@ public class PeaCompleteTaskByErrorCmd extends CompleteTaskByErrorCmd {
   }
 
   /**
+   * The BPMN error in the phase the caller is in.
+   *
    * @param taskId The task to cancel
    * @param errorCode The BPMN error code
    * @param errorMessage The BPMN error message

@@ -21,6 +21,11 @@ public final class PeaStartEvents {
   }
 
   /**
+   * Reads the start events of one process out of the raw bytes. The result is what the
+   * deployment refuses the module with: this engine reports no start of its own, so a
+   * workflow behind such an event would begin without an aggregate and nobody would
+   * notice (GAPS entry 16).
+   *
    * @param resource The raw BPMN
    * @param bpmnProcessId The process to look at
    * @return The start events the engine fires on its own, described as

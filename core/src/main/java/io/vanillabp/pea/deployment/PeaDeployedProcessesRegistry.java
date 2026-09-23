@@ -11,9 +11,20 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 public class PeaDeployedProcessesRegistry {
 
+  /**
+   * Starts out empty. An adapter id gets its record the first time somebody asks for it,
+   * which is the deployment service of that id at boot.
+   */
+  public PeaDeployedProcessesRegistry() {
+
+  }
+
   private final Map<String, PeaDeployedProcesses> byAdapterId = new ConcurrentHashMap<>();
 
   /**
+   * The record of one adapter id. Two configured ids never share one, because the same
+   * BPMN process id may be deployed to both and they are different processes.
+   *
    * @param adapterId The adapter id
    * @return The adapter id's record of deployed processes (created on first use)
    */

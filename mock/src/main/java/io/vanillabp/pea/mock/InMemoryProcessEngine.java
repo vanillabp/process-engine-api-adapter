@@ -54,16 +54,32 @@ import dev.bpmcrafters.processengineapi.task.UserTaskCompletionApi;
  * carry real state (deployed definitions, started instances, subscribed tasks), which a
  * generated mock cannot do.
  * <p>
- * <b>Current (skeleton) behavior:</b> every API method records its invocation - the command
- * object and, where the command carries one, its {@link ExecutionMode} - into the public,
- * inspectable {@link #invocations} list and returns a completed future / empty result of
- * the declared type. No stateful behavior yet. Use {@link #reset()} to clear recordings
- * between tests.
+ * <b>What it records and what it keeps:</b> every API method records its invocation - the
+ * command object and, where the command carries one, its {@link ExecutionMode} - into the
+ * public, inspectable {@link #invocations} list. Beside that it keeps the state a test has
+ * to be able to assert: the deployed bundles, the instances a {@link ExecutionMode#SYNC}
+ * start created, the open subscriptions, which task went to which of them, and what a
+ * completion carried. A task is delivered by a test calling {@code deliverTask}, because
+ * nothing here polls. {@link #reset()} clears all of it between tests.
+ * <p>
+ * <b>It refuses what the engines behind the API refuse</b> - a preflight against a task
+ * which is not open, a completion of a task which is gone - and no more than that. A fake
+ * stricter than the real thing turns a legitimate call into a failing test, which is how
+ * a null value in a shared aggregate attribute was found once.
  * <p>
  * A single instance implements all Process-Engine-API interfaces the adapter needs, so the
  * platform modules can inject the same bean wherever any of these interfaces is required.
  */
 public class InMemoryProcessEngine implements DeploymentApi, StartProcessApi, CorrelationApi, SignalApi, TaskSubscriptionApi, ServiceTaskCompletionApi, UserTaskCompletionApi {
+
+  /**
+   * Starts out with nothing deployed, nothing running and nothing recorded. One instance
+   * serves every Process-Engine-API interface the adapter needs, so a test wires the same
+   * object everywhere and sees one engine.
+   */
+  public InMemoryProcessEngine() {
+
+  }
 
   /**
    * A single recorded API invocation.
@@ -138,6 +154,9 @@ public class InMemoryProcessEngine implements DeploymentApi, StartProcessApi, Co
   private final AtomicLong instanceCounter = new AtomicLong();
 
   /**
+   * Every call the adapter made, which is what a test asserts a command and its execution
+   * mode against.
+   *
    * @return All invocations recorded so far, in call order.
    */
   public List<Invocation> getInvocations() {
@@ -147,6 +166,9 @@ public class InMemoryProcessEngine implements DeploymentApi, StartProcessApi, Co
   }
 
   /**
+   * What the adapter handed over as a bundle. The API deploys opaque resources, so these are
+   * bytes and a name, and a test reads them to check what the scoping rewrote.
+   *
    * @return All resource bundles deployed so far, in deployment order.
    */
   public List<Deployment> getDeployments() {
@@ -156,6 +178,11 @@ public class InMemoryProcessEngine implements DeploymentApi, StartProcessApi, Co
   }
 
   /**
+   * The workflows this engine really started. A preflight creates nothing, so the
+   * difference between this list and the recorded invocations is what the two phases did.
+   * Duplicates are kept rather than folded away: a start dispatched twice is the residual
+   * an at-least-once outbox has, and a test has to be able to see it.
+   *
    * @return All process instances created by a {@link ExecutionMode#SYNC} start, in
    *         creation order (duplicates for the same aggregate id are visible)
    */
@@ -386,6 +413,12 @@ public class InMemoryProcessEngine implements DeploymentApi, StartProcessApi, Co
 
   private final List<CorrelatedMessage> correlatedMessages = new CopyOnWriteArrayList<>();
 
+  /**
+   * What was correlated. A message carries no content of its own here, so a name and a
+   * correlation key are all there is to assert.
+   *
+   * @return The messages correlated so far, in call order
+   */
   public List<CorrelatedMessage> getCorrelatedMessages() {
 
     return correlatedMessages;
@@ -445,6 +478,12 @@ public class InMemoryProcessEngine implements DeploymentApi, StartProcessApi, Co
    */
   private final List<ActiveSubscription> subscriptions = new CopyOnWriteArrayList<>();
 
+  /**
+   * Which tasks this engine would deliver to whom. A test reads them to check what the
+   * subscription asks the engine for.
+   *
+   * @return The subscriptions which are open, in the order they were opened
+   */
   public List<ActiveSubscription> getSubscriptions() {
 
     return subscriptions;
@@ -719,18 +758,27 @@ public class InMemoryProcessEngine implements DeploymentApi, StartProcessApi, Co
 
   /**
    * A completed task (via {@code completeTask}) - inspectable by tests.
+   *
+   * @param taskId The task which was completed
    */
   public record CompletedTask(String taskId) {
   }
 
   /**
    * A task completed by BPMN error - inspectable by tests.
+   *
+   * @param taskId The task which raised the error
+   * @param errorCode The BPMN error code, which is what the model catches
+   * @param errorMessage The BPMN error message
    */
   public record ErroredTask(String taskId, String errorCode, String errorMessage) {
   }
 
   /**
    * A failed task (via {@code failTask}) - inspectable by tests.
+   *
+   * @param taskId The task whose handler threw
+   * @param reason The short reason the adapter reported
    */
   public record FailedTask(String taskId, String reason) {
   }
@@ -746,6 +794,10 @@ public class InMemoryProcessEngine implements DeploymentApi, StartProcessApi, Co
   private final Map<String, Map<String, Object>> completionPayloads = new ConcurrentHashMap<>();
 
   /**
+   * What travelled with a completion: the values the aggregate shares plus the aggregate-ID
+   * variable. Kept per task rather than in the list of completions, so a test asserting the
+   * completion itself is unaffected by what the sync model happens to share.
+   *
    * @param taskId The completed (or by-error completed) task
    * @return The payload the completion carried - empty if none or unknown task
    */
@@ -782,30 +834,59 @@ public class InMemoryProcessEngine implements DeploymentApi, StartProcessApi, Co
 
   private final Map<String, String> deliveredAs = new ConcurrentHashMap<>();
 
+  /**
+   * The tasks this engine considers open: delivered and neither completed nor terminated.
+   * It is what a preflight is answered from.
+   *
+   * @return The ids of the open tasks
+   */
   public Set<String> getOpenTaskIds() {
 
     return openTaskIds;
 
   }
 
+  /**
+   * The tasks which were finished normally.
+   *
+   * @return The tasks completed so far, in call order
+   */
   public List<CompletedTask> getCompletedTasks() {
 
     return completedTasks;
 
   }
 
+  /**
+   * The tasks which raised a BPMN error instead of finishing, with the code the model is
+   * meant to catch.
+   *
+   * @return The tasks ended by a BPMN error so far, in call order
+   */
   public List<ErroredTask> getErroredTasks() {
 
     return erroredTasks;
 
   }
 
+  /**
+   * The tasks whose handler threw. A real engine would count retries down and end in an
+   * incident; this one only remembers that it was told.
+   *
+   * @return The tasks reported as failed so far, in call order
+   */
   public List<FailedTask> getFailedTasks() {
 
     return failedTasks;
 
   }
 
+  /**
+   * Makes the next completion of that task fail, so a test can drive the path an outbox
+   * retry takes without a real engine misbehaving.
+   *
+   * @param taskId The task whose next completion fails
+   */
   public void failNextCompletionFor(
       final String taskId) {
 

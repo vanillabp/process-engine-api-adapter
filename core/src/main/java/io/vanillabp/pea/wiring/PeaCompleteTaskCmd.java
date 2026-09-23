@@ -20,6 +20,12 @@ public class PeaCompleteTaskCmd extends CompleteTaskCmd {
 
   private final ExecutionMode executionMode;
 
+  /**
+   * A completion carrying nothing but the task, for a caller which shares no aggregate
+   * values at all.
+   *
+   * @param taskId The task to complete
+   */
   public PeaCompleteTaskCmd(
       final String taskId) {
 
@@ -45,6 +51,8 @@ public class PeaCompleteTaskCmd extends CompleteTaskCmd {
   }
 
   /**
+   * The completion in the phase the caller is in.
+   *
    * @param taskId The task to complete
    * @param executionMode {@link ExecutionMode#SYNC} for the actual completion
    *        (phase two) or {@link ExecutionMode#PREFLIGHT_CHECK} for the

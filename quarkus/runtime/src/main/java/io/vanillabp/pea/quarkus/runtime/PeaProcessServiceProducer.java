@@ -32,19 +32,35 @@ import jakarta.enterprise.inject.Produces;
  * adapter id is resolved from the configuration (first adapter of type
  * {@code process-engine-api}).
  * <p>
- * The Process-Engine-API interfaces are injected; by default they resolve to the
- * mock-backed {@link io.vanillabp.pea.mock.InMemoryProcessEngine} default bean.
+ * The Process-Engine-API interfaces are injected, one per interface the API splits its
+ * commands into; by default they all resolve to the mock-backed
+ * {@link io.vanillabp.pea.mock.InMemoryProcessEngine} default bean. The signal API is the
+ * one which may be absent, and signals are then the operation this adapter refuses.
  */
 @ApplicationScoped
 public class PeaProcessServiceProducer {
 
   /**
-   * Only the Process-Engine-APIs the adapter actually uses are injected (currently
-   * {@link StartProcessApi}); upcoming stories add theirs when they consume them.
+   * Quarkus builds the bean to call the producer below. It keeps no state: what the
+   * producer returns is a bean of its own and lives as long as the application does.
    */
+  public PeaProcessServiceProducer() {
+
+  }
+
+
   /**
    * What the platform hands the adapter, built the same way for both services of an
    * adapter id.
+   *
+   * @param adapterId The configured adapter id the collaborators belong to
+   * @param workflowTaskRegistry What the core knows about the application's methods
+   * @param scoping How an identifier is kept apart from the one of another workflow module
+   * @param aggregateSync Which aggregate values travel to the engine
+   * @param preCommitRegistrar Where a phase-one check is run right before the commit
+   * @param workflowEndedInvoker The core's notification of a workflow which ended
+   * @param bpmsInitiatedStartInvoker The core's notification of a workflow the BPMS started
+   * @return The collaborators of that adapter id
    */
   static AdapterCollaborators collaboratorsOf(
       final String adapterId,
@@ -62,6 +78,28 @@ public class PeaProcessServiceProducer {
 
   }
 
+  /**
+   * One process service per configured adapter id of this type, as the element beans the
+   * platform collects.
+   *
+   * @param properties The platform's own configuration, which is where the adapter ids come
+   *          from
+   * @param startProcessApi Where a workflow is started
+   * @param serviceTaskCompletionApi Where a service task is completed or failed
+   * @param userTaskCompletionApi Where a user task is completed or canceled
+   * @param correlationApi Where a message is correlated
+   * @param signalApi Where a signal is broadcast, absent where the engine has no such API
+   * @param deployedProcessesRegistry The per-id record shared with the deployment services
+   * @param aggregateSync Which aggregate values travel to the engine
+   * @param scoping How an identifier is kept apart from the one of another workflow module
+   * @param preCommitRegistrar Where a phase-one check is run right before the commit
+   * @param workflowTaskRegistry What the core knows about the application's methods
+   * @param workflowEndedInvoker The core's notification of a workflow which ended, if the
+   *          application has a method for it
+   * @param bpmsInitiatedStartInvoker The core's notification of a workflow the BPMS started,
+   *          which this engine cannot report (GAPS entry 16)
+   * @return The process services, one per configured adapter id
+   */
   @Produces
   public List<MigratableProcessService<Object>> peaMigratableProcessServices(
       final MigrationAdapterProperties properties,

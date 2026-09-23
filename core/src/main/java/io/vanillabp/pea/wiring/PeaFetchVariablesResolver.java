@@ -29,6 +29,10 @@ public interface PeaFetchVariablesResolver {
   PeaFetchVariables.Mode DEFAULT_FETCH_VARIABLES = PeaFetchVariables.Mode.DERIVED;
 
   /**
+   * Answers for one task what its subscription asks the engine for. The implementation
+   * walks the four configuration levels and the most specific value wins, so this method
+   * is asked with the full triple and never with a partial one.
+   *
    * @param workflowModuleId The workflow module ID
    * @param bpmnProcessId The BPMN process ID
    * @param taskDefinition The task definition

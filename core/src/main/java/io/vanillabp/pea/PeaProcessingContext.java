@@ -18,8 +18,10 @@ import io.vanillabp.integration.adapter.spi.NameClashAvoidanceSupport.ModelIdent
  * startWorkflowProcessing}). It collects everything the adapter needs to deploy the
  * module's resources to the Process-Engine-API in one go.
  * <p>
- * Skeleton stage: the context only remembers the workflow module id and the models
- * seen so far. Real wiring/deployment state is added by later feature stories.
+ * Everything in here is collected while the module deploys and read once: the models and
+ * the decision tables become the bundle handed to the {@code DeploymentApi}, the declared
+ * identifiers go to the core so it can warn about a name two modules scope to the same
+ * string, and the subscriptions are what {@code stopWorkflowProcessing} closes again.
  */
 public class PeaProcessingContext {
 
@@ -27,6 +29,12 @@ public class PeaProcessingContext {
 
   private final List<PeaBpmnModel> models = new ArrayList<>();
 
+  /**
+   * Starts an empty context for one workflow module.
+   *
+   * @param workflowModuleId The workflow module this context collects, which is the unit
+   *          the adapter deploys in one call
+   */
   public PeaProcessingContext(
       final String workflowModuleId) {
 
@@ -34,12 +42,24 @@ public class PeaProcessingContext {
 
   }
 
+  /**
+   * Which module this context is about. Every identifier below is scoped with it on its way
+   * to the engine, because this BPMS has no namespace matching a workflow module.
+   *
+   * @return The workflow module this context belongs to
+   */
   public String getWorkflowModuleId() {
 
     return workflowModuleId;
 
   }
 
+  /**
+   * The processes read so far, in the order the pipeline handed the files over. That order
+   * is the one they are deployed in, and the one the registry of deployed processes keeps.
+   *
+   * @return The models of this workflow module
+   */
   public List<PeaBpmnModel> getModels() {
 
     return models;
@@ -104,6 +124,12 @@ public class PeaProcessingContext {
    */
   private final List<TaskSubscription> subscriptions = new ArrayList<>();
 
+  /**
+   * The subscriptions opened while the module started processing. They are closed in
+   * reverse order when it stops, which is why the order matters here.
+   *
+   * @return The open subscriptions, in the order they were opened
+   */
   public List<TaskSubscription> getSubscriptions() {
 
     return subscriptions;
