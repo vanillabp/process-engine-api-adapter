@@ -21,6 +21,20 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 public class PeaProcessEngineProducer {
 
+  /**
+   * Quarkus builds the bean to call the producer below. It keeps no state: what the
+   * producer returns is a bean of its own and lives as long as the application does.
+   */
+  public PeaProcessEngineProducer() {
+
+  }
+
+  /**
+   * The engine an application which brought none runs on. It warns while it does, because
+   * everything it holds is gone with the process and nothing else says so.
+   *
+   * @return The in-memory fake, serving every Process-Engine-API interface at once
+   */
   @Produces
   @Singleton
   @DefaultBean

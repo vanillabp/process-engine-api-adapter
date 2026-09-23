@@ -82,6 +82,9 @@ public final class PeaFetchVariables {
                           List<String> names) {
 
     /**
+     * Asks the engine for everything the process instance holds. More than the handlers
+     * declared, which costs payload on every delivery and never a missing value.
+     *
      * @return A selection asking for the complete payload
      */
     public static Selection everything() {
@@ -91,6 +94,9 @@ public final class PeaFetchVariables {
     }
 
     /**
+     * Asks for named variables only. The names are sorted, so two nodes of one application
+     * open the same subscription and a restart does not look like a change.
+     *
      * @param names The variable names, in any order
      * @return A selection asking for those names, sorted so it is stable across restarts
      */
@@ -102,6 +108,9 @@ public final class PeaFetchVariables {
     }
 
     /**
+     * Turns the selection into what the subscription command takes. Note the API's
+     * convention: an empty set means everything rather than nothing.
+     *
      * @return What the {@code SubscribeForTaskCmd} carries - an empty set is the API's
      *         way of asking for everything
      */
@@ -114,6 +123,11 @@ public final class PeaFetchVariables {
     }
 
     /**
+     * Whether a delivery of this subscription carries that variable. Asked whenever a
+     * handler reads a task parameter: a name the subscription left out would arrive as
+     * null and read like an empty value, so the handler refuses with a guiding message
+     * instead of running on nothing.
+     *
      * @param name A variable name
      * @return Whether a delivery of this subscription carries that variable
      */
@@ -125,6 +139,9 @@ public final class PeaFetchVariables {
     }
 
     /**
+     * The selection in words, so the startup line names what this subscription asks for
+     * instead of leaving somebody to work it out from the configuration.
+     *
      * @return What the startup line and the guiding messages call this selection
      */
     public String describe() {

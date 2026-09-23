@@ -32,6 +32,15 @@ public final class PeaStartProcessCommand implements StartProcessCommand {
 
   private final ExecutionMode executionMode;
 
+  /**
+   * Builds the command for one phase.
+   *
+   * @param bpmnProcessId The process to start, scoped for the workflow module already
+   * @param payload The shared aggregate values plus the aggregate-ID variable, which is
+   *          the only way back from the instance to the workflow
+   * @param executionMode {@link ExecutionMode#PREFLIGHT_CHECK} to ask before the commit,
+   *          {@link ExecutionMode#SYNC} to really start the workflow after it
+   */
   public PeaStartProcessCommand(
       final String bpmnProcessId,
       final Map<String, Object> payload,
@@ -44,6 +53,10 @@ public final class PeaStartProcessCommand implements StartProcessCommand {
   }
 
   /**
+   * What the engine is asked to start. The API calls it a {@code definitionKey} and this
+   * adapter puts the scoped BPMN process id there (see decision 2 in the repository's
+   * DECISIONS.md).
+   *
    * @return The BPMN process id (the Process-Engine-API's process {@code definitionKey})
    *         to start.
    */

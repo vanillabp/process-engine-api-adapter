@@ -31,6 +31,15 @@ import lombok.Setter;
 public class VanillaBpPeaProperties {
 
   /**
+   * Spring Boot builds the class and fills it with the keys of this overlay it recognises.
+   * An application which configures nothing keeps the empty maps, and every lookup then
+   * answers the default.
+   */
+  public VanillaBpPeaProperties() {
+
+  }
+
+  /**
    * The adapter sections of the shared tree, keyed by adapter ID.
    */
   private Map<String, PeaScopedKeys> adapters = Map.of();
@@ -117,6 +126,14 @@ public class VanillaBpPeaProperties {
   @Setter
   public static class PeaScopedKeys {
 
+    /**
+     * Spring Boot builds one per section it finds. An unset mode is what makes the level
+     * fall through to the next less specific one.
+     */
+    public PeaScopedKeys() {
+
+    }
+
     private PeaFetchVariables.Mode fetchVariables;
 
   }
@@ -127,6 +144,13 @@ public class VanillaBpPeaProperties {
   @Getter
   @Setter
   public static class ModuleOverlay {
+
+    /**
+     * Spring Boot builds one per workflow-module section it finds.
+     */
+    public ModuleOverlay() {
+
+    }
 
     private Map<String, PeaScopedKeys> adapters = Map.of();
 
@@ -141,6 +165,13 @@ public class VanillaBpPeaProperties {
   @Setter
   public static class WorkflowOverlay {
 
+    /**
+     * Spring Boot builds one per workflow section it finds.
+     */
+    public WorkflowOverlay() {
+
+    }
+
     private Map<String, PeaScopedKeys> adapters = Map.of();
 
     private Map<String, TaskOverlay> tasks = Map.of();
@@ -153,6 +184,13 @@ public class VanillaBpPeaProperties {
   @Getter
   @Setter
   public static class TaskOverlay {
+
+    /**
+     * Spring Boot builds one per task section it finds.
+     */
+    public TaskOverlay() {
+
+    }
 
     private Map<String, PeaScopedKeys> adapters = Map.of();
 

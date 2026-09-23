@@ -31,6 +31,13 @@ import lombok.extern.slf4j.Slf4j;
 public class PeaAdapterProcessServiceConfiguration {
 
   /**
+   * Spring Boot builds the class to read the bean methods below.
+   */
+  public PeaAdapterProcessServiceConfiguration() {
+
+  }
+
+  /**
    * The default Process-Engine-API implementation: an in-memory mock. Applications that
    * bring a real Process-Engine-API implementation override this by defining their own
    * bean.

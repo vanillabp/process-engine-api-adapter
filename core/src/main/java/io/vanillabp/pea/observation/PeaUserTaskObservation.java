@@ -47,6 +47,10 @@ public record PeaUserTaskObservation(
                                      TaskInformation taskInformation,
                                      Map<String, Object> payload) {
 
+  /**
+   * Checks what an observer cannot do without and makes the payload unmodifiable, so an
+   * observer which keeps the observation cannot change what the next one sees.
+   */
   public PeaUserTaskObservation {
     // what the observation is about: without them it cannot be placed under any workflow
     // module, and finding that out where a report is built would name neither the task nor
@@ -63,6 +67,8 @@ public record PeaUserTaskObservation(
   }
 
   /**
+   * The id the engine gave the task, which is what a completion is addressed to.
+   *
    * @return The engine's own id of the user task
    */
   public String taskId() {
@@ -72,6 +78,10 @@ public record PeaUserTaskObservation(
   }
 
   /**
+   * What the engine says about the task beside its payload - who it is assigned to, when it
+   * is due, whatever that engine fills. Which keys are there is the engine's business, so an
+   * observer asks for a key and takes no answer for granted.
+   *
    * @return What the engine says about the task, which the Process-Engine-API guarantees to
    *         be a map and may be an empty one
    */
@@ -82,6 +92,9 @@ public record PeaUserTaskObservation(
   }
 
   /**
+   * Why this observation happened at all, as far as the engine says so. An observer which
+   * builds a report needs it to tell a new task from an assignment of one it already has.
+   *
    * @return Why the engine reported the task - <code>create</code>, <code>assign</code>,
    *         <code>update</code>, <code>complete</code> or <code>delete</code> in the
    *         vocabulary the API's own engine adapters use - or <code>null</code> where the

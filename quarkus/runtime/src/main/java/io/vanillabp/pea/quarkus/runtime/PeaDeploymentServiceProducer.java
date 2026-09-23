@@ -48,6 +48,35 @@ import jakarta.inject.Singleton;
 @ApplicationScoped
 public class PeaDeploymentServiceProducer {
 
+  /**
+   * Quarkus builds the bean to call the producer below. It keeps no state: what the
+   * producer returns is a bean of its own and lives as long as the application does.
+   */
+  public PeaDeploymentServiceProducer() {
+
+  }
+
+  /**
+   * One deployment service per configured adapter id of this type, as the list the platform
+   * looks the beans up as.
+   *
+   * @param properties The platform's own configuration, which is where the adapter ids come
+   *          from
+   * @param deploymentApi Where a module's resources are handed to the engine
+   * @param workflowTaskRegistry What the core knows about the application's methods
+   * @param taskSubscriptionApi Where the subscriptions for the deployed tasks are opened
+   * @param serviceTaskCompletionApi What a delivered service task is completed through
+   * @param deployedProcessesRegistry The per-id record shared with the process services
+   * @param scoping How an identifier is kept apart from the one of another workflow module
+   * @param aggregateSync Which aggregate values travel to the engine
+   * @param preCommitRegistrar Where a phase-one check is run right before the commit
+   * @param workflowEndedInvoker The core's notification of a workflow which ended, if the
+   *          application has a method for it
+   * @param bpmsInitiatedStartInvoker The core's notification of a workflow the BPMS started,
+   *          which this engine cannot report (GAPS entry 16)
+   * @param userTaskObservers Who watches the delivered user tasks
+   * @return The deployment services, one per configured adapter id
+   */
   @Produces
   @Singleton
   @SuppressWarnings({

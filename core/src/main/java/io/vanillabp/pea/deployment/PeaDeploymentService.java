@@ -106,6 +106,12 @@ public class PeaDeploymentService implements AdapterDeploymentService<PeaBpmnMod
   /**
    * Convenience constructor without a shared deployment record (tests) - the
    * service then records into an instance of its own.
+   *
+   * @param adapterId The configured adapter id this service deploys for
+   * @param deploymentApi Where the module's resources are handed to the engine
+   * @param collaborators Everything the platform hands over, wiring and invoker included
+   * @param taskSubscriptionApi Where the subscriptions for the deployed tasks are opened
+   * @param serviceTaskCompletionApi What a delivered service task is completed through
    */
   public PeaDeploymentService(
       final String adapterId,
@@ -118,6 +124,18 @@ public class PeaDeploymentService implements AdapterDeploymentService<PeaBpmnMod
 
   }
 
+  /**
+   * The constructor a platform integration uses: the record of deployed processes is
+   * shared with the process service of the same adapter id, because that record is the
+   * only source of process definitions this engine has.
+   *
+   * @param adapterId The configured adapter id this service deploys for
+   * @param deploymentApi Where the module's resources are handed to the engine
+   * @param collaborators Everything the platform hands over, wiring and invoker included
+   * @param taskSubscriptionApi Where the subscriptions for the deployed tasks are opened
+   * @param serviceTaskCompletionApi What a delivered service task is completed through
+   * @param deployedProcesses The record this service fills and the process service reads
+   */
   public PeaDeploymentService(
       final String adapterId,
       final DeploymentApi deploymentApi,

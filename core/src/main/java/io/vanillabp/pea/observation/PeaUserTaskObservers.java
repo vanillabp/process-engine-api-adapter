@@ -44,6 +44,10 @@ public final class PeaUserTaskObservers {
   }
 
   /**
+   * The observers of one adapter id, as a value which can be handed around: a missing
+   * collection and an empty one are the same thing here, an application which does not
+   * watch.
+   *
    * @param adapterId The adapter id whose deliveries these observers are told about - what
    *          names the culprit's neighbourhood when one of them fails
    * @param observers What the platform module collected, possibly <code>null</code> or empty
@@ -61,6 +65,9 @@ public final class PeaUserTaskObservers {
   }
 
   /**
+   * Asked before an observation is built, because building one loads the values the engine
+   * delivered and nobody should pay for that where there is no reader.
+   *
    * @return Whether nobody watches - the state an application which knows nothing about this
    *         seam is in
    */
@@ -71,6 +78,9 @@ public final class PeaUserTaskObservers {
   }
 
   /**
+   * Names the observers so the startup line says who watches. A seam nobody can see in a
+   * log is a seam somebody will look for in a debugger.
+   *
    * @return The observers by class name, for the line said once at startup
    */
   public List<String> names() {
@@ -83,6 +93,9 @@ public final class PeaUserTaskObservers {
   }
 
   /**
+   * Tells every observer that a user task was delivered. The observation is built once and
+   * only where somebody watches, which is why it arrives as a supplier.
+   *
    * @param workflowModuleId The workflow module the task belongs to, for the message of a
    *          failure
    * @param taskId The delivered task, for the message of a failure
@@ -101,6 +114,10 @@ public final class PeaUserTaskObservers {
   }
 
   /**
+   * Tells every observer that a user task the engine had delivered is gone. The engine's
+   * own word for why travels with the observation and is passed on uninterpreted, because
+   * what that word means differs per engine behind this API.
+   *
    * @param workflowModuleId The workflow module the task belongs to, for the message of a
    *          failure
    * @param taskId The terminated task, for the message of a failure

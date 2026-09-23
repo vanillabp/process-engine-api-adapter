@@ -63,10 +63,12 @@ import lombok.extern.slf4j.Slf4j;
  * {@code SYNC} has to throw so the outbox retries the dispatch (phase two) - discarding
  * the future would consume the outbox entry and the workflow would silently never start.
  * <p>
- * Only the Process-Engine-APIs actually used are constructor parameters (currently
- * {@link StartProcessApi}); upcoming stories add theirs when they consume them. The
- * platform modules inject an implementation - by default the in-memory mock, later a
- * real Process-Engine-API implementation contributed by the application.
+ * The Process-Engine-APIs this class calls are constructor parameters, one per interface
+ * the API splits its commands into. The signal API is the exception and arrives through
+ * {@link #setSignalApi(SignalApi)}, because an engine may be built without it and signals
+ * are then the one operation this adapter refuses. The platform modules inject the
+ * implementations: the in-memory mock of this repository, or a real one the application
+ * contributes.
  *
  * <p>
  * Three rules of this class are written down because several places rely on them: a preflight asks
@@ -125,6 +127,16 @@ public class PeaProcessService<A> implements MigratableProcessService<A> {
    */
   private final AdapterCollaborators collaborators;
 
+  /**
+   * Convenience constructor for a test: no shared record of deployed processes and no
+   * collaborators, so the viewer API answers nothing and no aggregate values travel.
+   *
+   * @param adapterId The configured adapter id this service serves
+   * @param startProcessApi Where a workflow is started
+   * @param serviceTaskCompletionApi Where a service task is completed or failed
+   * @param userTaskCompletionApi Where a user task is completed or canceled
+   * @param correlationApi Where a message is correlated
+   */
   public PeaProcessService(
       final String adapterId,
       final StartProcessApi startProcessApi,
@@ -136,6 +148,18 @@ public class PeaProcessService<A> implements MigratableProcessService<A> {
 
   }
 
+  /**
+   * Convenience constructor for a test which needs the viewer API: it reads the record the
+   * deployment service filled, and still no aggregate values travel.
+   *
+   * @param adapterId The configured adapter id this service serves
+   * @param startProcessApi Where a workflow is started
+   * @param serviceTaskCompletionApi Where a service task is completed or failed
+   * @param userTaskCompletionApi Where a user task is completed or canceled
+   * @param correlationApi Where a message is correlated
+   * @param deployedProcesses What this application version deployed, the only source of
+   *          process definitions this engine has
+   */
   public PeaProcessService(
       final String adapterId,
       final StartProcessApi startProcessApi,
@@ -226,6 +250,21 @@ public class PeaProcessService<A> implements MigratableProcessService<A> {
 
   }
 
+  /**
+   * The constructor a platform integration uses. The collaborators are what makes the
+   * shared aggregate values and the aggregate-ID variable travel with every command, so a
+   * service built without them talks to the engine about an aggregate id and nothing else.
+   *
+   * @param adapterId The configured adapter id this service serves
+   * @param startProcessApi Where a workflow is started
+   * @param serviceTaskCompletionApi Where a service task is completed or failed
+   * @param userTaskCompletionApi Where a user task is completed or canceled
+   * @param correlationApi Where a message is correlated
+   * @param deployedProcesses What this application version deployed, the only source of
+   *          process definitions this engine has
+   * @param collaborators Everything the platform hands over, the sync model included; may
+   *          be <code>null</code> in a test
+   */
   public PeaProcessService(
       final String adapterId,
       final StartProcessApi startProcessApi,
@@ -387,6 +426,13 @@ public class PeaProcessService<A> implements MigratableProcessService<A> {
 
   }
 
+  /**
+   * The BPMS this service talks to, as the configuration and the startup lines name it.
+   * One adapter id of this type is all an application may configure, because the API
+   * cannot tell two engines behind it apart (GAPS entry 14).
+   *
+   * @return The adapter type of the Process-Engine-API adapter
+   */
   public String getAdapterType() {
 
     return PeaAdapter.ADAPTER_TYPE;

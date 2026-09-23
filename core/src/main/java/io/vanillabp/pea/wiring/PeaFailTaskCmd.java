@@ -13,6 +13,14 @@ import dev.bpmcrafters.processengineapi.task.FailTaskCmd;
  */
 public class PeaFailTaskCmd extends FailTaskCmd {
 
+  /**
+   * Reports that the handler of a task threw. The number of retries and their timeout stay
+   * empty, so the engine behind the API applies whatever it does by default.
+   *
+   * @param taskId The task which could not be handled
+   * @param reason The short reason, which is what a task list or an incident shows
+   * @param errorDetails The long form, usually the stack trace
+   */
   public PeaFailTaskCmd(
       final String taskId,
       final String reason,

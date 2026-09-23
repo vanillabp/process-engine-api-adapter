@@ -46,6 +46,17 @@ import io.vanillabp.pea.PeaBpmnModel;
 public class PeaDeployedProcesses {
 
   /**
+   * Starts out empty. One instance belongs to one configured adapter id, and the
+   * deployment service fills it at every boot.
+   */
+  public PeaDeployedProcesses() {
+
+  }
+
+  /**
+   * One deployed process: the model as it was read, plus what the engine answered when the
+   * bundle carrying it was deployed.
+   *
    * @param workflowModuleId The workflow module the process belongs to
    * @param model The BPMN model as read and deployed
    * @param deploymentKey The Process-Engine-API deployment key (the only version
@@ -58,6 +69,9 @@ public class PeaDeployedProcesses {
                                 String deploymentKey) {
 
     /**
+     * The process id the application wrote, not the scoped one the deployed bytes carry
+     * (see decision 2 in the repository's DECISIONS.md).
+     *
      * @return The plain BPMN process id
      */
     public String bpmnProcessId() {
@@ -67,6 +81,8 @@ public class PeaDeployedProcesses {
     }
 
     /**
+     * What a viewer shows instead of the process id, where the model offers one.
+     *
      * @return The name the modeller wrote on the process, or <code>null</code> where the
      *         model carries none
      */
@@ -149,6 +165,15 @@ public class PeaDeployedProcesses {
 
   }
 
+  /**
+   * Remembers one deployed process and rebuilds the two user-task indexes from what is
+   * held now. Synchronized because those indexes are replaced as a whole: two modules
+   * deploying at once would otherwise each index the state they read.
+   *
+   * @param workflowModuleId The workflow module the process belongs to
+   * @param model The BPMN model as read and deployed
+   * @param deploymentKey What the engine answered for the bundle the process travelled in
+   */
   public synchronized void record(
       final String workflowModuleId,
       final PeaBpmnModel model,
@@ -187,6 +212,9 @@ public class PeaDeployedProcesses {
   }
 
   /**
+   * Whether an empty answer about this process means "renamed" rather than "never heard
+   * of it".
+   *
    * @param workflowModuleId The workflow module id
    * @param bpmnProcessId The plain BPMN process id
    * @return Whether the module declares that id without deploying a model under it
@@ -200,6 +228,10 @@ public class PeaDeployedProcesses {
   }
 
   /**
+   * The model a workflow of this process is served with. It is the one THIS application
+   * version deployed, which is all the Process-Engine-API allows: a workflow still running
+   * on an older definition cannot be told apart from a new one here.
+   *
    * @param workflowModuleId The workflow module id
    * @param bpmnProcessId The BPMN process id
    * @return The deployed process or <code>null</code>
@@ -213,6 +245,9 @@ public class PeaDeployedProcesses {
   }
 
   /**
+   * The same answer for a caller which already holds a definition id, which is what the
+   * viewer API hands back and forth.
+   *
    * @param processDefinitionId The adapter-native definition id (see
    *        {@link #definitionId(String, String)})
    * @return The deployed process or <code>null</code>
