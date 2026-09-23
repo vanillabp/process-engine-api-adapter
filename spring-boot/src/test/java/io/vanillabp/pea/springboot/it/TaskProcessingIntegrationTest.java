@@ -38,6 +38,7 @@ import dev.bpmcrafters.processengineapi.task.CompleteTaskCmd;
 import dev.bpmcrafters.processengineapi.task.TaskInformation;
 import io.vanillabp.integration.spi.AggregatePersistenceAware;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
+import io.vanillabp.integration.test.utils.delivery.TaskDeliveryLogReader;
 import io.vanillabp.pea.mock.InMemoryProcessEngine;
 import io.vanillabp.pea.springboot.TestPersistenceConfiguration;
 import io.vanillabp.spi.process.ProcessService;
@@ -885,22 +886,21 @@ public class TaskProcessingIntegrationTest {
   private DataSource deliveryLogDataSource;
 
   /**
-   * What the delivery log wrote down about one task, read out of the table the platform's
-   * JDBC store owns.
+   * What the delivery log wrote down about one task. The reader belongs to the platform,
+   * so this class names neither the table nor its columns.
    *
    * @param taskId The engine's task id, which is what the adapter reports as the delivery
-   * @return The element id and the workflow id of that record
+   * @return The one record of that task
    */
-  private Map<String, Object> recordOf(
+  private TaskDeliveryLogReader.Delivery recordOf(
       final String taskId) {
 
-    final var rows = new org.springframework.jdbc.core.JdbcTemplate(deliveryLogDataSource)
-        .queryForList(
-            "SELECT BPMN_ELEMENT_ID, WORKFLOW_ID FROM VANILLABP_TASK_DELIVERY WHERE TASK_ID = ?",
-            taskId);
-    assertEquals(1, rows.size(), "expected exactly one record for task "
+    final var records = TaskDeliveryLogReader
+        .of(deliveryLogDataSource)
+        .deliveriesOfTask(taskId);
+    assertEquals(1, records.size(), "expected exactly one record for task "
         + taskId);
-    return rows.getFirst();
+    return records.getFirst();
 
   }
 
@@ -917,8 +917,8 @@ public class TaskProcessingIntegrationTest {
                 .of("activityId", "PeaHappyTask", "processInstanceId", "instance-4741"));
 
     final var record = recordOf("task-meta");
-    assertEquals("PeaHappyTask", record.get("BPMN_ELEMENT_ID"), "the element id the engine named");
-    assertEquals("instance-4741", record.get("WORKFLOW_ID"), "the workflow id the engine named");
+    assertEquals("PeaHappyTask", record.bpmnElementId(), "the element id the engine named");
+    assertEquals("instance-4741", record.workflowId(), "the workflow id the engine named");
 
     // the user-task side reads the same two keys, and it is a handler of its own
     engine
@@ -929,11 +929,11 @@ public class TaskProcessingIntegrationTest {
     final var userTaskRecord = recordOf("utask-meta");
     assertEquals(
         "PeaApproveTask",
-        userTaskRecord.get("BPMN_ELEMENT_ID"),
+        userTaskRecord.bpmnElementId(),
         "the user task's element id the engine named");
     assertEquals(
         "instance-4741",
-        userTaskRecord.get("WORKFLOW_ID"),
+        userTaskRecord.workflowId(),
         "the workflow id of the user-task notification");
 
   }
@@ -951,8 +951,8 @@ public class TaskProcessingIntegrationTest {
     engine.deliverTask("task-no-meta", "peaHappy", PROCESS, Map.of("id", "4742"));
 
     final var record = recordOf("task-no-meta");
-    assertEquals("t_happy", record.get("BPMN_ELEMENT_ID"), "the element the model names");
-    assertNull(record.get("WORKFLOW_ID"), "no workflow id was named");
+    assertEquals("t_happy", record.bpmnElementId(), "the element the model names");
+    assertNull(record.workflowId(), "no workflow id was named");
 
   }
 
