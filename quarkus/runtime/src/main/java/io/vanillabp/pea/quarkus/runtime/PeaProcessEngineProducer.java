@@ -40,8 +40,10 @@ public class PeaProcessEngineProducer {
   @DefaultBean
   public InMemoryProcessEngine peaInMemoryProcessEngine() {
 
-    // full startup config validation is a later story - this single warning is the
-    // safety net against accidentally running the volatile mock in production
+    // no property picks the engine, so there is no configuration a startup check could
+    // read. This warning is the only place where the mock says that it is the one
+    // running, and an application which misses it loses its workflows at the next
+    // shutdown
     log.warn(
         """
             The IN-MEMORY MOCK is the active Process-Engine-API implementation: all workflow state is \

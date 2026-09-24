@@ -72,11 +72,6 @@ public class PeaFetchVariablesTest {
   private final InMemoryProcessEngine engine = new InMemoryProcessEngine();
 
   /**
-   * A core answering the given aggregate-ID variable per BPMN process and the given
-   * <code>&#64;TaskParam</code> names per task definition - the two questions the
-   * derivation asks it.
-   */
-  /**
    * The service under test, with the given core standing in for both halves of the task
    * SPI: this service derives its subscriptions while wiring and hands the deliveries of
    * those subscriptions back at runtime.
@@ -88,6 +83,11 @@ public class PeaFetchVariablesTest {
 
   }
 
+  /**
+   * A core answering the given aggregate-ID variable per BPMN process and the given
+   * <code>&#64;TaskParam</code> names per task definition - the two questions the
+   * derivation asks it.
+   */
   private static PeaDeploymentServiceTest.PermissiveInvoker invoker(
       final Function<String, String> aggregateIdNames,
       final Function<String, List<String>> taskParameters) {

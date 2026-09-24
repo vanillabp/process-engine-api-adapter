@@ -612,22 +612,6 @@ public class PeaDeploymentService implements AdapterDeploymentService<PeaBpmnMod
   }
 
   /**
-   * Streams over the BPMN XML with StAX and collects all
-   * {@code <bpmn:process isExecutable="true">} elements together with their
-   * service-like tasks. StAX is used (instead of building a DOM or depending on a
-   * BPMS-specific model API) because the Process-Engine-API has no BPMN model type.
-   * The task definition is read from the <code>zeebe:taskDefinition</code>
-   * extension (Camunda-8-style - the Process-Engine-API does not define how BPMN
-   * names task definitions, see {@code GAPS.md}); a task without one is reported
-   * by the wiring validation.
-   *
-   * @param workflowModuleId The workflow module id (used for error messages)
-   * @param filename The BPMN filename (used for error messages)
-   * @param resource The raw BPMN XML bytes
-   * @return The executable processes contained in the resource
-   * @throws BpmnParseException If the XML cannot be parsed
-   */
-  /**
    * Whether the element the reader stands on carries an attribute of the given local
    * name, whatever namespace it is in - the reference to a decision is spelled
    * differently per engine, and this parser reads raw XML rather than a model.
@@ -666,6 +650,22 @@ public class PeaDeploymentService implements AdapterDeploymentService<PeaBpmnMod
 
   }
 
+  /**
+   * Streams over the BPMN XML with StAX and collects all
+   * {@code <bpmn:process isExecutable="true">} elements together with their
+   * service-like tasks. StAX is used (instead of building a DOM or depending on a
+   * BPMS-specific model API) because the Process-Engine-API has no BPMN model type.
+   * The task definition is read from the <code>zeebe:taskDefinition</code>
+   * extension (Camunda-8-style - the Process-Engine-API does not define how BPMN
+   * names task definitions, see {@code GAPS.md}); a task without one is reported
+   * by the wiring validation.
+   *
+   * @param workflowModuleId The workflow module id (used for error messages)
+   * @param filename The BPMN filename (used for error messages)
+   * @param resource The raw BPMN XML bytes
+   * @return The executable processes contained in the resource
+   * @throws BpmnParseException If the XML cannot be parsed
+   */
   private List<ParsedProcess> parseBpmn(
       final String workflowModuleId,
       final String filename,
