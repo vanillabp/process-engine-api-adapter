@@ -780,6 +780,10 @@ coverage gate | Spring Boot: <percent> % instructions (<missed> of <total> misse
 coverage gate | Quarkus: <percent> % instructions (<missed> of <total> missed) | <gap> points below the rule of 90 %, build breaks below 85 %
 ```
 
+A build which stops at `package` never reaches the phase which writes the reports. The gate then
+prints a line per platform saying that the coverage was not checked, and those two tests are
+reported as skipped, instead of failing over a file the run could not have written.
+
 Both platforms are held to the same line. Coverage is measured per platform because the adapter core
 is platform-neutral: whatever exercises it counts only on the platform its tests ran on, so the core
 lines Quarkus never reaches are the features Quarkus never runs. `quarkus/integration-tests`
