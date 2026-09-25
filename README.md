@@ -724,6 +724,19 @@ adapter can hold; that the same id also stays equal across redeliveries is an as
 the engine behind the API rather than something a test here can produce, and an implementation
 which hands out a new task id per redelivery would disprove it.
 
+## What this adapter says about a value type
+
+The platform refuses to start a workflow whose values may not arrive as what they were, and it asks
+every adapter of that workflow what its BPMS does with a type
+(`MigratableProcessService#whatThisBpmsDoesWith`). `PeaValueTypes` is this adapter's answer, and it
+is the shortest of the three.
+
+The Process-Engine-API is engine-agnostic by design: it takes a payload and gives one back, and
+which engine sits behind it, how that engine stores a variable and which expression language reads
+it are all outside the API. So this adapter speaks for a text, a boolean and an enum, and for
+everything else the honest answer is "cannot say". That never ends a startup. It does cost the
+developer a warning, and the way out of the warning is a test against the engine really in use.
+
 ## Decision log
 
 Decisions several places in this repository rely on live in [`DECISIONS.md`](./DECISIONS.md), the
