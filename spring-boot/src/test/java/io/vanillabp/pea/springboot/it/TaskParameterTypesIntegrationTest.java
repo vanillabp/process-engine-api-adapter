@@ -55,11 +55,17 @@ import lombok.Getter;
  * is the round trip through THIS engine: a number which survives arrives, a number which
  * would be cut down fails the task instead, and the reason the engine is told is the
  * message the platform wrote.
+ * <p>
+ * None of those numbers means the same in every expression language, so the properties
+ * below name every one of them, and they name the <code>order</code> parameter of
+ * <code>orderAsObject</code> as well, which is declared as an <code>Object</code> and
+ * takes whatever the engine holds. This test is about the values, so it lists them one by
+ * one instead of allowing the whole aggregate.
  */
 @SpringBootTest(
     classes = TaskParameterTypesIntegrationTest.TaskParameterTypesApplication.class,
     properties = {
-        "vanillabp.adapters.pea.type=process-engine-api", "vanillabp.adapters.pea.name-clash-avoidance=none", "vanillabp.prioritized-adapters=pea", "vanillabp.workflow-modules.pea-test-module.adapters.pea.resources-location=classpath*:pea-test-module/processes/paramtypes"
+        "vanillabp.adapters.pea.type=process-engine-api", "vanillabp.adapters.pea.name-clash-avoidance=none", "vanillabp.prioritized-adapters=pea", "vanillabp.workflow-modules.pea-test-module.adapters.pea.resources-location=classpath*:pea-test-module/processes/paramtypes", "vanillabp.workflow-modules.pea-test-module.workflows.PeaParamProcess.declared-aggregate-values=total,huge,rate,count,order.total", "vanillabp.workflow-modules.pea-test-module.workflows.PeaParamProcess.tasks.orderAsObject.declared-task-params=order"
     })
 @ExtendWith(SuppressOutputExtension.class)
 public class TaskParameterTypesIntegrationTest {
