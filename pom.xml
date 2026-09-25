@@ -19,10 +19,10 @@
   <packaging>pom</packaging>
   <name>VanillaBP Process-Engine-API adapter</name>
   <description>Skeleton of the VanillaBP Version 2 adapter built on the BPMS-agnostic bpm-crafters Process-Engine-API (mock-first).</description>
-  <!-- the release parent carries an address of its own, and a child which says nothing
-       inherits it with its own name appended. Every artifact here would then advertise a
-       page which does not exist. The url below is the project page, the one the other
-       VanillaBP repositories name too, and the scm further down is this repository. The
+  <!-- a child which names no url of its own inherits the one of its parent and appends
+       its own name to it, and every artifact here would then advertise a page which does
+       not exist. The url below is the project page, the one the other VanillaBP
+       repositories name too, and the scm further down is this repository. The
        'inherit.append.path' attributes, one on <project> above and three on <scm> below,
        stop a module from appending its name to either. -->
   <url>https://www.vanillabp.io</url>
