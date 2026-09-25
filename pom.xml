@@ -1,6 +1,17 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" child.project.url.inherit.append.path="false" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
   <modelVersion>4.0.0</modelVersion>
+
+  <!-- brings the plugins and the two profiles a release to Maven Central needs (sources,
+       javadoc, GPG signature, the central-publishing plugin), and the javadoc options
+       shared by every VanillaBP repository, among them the one which lets javadoc count
+       past a hundred warnings per module. The javadoc block further down stays: this
+       repository is stricter than the parent and fails its build on the first warning. -->
+  <parent>
+    <groupId>io.vanillabp</groupId>
+    <artifactId>release-parent</artifactId>
+    <version>1.2.1</version>
+  </parent>
 
   <groupId>io.vanillabp</groupId>
   <artifactId>process-engine-api-adapter-parent</artifactId>
@@ -8,6 +19,13 @@
   <packaging>pom</packaging>
   <name>VanillaBP Process-Engine-API adapter</name>
   <description>Skeleton of the VanillaBP Version 2 adapter built on the BPMS-agnostic bpm-crafters Process-Engine-API (mock-first).</description>
+  <!-- the release parent carries an address of its own, and a child which says nothing
+       inherits it with its own name appended. Every artifact here would then advertise a
+       page which does not exist. The url below is the project page, the one the other
+       VanillaBP repositories name too, and the scm further down is this repository. The
+       'inherit.append.path' attributes, one on <project> above and three on <scm> below,
+       stop a module from appending its name to either. -->
+  <url>https://www.vanillabp.io</url>
 
   <licenses>
     <license>
@@ -32,6 +50,12 @@
     <module>quarkus</module>
     <module>test-coverage-report</module>
   </modules>
+
+  <scm child.scm.connection.inherit.append.path="false" child.scm.developerConnection.inherit.append.path="false" child.scm.url.inherit.append.path="false">
+    <connection>scm:git:https://github.com/vanillabp/process-engine-api-adapter.git</connection>
+    <developerConnection>scm:git:https://github.com/vanillabp/process-engine-api-adapter.git</developerConnection>
+    <url>https://github.com/vanillabp/process-engine-api-adapter/tree/main</url>
+  </scm>
 
   <distributionManagement>
     <snapshotRepository>
