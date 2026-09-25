@@ -427,6 +427,24 @@ public class PeaProcessService<A> implements MigratableProcessService<A> {
   }
 
   /**
+   * What the engine behind the Process-Engine-API does with that type, so the startup
+   * check can say what happens to a value which travels between the application and this
+   * BPMS.
+   *
+   * @param valueType The declared type of the value
+   * @param direction Which way the value travels
+   * @return The verdict of this adapter
+   */
+  @Override
+  public io.vanillabp.integration.adapter.spi.values.ValueTypeVerdict whatThisBpmsDoesWith(
+      final Class<?> valueType,
+      final io.vanillabp.integration.adapter.spi.values.ValueDirection direction) {
+
+    return PeaValueTypes.verdictFor(valueType, direction);
+
+  }
+
+  /**
    * The BPMS this service talks to, as the configuration and the startup lines name it.
    * One adapter id of this type is all an application may configure, because the API
    * cannot tell two engines behind it apart (GAPS entry 14).
