@@ -1,6 +1,7 @@
 package io.vanillabp.pea;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.List;
@@ -22,6 +23,7 @@ import dev.bpmcrafters.processengineapi.task.TaskInformation;
 import io.vanillabp.integration.adapter.spi.AggregateSyncMode;
 import io.vanillabp.integration.adapter.spi.NameClashAvoidance;
 import io.vanillabp.integration.adapter.spi.NameClashAvoidanceSupport;
+import io.vanillabp.integration.adapter.spi.workflowtask.DeliveryOfAnUnknownWorkflowException;
 import io.vanillabp.integration.adapter.spi.workflowtask.TaskInvocationContext;
 import io.vanillabp.integration.adapter.spi.workflowtask.WorkflowTaskInvoker;
 import io.vanillabp.integration.adapter.spi.workflowtask.WorkflowTaskOutcome;
@@ -65,6 +67,12 @@ public class PeaTaskHandlerTest {
      */
     WorkflowTaskOutcome outcome = WorkflowTaskOutcome.completed();
 
+    /**
+     * What the core throws instead of answering, or <code>null</code> for a delivery which
+     * reaches a business method.
+     */
+    RuntimeException refusal;
+
     @Override
     public WorkflowTaskOutcome invokeWorkflowTask(
         final String workflowModuleId,
@@ -78,6 +86,9 @@ public class PeaTaskHandlerTest {
       invokedActivationId = context.getActivationId();
       if (readParameter != null) {
         readParameterValue = context.getTaskParameter(readParameter);
+      }
+      if (refusal != null) {
+        throw refusal;
       }
       return outcome;
 
@@ -533,6 +544,57 @@ public class PeaTaskHandlerTest {
         warnings.getFirst().contains("task-8") && warnings.getFirst().contains("redelivers"),
         "expected a warning naming the task and the redelivery but got: "
             + warnings.getFirst());
+
+  }
+
+  @Test
+  @DisplayName("A task of a workflow this application does not own is failed with no further attempt")
+  public void aTaskOfAWorkflowWeDoNotOwnIsRefusedOnce() {
+
+    // a task subscription of this API matches a task type globally and there is no tenant,
+    // so a second application deploying the same BPMN process is served this application's
+    // tasks and the other way round. Failing such a task with the engine's default retries
+    // buys the same refusal once per attempt and, on an engine which never runs out, for ever
+    invoker.refusal = new DeliveryOfAnUnknownWorkflowException(
+        "pea", "test-module", "OnlyProcess", "someTask", "io.example.Aggregate", "4711", "wf-99");
+
+    final var warnings = warningsOf(
+        () -> handler(List.of("OnlyProcess"))
+            .accept(new TaskInformation("task-stranger", Map.of()), Map.of("id", "4711")));
+
+    assertEquals(1, engine.getFailedTasks().size());
+    final var failed = engine.getFailedTasks().getFirst();
+    assertEquals(
+        Integer.valueOf(0), failed.retryCount(),
+        "the same delivery would meet the same refusal, so the engine is asked not to repeat it");
+    assertTrue(
+        failed.reason().contains("does not own"),
+        "the reason the engine shows is the core's own message but got: "
+            + failed.reason());
+    assertEquals(1, warnings.size(), () -> "expected exactly one warning but got: "
+        + warnings);
+    assertTrue(
+        warnings.getFirst().contains("task-stranger") && warnings.getFirst().contains("does not own"),
+        "expected a warning naming the task and the reason but got: "
+            + warnings.getFirst());
+
+  }
+
+  @Test
+  @DisplayName("Any other failure keeps the retries the engine would apply anyway")
+  public void anOrdinaryFailureLeavesTheRetriesToTheEngine() {
+
+    // the counterpart of the test above: a handler which threw once may well work the next
+    // time, so the count stays empty and the engine decides
+    invoker.refusal = new IllegalStateException("the database was down");
+
+    handler(List.of("OnlyProcess"))
+        .accept(new TaskInformation("task-flaky", Map.of()), Map.of("id", "4711"));
+
+    assertEquals(1, engine.getFailedTasks().size());
+    assertNull(
+        engine.getFailedTasks().getFirst().retryCount(),
+        "an ordinary failure must not pin the number of attempts");
 
   }
 

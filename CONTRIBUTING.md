@@ -58,6 +58,12 @@ the cheapest in the workspace and is also the reason other repositories boot thi
 test double. `test-coverage-report/coverage-gate` is the last module of the reactor and fails below
 85 percent of covered instructions per platform, while the rule is 90.
 
+That last module also holds the checks which read the sources of the whole repository instead of
+running anything: that every test class suppresses its output, that no guiding message fell apart
+in its text block, and that every BPMN error code goes through the scoping helper before it reaches
+the engine. They live there because one run of them covers every module. A build of a single module
+never sees them, so run the whole reactor before you push.
+
 ## What a POM hands an application
 
 A tool which only translates our source belongs in scope `provided`, and the scope stands at the

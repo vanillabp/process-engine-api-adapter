@@ -9,6 +9,7 @@ import dev.bpmcrafters.processengineapi.task.ServiceTaskCompletionApi;
 import dev.bpmcrafters.processengineapi.task.TaskHandler;
 import dev.bpmcrafters.processengineapi.task.TaskInformation;
 import io.vanillabp.integration.adapter.spi.NameClashAvoidanceSupport;
+import io.vanillabp.integration.adapter.spi.workflowtask.DeliveryOfAnUnknownWorkflowException;
 import io.vanillabp.integration.adapter.spi.workflowtask.TaskInvocationContext;
 import io.vanillabp.integration.adapter.spi.workflowtask.WorkflowTaskInvoker;
 import io.vanillabp.integration.adapter.spi.workflowtask.WorkflowTaskOutcome;
@@ -34,6 +35,9 @@ import lombok.extern.slf4j.Slf4j;
  * committed);</li>
  * <li>COMPLETION_PENDING ({@code @TaskId} methods) - nothing: the task stays open
  * for {@code ProcessService#completeTask};</li>
+ * <li>a task of a workflow this application does not own
+ * ({@code DeliveryOfAnUnknownWorkflowException}) - {@code failTask} with a retry count of
+ * zero, see {@link #refuseTheStrangersTask(String, DeliveryOfAnUnknownWorkflowException)};</li>
  * <li>any other exception - {@code ServiceTaskCompletionApi.failTask} (the local
  * transaction was already rolled back by the core; retry semantics are the
  * engine's).</li>
@@ -228,6 +232,9 @@ public class PeaTaskHandler implements TaskHandler {
           new PeaTaskInvocationContext(
               adapterId, plainTaskDefinition(bpmnProcessId), bpmnElementId(bpmnProcessId, taskInformation), String
                   .valueOf(aggregateId), taskId, payload, taskInformation, fetchVariables));
+    } catch (final DeliveryOfAnUnknownWorkflowException refusal) {
+      refuseTheStrangersTask(taskId, refusal);
+      return;
     } catch (final Exception e) {
       // the core rolled the local transaction back - fail the task so the
       // underlying engine applies its retry semantics
@@ -269,6 +276,47 @@ public class PeaTaskHandler implements TaskHandler {
           taskId,
           taskDefinition);
     }
+
+  }
+
+  /**
+   * Hands a task of a workflow this application does not own back to the engine, and asks for
+   * no further attempt.
+   * <p>
+   * A task subscription of this API matches a task type globally and there is no tenant, so
+   * where two applications deploy a BPMN process of the same name, each of them is served the
+   * other's tasks. The core answers such a delivery with
+   * {@link DeliveryOfAnUnknownWorkflowException}, and nothing here can make the task run: the
+   * workflow aggregate it names lives in the other application. Repeating the delivery would
+   * therefore repeat the same refusal, which is why the retry count is zero rather than the
+   * engine's default. Zero and not a silent completion: the task is the other application's
+   * work and stays in the engine, and an application which quietly takes a stranger's task off
+   * the board takes it for good.
+   * <p>
+   * The log line leaves the stack trace out. The message of the refusal names the workflow,
+   * both situations it can be and what to do about each, and a trace would only add which line
+   * of the core read the database.
+   *
+   * @param taskId The task which belongs somewhere else
+   * @param refusal What the core said about it
+   */
+  private void refuseTheStrangersTask(
+      final String taskId,
+      final DeliveryOfAnUnknownWorkflowException refusal) {
+
+    log.warn(
+        "Process-Engine-API adapter '{}': task '{}' (definition '{}') is about a workflow this "
+            + "application does not own - failing it with no further attempt. The reason reads: {}",
+        adapterId,
+        taskId,
+        taskDefinition,
+        refusal.getMessage());
+    completion(
+        () -> serviceTaskCompletionApi
+            .failTask(PeaFailTaskCmd.withoutFurtherAttempts(taskId, refusal.getMessage()))
+            .get(),
+        taskId,
+        "fail");
 
   }
 
