@@ -7,6 +7,7 @@ import dev.bpmcrafters.processengineapi.task.TaskHandler;
 import dev.bpmcrafters.processengineapi.task.TaskInformation;
 import dev.bpmcrafters.processengineapi.task.TaskTerminationHandler;
 import io.vanillabp.integration.adapter.spi.NameClashAvoidanceSupport;
+import io.vanillabp.integration.adapter.spi.workflowtask.DeliveryOfAnUnknownWorkflowException;
 import io.vanillabp.integration.adapter.spi.workflowtask.TaskInvocationContext;
 import io.vanillabp.integration.adapter.spi.workflowtask.WorkflowTaskInvoker;
 import io.vanillabp.integration.adapter.spi.workflowtask.WorkflowTaskOutcome;
@@ -207,6 +208,8 @@ public class PeaUserTaskHandler implements TaskHandler {
                 + "instead.")
                 .formatted(taskDefinition, bpmnProcessId, workflowModuleId));
       }
+    } catch (final DeliveryOfAnUnknownWorkflowException refusal) {
+      sayTheUserTaskBelongsSomewhereElse(taskId, refusal);
     } catch (final Exception e) {
       // a failing NOTIFICATION must not break the user task itself - the task
       // stays available through forms/task lists; the defect is logged loudly
@@ -221,6 +224,46 @@ public class PeaUserTaskHandler implements TaskHandler {
     if (observerFailure != null) {
       throw observerFailure;
     }
+
+  }
+
+  /**
+   * Says that a delivered user task is about a workflow this application does not own, and
+   * that nothing else can be done about it here.
+   * <p>
+   * A task subscription of this API matches a task type globally and there is no tenant, so
+   * two applications which deploy a BPMN process of the same name are served each other's user
+   * tasks. The service-task side answers such a delivery at the engine, with a failure carrying
+   * no further attempt. This side cannot: {@code UserTaskCompletionApi} offers completion and
+   * completion by error and nothing else, and both of them would move a stranger's workflow on.
+   * So the notification ends here, the user task stays where it is, and the log line is the
+   * whole answer.
+   * <p>
+   * Ending it here is also what keeps the delivery from circling. A notification which throws
+   * travels back into the engine's pull cycle, which drops the subscription for the task and
+   * offers it again at the next turn, for as long as both applications run. Returning normally
+   * leaves the task delivered, so the message is written once per activation instead of once
+   * per cycle.
+   * <p>
+   * The stack trace is left out on purpose. The message of the refusal names the workflow, both
+   * situations it can be and what to do about each, and nothing in this application's code is
+   * at fault.
+   *
+   * @param taskId The user task which belongs somewhere else
+   * @param refusal What the core said about it
+   */
+  private void sayTheUserTaskBelongsSomewhereElse(
+      final String taskId,
+      final DeliveryOfAnUnknownWorkflowException refusal) {
+
+    log.warn(
+        "Process-Engine-API adapter '{}': user task '{}' (form reference '{}') is about a workflow "
+            + "this application does not own - not notified. This API has no way to refuse a user "
+            + "task, so the task stays untouched in the engine. The reason reads: {}",
+        adapterId,
+        taskId,
+        externalFormReference,
+        refusal.getMessage());
 
   }
 

@@ -779,8 +779,10 @@ public class InMemoryProcessEngine implements DeploymentApi, StartProcessApi, Co
    *
    * @param taskId The task whose handler threw
    * @param reason The short reason the adapter reported
+   * @param retryCount How many attempts the adapter left the task, or <code>null</code> where
+   *          it left the number to the engine
    */
-  public record FailedTask(String taskId, String reason) {
+  public record FailedTask(String taskId, String reason, Integer retryCount) {
   }
 
   private final List<CompletedTask> completedTasks = new CopyOnWriteArrayList<>();
@@ -976,7 +978,7 @@ public class InMemoryProcessEngine implements DeploymentApi, StartProcessApi, Co
       final FailTaskCmd cmd) {
 
     record("ServiceTaskCompletionApi", "failTask", cmd);
-    failedTasks.add(new FailedTask(cmd.getTaskId(), cmd.getReason()));
+    failedTasks.add(new FailedTask(cmd.getTaskId(), cmd.getReason(), cmd.getRetryCount()));
     return CompletableFuture.completedFuture(Empty.INSTANCE);
 
   }

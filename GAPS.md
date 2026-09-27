@@ -684,18 +684,29 @@ failure this replaced.
 **Offered by the Process-Engine-API:** nothing in writing. `TaskHandler` is a `BiConsumer`
 whose documentation says what it receives and nothing about what an exception out of it
 means, `TaskTerminationHandler` is the same, and `SubscribeForTaskCmd` has no place to say
-what a subscriber wants to happen. There is no way to answer a delivery either: no command
-reports one as failed, and nothing counts attempts. So each engine adapter decides for
-itself, and a subscriber cannot read anywhere what it will get.
+what a subscriber wants to happen. So each engine adapter decides for itself, and a subscriber
+cannot read anywhere what it will get. Reporting a failure instead of throwing is only half an
+answer: `ServiceTaskCompletionApi.failTask` takes a `FailTaskCmd` with an optional retry count
+and an optional backoff, and what an engine makes of either is again not written down, while
+`UserTaskCompletionApi` has no such command at all (entry 28).
 
 **Consequence for the adapter:** the adapter measures instead of assuming, and it relies on
 as little as possible. Measured on 2026-09-17 against the API's own reference implementation
 for an embedded Camunda 7 (`process-engine-adapter-camunda-platform-c7-embedded-core`
-2025.11.1, Camunda 7.24 on H2): a delivery whose handler throws is logged as
+2025.11.1, Camunda 7.24 on H2): a USER-task delivery whose handler throws is logged as
 `PROCESS-ENGINE-C7-EMBEDDED-038`, the task is deactivated for its subscription, and the next
 pull cycle hands it over again as a new delivery, over and over until the handler returns
 normally. The task itself is untouched in the engine and no incident appears. A termination whose handler throws is reported once, the failure travels
 out of the pull cycle, and the same termination is not offered again.
+
+A SERVICE-task delivery is a different mechanism and was read in the same version on
+2026-09-27. A handler which throws is logged as `PROCESS-ENGINE-C7-EMBEDDED-033` and the
+delivery ends in `handleFailure` with one attempt less than the task had, so it does run out.
+A handler which calls `failTask` instead lands in `C7ServiceTaskCompletionApiImpl`, which
+passes `cmd.retryCount` on where the command names one and falls back to its own
+`FailureRetrySupplier` where it does not; the supplier the reference stage wires counts three
+attempts down to zero, and zero is what Camunda 7 turns into an incident. So the retry count
+of the command is the one lever a subscriber has here, and entry 28 is what it does not reach.
 
 What the adapter takes from that: it logs the failure where it builds it, so an engine which
 prints the message alone still leaves the stack trace and the other observers behind. And the
@@ -796,3 +807,42 @@ API wrote down that a termination carries `reason`, and which of the values of
 `TaskInformation` it carries, an adapter could turn the push into a cancellation for the
 tasks it was delivered. That would not cover a task withdrawn while the application was
 down, so it is an addition to the two asks above and not a replacement for them.
+
+## 28. A user task cannot be handed back, so a stranger's user task ends in a log line
+
+**Needed by VanillaBP:** a way to say "this delivery is not mine". An application which is
+served a task of a workflow it does not own refuses it, the BPMS keeps the task, and whoever
+runs both applications reads why. The core words that refusal as
+`DeliveryOfAnUnknownWorkflowException` and every adapter carries it out with the means of its
+BPMS: Camunda 8 fails the job and the cluster raises an incident.
+
+**Offered by the Process-Engine-API:** on the service-task side enough, on the user-task side
+nothing. `ServiceTaskCompletionApi` has `failTask`, and `FailTaskCmd` carries an optional retry
+count, so a subscriber can report the failure and ask for no further attempt in one command.
+`UserTaskCompletionApi` has `completeTask` and `completeTaskByError` and nothing else. Both of
+them move the workflow on, which is the one thing that must not happen to a workflow belonging
+to somebody else, and there is no third operation. Throwing out of the handler is not a way
+out either: entry 25 measured that the reference engine then offers the same user task again at
+every pull cycle.
+
+Nothing narrows the delivery beforehand, which is what makes this reachable at all. A task
+subscription matches a task type globally and there is no tenant (entry 15), and
+`SubscribeForTaskCmd` restricts by the values of `CommonRestrictions`, all of which name one
+running instance or one definition. None of them says "only the workflows this application
+started", and the API has nothing which could.
+
+**Consequence for the adapter:** the two sides answer differently, and the difference is the
+gap. `PeaTaskHandler` fails the stranger's service task with a retry count of zero, so an
+engine which reads the count stops offering it and the ones with an incident concept raise
+one. `PeaUserTaskHandler` writes one log line naming the workflow and saying that the task was
+left untouched, and returns normally, because returning normally is what keeps the same
+delivery from circling through the pull cycle. So on user tasks the refusal is visible in the
+log of the application which was wrongly served, and nowhere else. The decision entry for
+story 696 carries the reasoning, and `PeaTaskHandlerTest` and `PeaUserTaskHandlerTest` hold
+both halves.
+
+**Ready to be sent to bpm-crafters:** yes, and it is the same ask as entry 25 seen from the
+other end. A `failTask` on `UserTaskCompletionApi`, with the same optional retry count the
+service-task command has, would let a subscriber answer a user-task delivery without touching
+the workflow. What the engine does with it stays the engine's business, which is why the
+paragraph entry 25 asks for is part of this ask rather than a separate one.

@@ -1390,4 +1390,131 @@ public class PeaDeploymentServiceTest {
 
   }
 
+  @Nested
+  @DisplayName("What the adapter hands over untouched")
+  class WhatTheAdapterHandsOverUntouched {
+
+    /**
+     * A model carrying the three constructs this adapter says nothing about: a compensation
+     * with its boundary event, handler and association, a multi-instance loop, and a data
+     * object with the reference which reads it. None of them is an element the adapter's pass
+     * over the BPMN reacts to, so all of them belong to the engine behind the API.
+     */
+    private static final String XML = """
+        <?xml version="1.0" encoding="UTF-8"?>
+        <bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:zeebe="http://camunda.org/schema/zeebe/1.0">
+          <bpmn:process id="RiskAssessment" isExecutable="true">
+            <bpmn:dataObject id="Dossier" name="The applicant's dossier"/>
+            <bpmn:dataObjectReference id="DossierRef" dataObjectRef="Dossier"/>
+            <bpmn:startEvent id="Start"/>
+            <bpmn:serviceTask id="Score">
+              <bpmn:extensionElements>
+                <zeebe:taskDefinition type="scoreApplicant"/>
+              </bpmn:extensionElements>
+              <bpmn:multiInstanceLoopCharacteristics isSequential="false">
+                <bpmn:loopCardinality>3</bpmn:loopCardinality>
+              </bpmn:multiInstanceLoopCharacteristics>
+              <bpmn:property id="Prop" name="__targetRef_placeholder"/>
+              <bpmn:dataInputAssociation id="DataIn">
+                <bpmn:sourceRef>DossierRef</bpmn:sourceRef>
+                <bpmn:targetRef>Prop</bpmn:targetRef>
+              </bpmn:dataInputAssociation>
+            </bpmn:serviceTask>
+            <bpmn:boundaryEvent id="ScoreCompensation" attachedToRef="Score">
+              <bpmn:compensateEventDefinition id="CompensateScore"/>
+            </bpmn:boundaryEvent>
+            <bpmn:serviceTask id="UndoScore" isForCompensation="true">
+              <bpmn:extensionElements>
+                <zeebe:taskDefinition type="undoScore"/>
+              </bpmn:extensionElements>
+            </bpmn:serviceTask>
+            <bpmn:association id="CompensationLink" associationDirection="One"
+                sourceRef="ScoreCompensation" targetRef="UndoScore"/>
+          </bpmn:process>
+        </bpmn:definitions>
+        """;
+
+    /**
+     * What the engine was given, for the one file this nested class deploys.
+     */
+    private byte[] deployedBytes() {
+
+      final var resources = engine
+          .getDeployments()
+          .getFirst()
+          .resources();
+      Assertions.assertEquals(1, resources.size());
+      try {
+        return resources
+            .getFirst()
+            .getResourceStream()
+            .readAllBytes();
+      } catch (final IOException cannotRead) {
+        throw new AssertionError("the deployed resource could not be read back", cannotRead);
+      }
+
+    }
+
+    private void deploy(
+        final PeaDeploymentService service) {
+
+      PeaProcessingContext context = null;
+      for (final var model : service.readBpmn("loan-approval", "risk.bpmn", bpmn(XML), true)) {
+        context = service.prepareBpmn("loan-approval", context, "risk.bpmn", model.getKey(), model.getValue());
+      }
+      service.deployResources("loan-approval", context);
+
+    }
+
+    @Test
+    @DisplayName("Outside 'use-prefix' the engine is given the file byte for byte")
+    public void theEngineIsGivenTheFileByteForByte() {
+
+      // the wiki says that everything this adapter does not read reaches the engine as it was
+      // modelled. Nothing in the code says it: the pass over the BPMN skips an element by not
+      // naming it, so a new element name added to that pass would quietly start rewriting
+      // models nobody is watching
+      deploy(serviceScopedBy(scopingWith(NameClashAvoidance.NONE)));
+
+      Assertions.assertArrayEquals(
+          XML.getBytes(StandardCharsets.UTF_8),
+          deployedBytes(),
+          "the deployed resource is not the file which came in");
+
+    }
+
+    @Test
+    @DisplayName("Under 'use-prefix' the identifiers change and the three constructs do not")
+    public void underUsePrefixOnlyTheIdentifiersChange() {
+
+      // here the comparison of the whole file says nothing, because the rewrite is the point.
+      // What still has to hold is that the rewrite touches identifiers and leaves the shapes
+      // it does not know alone
+      deploy(serviceScopedBy(scopingWith(NameClashAvoidance.USE_PREFIX)));
+
+      final var deployed = new String(deployedBytes(), StandardCharsets.UTF_8);
+      Assertions.assertTrue(
+          deployed.contains("loan-approval"),
+          () -> "expected the prefixed identifiers but got: "
+              + deployed);
+      for (final var construct : List
+          .of(
+              "compensateEventDefinition",
+              "isForCompensation=\"true\"",
+              "multiInstanceLoopCharacteristics",
+              "loopCardinality",
+              "dataObject",
+              "dataObjectReference")) {
+        Assertions.assertTrue(
+            deployed.contains(construct),
+            () -> "the rewrite lost '"
+                + construct
+                + "' from: "
+                + deployed);
+      }
+
+    }
+
+  }
+
 }
