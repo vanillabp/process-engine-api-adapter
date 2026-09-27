@@ -9,8 +9,6 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 
 import io.vanillabp.pea.wiring.PeaFetchVariables;
 import io.vanillabp.pea.wiring.PeaFetchVariablesResolver;
-import lombok.Getter;
-import lombok.Setter;
 
 /**
  * The Process-Engine-API adapter's OVERLAY of the shared <code>vanillabp.*</code>
@@ -26,8 +24,6 @@ import lombok.Setter;
  * platform's core properties; the overlay is a per-known-id lookup only.
  */
 @ConfigurationProperties("vanillabp")
-@Getter
-@Setter
 public class VanillaBpPeaProperties {
 
   /**
@@ -50,6 +46,52 @@ public class VanillaBpPeaProperties {
    * adapter).
    */
   private Map<String, ModuleOverlay> workflowModules = Map.of();
+
+  /**
+   * The adapter sections of the shared tree, keyed by adapter ID.
+   *
+   * @return The sections, keyed by adapter ID, never <code>null</code>
+   */
+  public Map<String, PeaScopedKeys> getAdapters() {
+
+    return adapters;
+
+  }
+
+  /**
+   * The adapter sections of the shared tree, keyed by adapter ID.
+   *
+   * @param adapters The sections, keyed by adapter ID
+   */
+  public void setAdapters(
+      final Map<String, PeaScopedKeys> adapters) {
+
+    this.adapters = adapters;
+
+  }
+
+  /**
+   * The workflow-module sections of the shared tree, keyed by workflow-module ID.
+   *
+   * @return The sections, keyed by workflow-module ID, never <code>null</code>
+   */
+  public Map<String, ModuleOverlay> getWorkflowModules() {
+
+    return workflowModules;
+
+  }
+
+  /**
+   * The workflow-module sections of the shared tree, keyed by workflow-module ID.
+   *
+   * @param workflowModules The sections, keyed by workflow-module ID
+   */
+  public void setWorkflowModules(
+      final Map<String, ModuleOverlay> workflowModules) {
+
+    this.workflowModules = workflowModules;
+
+  }
 
   /**
    * Resolves whether a subscription asks for the DERIVED payload variables or for all of
@@ -122,8 +164,6 @@ public class VanillaBpPeaProperties {
   /**
    * The scope-specific keys of one <code>adapters.&lt;id&gt;</code> section.
    */
-  @Getter
-  @Setter
   public static class PeaScopedKeys {
 
     /**
@@ -134,15 +174,43 @@ public class VanillaBpPeaProperties {
 
     }
 
+    /**
+     * Whether a subscription of this level asks for the derived payload variables or for
+     * all of them, <code>null</code> where the level says nothing.
+     */
     private PeaFetchVariables.Mode fetchVariables;
+
+    /**
+     * Whether a subscription of this level asks for the derived payload variables or for
+     * all of them.
+     *
+     * @return The mode, <code>null</code> where this level says nothing
+     */
+    public PeaFetchVariables.Mode getFetchVariables() {
+
+      return fetchVariables;
+
+    }
+
+    /**
+     * Whether a subscription of this level asks for the derived payload variables or for
+     * all of them.
+     *
+     * @param fetchVariables The mode, <code>null</code> to fall through to the next less
+     *          specific level
+     */
+    public void setFetchVariables(
+        final PeaFetchVariables.Mode fetchVariables) {
+
+      this.fetchVariables = fetchVariables;
+
+    }
 
   }
 
   /**
    * The adapter's view of one workflow-module section.
    */
-  @Getter
-  @Setter
   public static class ModuleOverlay {
 
     /**
@@ -152,17 +220,67 @@ public class VanillaBpPeaProperties {
 
     }
 
+    /**
+     * The <code>adapters.&lt;id&gt;</code> sections of this workflow module.
+     */
     private Map<String, PeaScopedKeys> adapters = Map.of();
 
+    /**
+     * The workflow sections of this workflow module, keyed by BPMN process ID.
+     */
     private Map<String, WorkflowOverlay> workflows = Map.of();
+
+    /**
+     * The <code>adapters.&lt;id&gt;</code> sections of this level, keyed by adapter ID.
+     *
+     * @return The sections, keyed by adapter ID, never <code>null</code>
+     */
+    public Map<String, PeaScopedKeys> getAdapters() {
+
+      return adapters;
+
+    }
+
+    /**
+     * The <code>adapters.&lt;id&gt;</code> sections of this level, keyed by adapter ID.
+     *
+     * @param adapters The sections, keyed by adapter ID
+     */
+    public void setAdapters(
+        final Map<String, PeaScopedKeys> adapters) {
+
+      this.adapters = adapters;
+
+    }
+
+    /**
+     * The workflow sections of this workflow module, keyed by BPMN process ID.
+     *
+     * @return The sections, keyed by BPMN process ID, never <code>null</code>
+     */
+    public Map<String, WorkflowOverlay> getWorkflows() {
+
+      return workflows;
+
+    }
+
+    /**
+     * The workflow sections of this workflow module, keyed by BPMN process ID.
+     *
+     * @param workflows The sections, keyed by BPMN process ID
+     */
+    public void setWorkflows(
+        final Map<String, WorkflowOverlay> workflows) {
+
+      this.workflows = workflows;
+
+    }
 
   }
 
   /**
    * The adapter's view of one workflow section.
    */
-  @Getter
-  @Setter
   public static class WorkflowOverlay {
 
     /**
@@ -172,17 +290,67 @@ public class VanillaBpPeaProperties {
 
     }
 
+    /**
+     * The <code>adapters.&lt;id&gt;</code> sections of this workflow.
+     */
     private Map<String, PeaScopedKeys> adapters = Map.of();
 
+    /**
+     * The task sections of this workflow, keyed by task definition.
+     */
     private Map<String, TaskOverlay> tasks = Map.of();
+
+    /**
+     * The <code>adapters.&lt;id&gt;</code> sections of this level, keyed by adapter ID.
+     *
+     * @return The sections, keyed by adapter ID, never <code>null</code>
+     */
+    public Map<String, PeaScopedKeys> getAdapters() {
+
+      return adapters;
+
+    }
+
+    /**
+     * The <code>adapters.&lt;id&gt;</code> sections of this level, keyed by adapter ID.
+     *
+     * @param adapters The sections, keyed by adapter ID
+     */
+    public void setAdapters(
+        final Map<String, PeaScopedKeys> adapters) {
+
+      this.adapters = adapters;
+
+    }
+
+    /**
+     * The task sections of this workflow, keyed by task definition.
+     *
+     * @return The sections, keyed by task definition, never <code>null</code>
+     */
+    public Map<String, TaskOverlay> getTasks() {
+
+      return tasks;
+
+    }
+
+    /**
+     * The task sections of this workflow, keyed by task definition.
+     *
+     * @param tasks The sections, keyed by task definition
+     */
+    public void setTasks(
+        final Map<String, TaskOverlay> tasks) {
+
+      this.tasks = tasks;
+
+    }
 
   }
 
   /**
    * The adapter's view of one task section - the MOST specific level.
    */
-  @Getter
-  @Setter
   public static class TaskOverlay {
 
     /**
@@ -192,7 +360,33 @@ public class VanillaBpPeaProperties {
 
     }
 
+    /**
+     * The <code>adapters.&lt;id&gt;</code> sections of this task.
+     */
     private Map<String, PeaScopedKeys> adapters = Map.of();
+
+    /**
+     * The <code>adapters.&lt;id&gt;</code> sections of this level, keyed by adapter ID.
+     *
+     * @return The sections, keyed by adapter ID, never <code>null</code>
+     */
+    public Map<String, PeaScopedKeys> getAdapters() {
+
+      return adapters;
+
+    }
+
+    /**
+     * The <code>adapters.&lt;id&gt;</code> sections of this level, keyed by adapter ID.
+     *
+     * @param adapters The sections, keyed by adapter ID
+     */
+    public void setAdapters(
+        final Map<String, PeaScopedKeys> adapters) {
+
+      this.adapters = adapters;
+
+    }
 
   }
 
