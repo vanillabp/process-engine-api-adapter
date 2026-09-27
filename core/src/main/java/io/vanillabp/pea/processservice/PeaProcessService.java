@@ -832,7 +832,8 @@ public class PeaProcessService<A> implements MigratableProcessService<A> {
     try {
       userTaskCompletionApi
           .completeTaskByError(new PeaCompleteTaskByErrorCmd(
-              request.taskId(), request.bpmnErrorCode(), "canceled via ProcessService#cancelUserTask"))
+              request.taskId(), scopedIdentifier(request.workflowModuleId(),
+                  request.bpmnErrorCode()), "canceled via ProcessService#cancelUserTask"))
           .get();
       log.info(
           "PEA[{}]: canceled user task '{}' (error code '{}') of BPMN process '{}' of workflow module '{}'",

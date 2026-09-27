@@ -29,8 +29,9 @@ import lombok.extern.slf4j.Slf4j;
  * <ul>
  * <li>COMPLETED - {@code ServiceTaskCompletionApi.completeTask};</li>
  * <li>BPMN_ERROR ({@code TaskException}) -
- * {@code ServiceTaskCompletionApi.completeTaskByError} with the error code
- * (aggregate changes committed);</li>
+ * {@code ServiceTaskCompletionApi.completeTaskByError} with the error code as the
+ * deployed model carries it (see {@link #scopedErrorCode(String)}, aggregate changes
+ * committed);</li>
  * <li>COMPLETION_PENDING ({@code @TaskId} methods) - nothing: the task stays open
  * for {@code ProcessService#completeTask};</li>
  * <li>any other exception - {@code ServiceTaskCompletionApi.failTask} (the local
@@ -155,6 +156,23 @@ public class PeaTaskHandler implements TaskHandler {
   }
 
   /**
+   * The error code as the deployed model carries it. Under {@code use-prefix} the
+   * {@code errorCode} of a {@code bpmn:error} is prefixed like every other identifier of
+   * the module, so the code a {@code TaskException} names has to be translated on its way
+   * to the engine. Without it the engine is asked to throw a code no boundary event in the
+   * model catches.
+   *
+   * @param errorCode The code the business method raised
+   * @return The code the engine knows it by
+   */
+  private String scopedErrorCode(
+      final String errorCode) {
+
+    return NameClashAvoidanceSupport.scopedIdentifier(scoping, workflowModuleId, errorCode, adapterId);
+
+  }
+
+  /**
    * Which BPMN element this delivery belongs to - the second key a
    * <code>&#64;WorkflowTask</code> method is wired by, so a delivery which names none does not
    * reach a method carrying <code>&#64;WorkflowTask(id = ...)</code>.
@@ -240,7 +258,7 @@ public class PeaTaskHandler implements TaskHandler {
       case BPMN_ERROR -> completion(
           () -> serviceTaskCompletionApi
               .completeTaskByError(new PeaCompleteTaskByErrorCmd(
-                  taskId, outcome.errorCode(), String.valueOf(outcome.errorName()), completionPayload))
+                  taskId, scopedErrorCode(outcome.errorCode()), String.valueOf(outcome.errorName()), completionPayload))
               .get(),
           taskId,
           "complete-by-error");
