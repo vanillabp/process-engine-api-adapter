@@ -60,6 +60,11 @@ public class PeaTaskHandlerTest {
 
     Object readParameterValue;
 
+    /**
+     * What the business method did: completing it, unless a test says otherwise.
+     */
+    WorkflowTaskOutcome outcome = WorkflowTaskOutcome.completed();
+
     @Override
     public WorkflowTaskOutcome invokeWorkflowTask(
         final String workflowModuleId,
@@ -74,7 +79,7 @@ public class PeaTaskHandlerTest {
       if (readParameter != null) {
         readParameterValue = context.getTaskParameter(readParameter);
       }
-      return WorkflowTaskOutcome.completed();
+      return outcome;
 
     }
 
@@ -454,6 +459,46 @@ public class PeaTaskHandlerTest {
         reason.contains("bigPayload") && reason.contains("vanillabp.adapters.pea.fetch-variables"),
         "expected a guiding failure naming the variable and the escape hatch but got: "
             + reason);
+
+  }
+
+  @Test
+  @DisplayName("A TaskException raises the error code the deployed model carries, prefix included")
+  public void aTaskExceptionRaisesTheCodeTheModelCarries() {
+
+    // under use-prefix the errorCode of a bpmn:error is deployed with the module's
+    // prefix, just like every other identifier. A code handed on plain is a code no
+    // boundary event of that model catches, and nothing says so: the engine accepts the
+    // command and the workflow walks past the error path
+    engine.getOpenTaskIds().add("task-error");
+    invoker.outcome = WorkflowTaskOutcome.bpmnError("PAYMENT_FAILED", "Payment failed");
+    handler(List.of("OnlyProcess"), NameClashAvoidance.USE_PREFIX)
+        .accept(
+            new TaskInformation("task-error", Map.of()),
+            Map.of("id", "4711"));
+
+    assertEquals(1, engine.getErroredTasks().size());
+    assertEquals(
+        "test-module"
+            + NameClashAvoidanceSupport.SEPARATOR
+            + "PAYMENT_FAILED",
+        engine.getErroredTasks().getFirst().errorCode());
+    assertEquals("Payment failed", engine.getErroredTasks().getFirst().errorMessage());
+
+  }
+
+  @Test
+  @DisplayName("Under 'none' the error code reaches the engine as the application wrote it")
+  public void underNoneTheErrorCodeIsPassedThrough() {
+
+    engine.getOpenTaskIds().add("task-plain-error");
+    invoker.outcome = WorkflowTaskOutcome.bpmnError("PAYMENT_FAILED", "Payment failed");
+    handler(List.of("OnlyProcess"), NameClashAvoidance.NONE)
+        .accept(
+            new TaskInformation("task-plain-error", Map.of()),
+            Map.of("id", "4711"));
+
+    assertEquals("PAYMENT_FAILED", engine.getErroredTasks().getFirst().errorCode());
 
   }
 

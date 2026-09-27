@@ -1296,4 +1296,98 @@ public class PeaDeploymentServiceTest {
 
   }
 
+
+  /**
+   * A start event the engine fires on its own ends the deployment. The Process-Engine-API
+   * reports no start of its own, so a workflow which began that way would run without a
+   * workflow aggregate: no task could be routed and no expression resolved. The message is
+   * the only thing a developer ever sees of this limit, which is why it is read here word
+   * for word.
+   */
+  @Nested
+  class BpmsInitiatedStartEvents {
+
+    private static final String PROCESS = """
+        <?xml version="1.0" encoding="UTF-8"?>
+        <bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL">
+          <bpmn:process id="NightlyReview" isExecutable="true">
+            <bpmn:startEvent id="EveryNight">
+              %s
+            </bpmn:startEvent>
+          </bpmn:process>
+        </bpmn:definitions>
+        """;
+
+    /**
+     * Runs the deployment pipeline over one model, up to and including the wiring, which
+     * is where a model is looked at for what this adapter cannot serve.
+     */
+    private void wire(
+        final String filename,
+        final String xml) {
+
+      PeaProcessingContext context = null;
+      for (final var entry : service.readBpmn("loan-approval", filename, bpmn(xml), true)) {
+        context = service.prepareBpmn("loan-approval", context, filename, entry.getKey(), entry.getValue());
+      }
+      for (final var model : context.getModels()) {
+        service.wireBpmn("loan-approval", filename, model.bpmnProcessId(), model, context);
+      }
+
+    }
+
+    @Test
+    @DisplayName("A timer start event ends the deployment, and the message says what to do instead")
+    public void aTimerStartEventIsRefusedWithAGuidingMessage() {
+
+      final var failure = Assertions.assertThrows(
+          IllegalStateException.class,
+          () -> wire("nightly.bpmn", PROCESS.formatted("<bpmn:timerEventDefinition/>")));
+
+      Assertions.assertEquals(
+          "BPMN process 'NightlyReview' (file 'nightly.bpmn', workflow module 'loan-approval') "
+              + "is started by the engine itself ('EveryNight' (timer start event)), which the "
+              + "Process-Engine-API adapter cannot serve: the API does not report such a start, "
+              + "so VanillaBP could never build the workflow aggregate the workflow needs. Start "
+              + "the workflow from your application (ProcessService#startWorkflow, or a message "
+              + "start event and ProcessService#startWorkflowByMessage), or run this workflow "
+              + "module on a BPMS whose adapter supports it.",
+          failure.getMessage());
+
+    }
+
+    @Test
+    @DisplayName("A signal and a conditional start are refused the same way")
+    public void theOtherTwoKindsAreRefusedAsWell() {
+
+      final var signal = Assertions.assertThrows(
+          IllegalStateException.class,
+          () -> wire("signalled.bpmn", PROCESS.formatted("<bpmn:signalEventDefinition/>")));
+      Assertions.assertTrue(
+          signal.getMessage().contains("'EveryNight' (signal start event)"),
+          signal::getMessage);
+
+      final var conditional = Assertions.assertThrows(
+          IllegalStateException.class,
+          () -> wire("conditional.bpmn", PROCESS.formatted("<bpmn:conditionalEventDefinition/>")));
+      Assertions.assertTrue(
+          conditional.getMessage().contains("'EveryNight' (conditional start event)"),
+          conditional::getMessage);
+
+    }
+
+    @Test
+    @DisplayName("A start the application drives is deployed: plain, and by message")
+    public void aStartTheApplicationDrivesIsFine() {
+
+      Assertions.assertDoesNotThrow(() -> wire("plain.bpmn", PROCESS.formatted("")));
+      Assertions.assertDoesNotThrow(
+          () -> wire(
+              "by-message.bpmn",
+              PROCESS.formatted("<bpmn:messageEventDefinition messageRef=\"Msg\"/>")));
+
+    }
+
+  }
+
 }

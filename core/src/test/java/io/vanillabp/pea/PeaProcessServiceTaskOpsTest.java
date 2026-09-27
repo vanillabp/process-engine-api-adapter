@@ -11,6 +11,8 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 
+import io.vanillabp.integration.adapter.spi.NameClashAvoidance;
+import io.vanillabp.integration.adapter.spi.NameClashAvoidanceSupport;
 import io.vanillabp.integration.adapter.spi.WorkflowAwareness;
 import io.vanillabp.integration.adapter.spi.WorkflowScope;
 import io.vanillabp.integration.spi.PhaseOperation;
@@ -175,6 +177,39 @@ public class PeaProcessServiceTaskOpsTest {
 
     assertEquals(1, engine.getCompletedTasks().size());
     assertEquals(1, engine.getErroredTasks().size());
+
+  }
+
+  @Test
+  @DisplayName("Canceling a task or a user task raises the error code the deployed model carries")
+  public void bothCancelOperationsScopeTheErrorCode() {
+
+    // the errorCode of a bpmn:error is prefixed like every other identifier of the
+    // module, so both cancel operations have to translate the code the application
+    // named. The engine accepts an unknown code without a word, so a plain one leaves
+    // the workflow walking past the error path it was supposed to take
+    final var scoped = new PeaProcessService<Object>(
+        "pea", engine, engine, engine, engine, null, TestCollaborators.of(
+            new PeaDeploymentServiceTest.PermissiveInvoker(),
+            TestScoping.of(NameClashAvoidance.USE_PREFIX, "mod")));
+    final var prefix = "mod"
+        + NameClashAvoidanceSupport.SEPARATOR;
+
+    engine.getOpenTaskIds().add("task-10");
+    PhaseOperations.phaseTwo(scoped, PhaseOperation.CANCEL_TASK, "mod", "Process", null,
+        "42", PhaseOperations.args(PhaseTwoCall.ARG_TASK_ID, "task-10",
+            PhaseTwoCall.ARG_BPMN_ERROR_CODE, "PAYMENT_FAILED"));
+
+    engine.getOpenTaskIds().add("utask-10");
+    PhaseOperations.phaseTwo(scoped, PhaseOperation.CANCEL_USER_TASK, "mod", "Process", null,
+        "42", PhaseOperations.args(PhaseTwoCall.ARG_TASK_ID, "utask-10",
+            PhaseTwoCall.ARG_BPMN_ERROR_CODE, "APPROVAL_WITHDRAWN"));
+
+    assertEquals(2, engine.getErroredTasks().size());
+    assertEquals(prefix
+        + "PAYMENT_FAILED", engine.getErroredTasks().get(0).errorCode());
+    assertEquals(prefix
+        + "APPROVAL_WITHDRAWN", engine.getErroredTasks().get(1).errorCode());
 
   }
 
