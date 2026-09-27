@@ -2,6 +2,7 @@ package io.vanillabp.pea;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.List;
 import java.util.Map;
@@ -9,11 +10,17 @@ import java.util.Map;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.slf4j.LoggerFactory;
 
+import ch.qos.logback.classic.Level;
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
 import dev.bpmcrafters.processengineapi.task.TaskInformation;
 import io.vanillabp.integration.adapter.spi.AggregateSyncMode;
 import io.vanillabp.integration.adapter.spi.NameClashAvoidance;
 import io.vanillabp.integration.adapter.spi.NameClashAvoidanceSupport;
+import io.vanillabp.integration.adapter.spi.workflowtask.DeliveryOfAnUnknownWorkflowException;
 import io.vanillabp.integration.adapter.spi.workflowtask.TaskInvocationContext;
 import io.vanillabp.integration.adapter.spi.workflowtask.WorkflowTaskInvoker;
 import io.vanillabp.integration.adapter.spi.workflowtask.WorkflowTaskOutcome;
@@ -37,6 +44,12 @@ public class PeaUserTaskHandlerTest {
 
     WorkflowTaskOutcome outcome = WorkflowTaskOutcome.completed();
 
+    /**
+     * What the core throws instead of answering, or <code>null</code> for a notification
+     * which reaches a business method.
+     */
+    RuntimeException refusal;
+
     String invokedBpmnProcessId;
 
     TaskEvent.Event invokedEvent;
@@ -59,6 +72,9 @@ public class PeaUserTaskHandlerTest {
 
       invokedBpmnProcessId = bpmnProcessId;
       invokedEvent = context.getTaskEvent();
+      if (refusal != null) {
+        throw refusal;
+      }
       return outcome;
 
     }
@@ -223,6 +239,60 @@ public class PeaUserTaskHandlerTest {
     invoker.outcome = WorkflowTaskOutcome.bpmnError("SOME_ERROR", null);
     handler(List.of("OnlyProcess"))
         .accept(new TaskInformation("utask-5", Map.of()), Map.of("id", "4711"));
+
+  }
+
+  @Test
+  @DisplayName("A user task of a workflow this application does not own is said and left alone")
+  public void aUserTaskOfAWorkflowWeDoNotOwnIsSaidAndLeftAlone() {
+
+    // the service-task side answers such a delivery at the engine. This side cannot:
+    // UserTaskCompletionApi offers completion and completion by error, and both of them
+    // would move a stranger's workflow on. So the log line is the whole answer, and the
+    // handler returns normally because a handler which throws makes the engine's pull cycle
+    // offer the same task again at every turn
+    invoker.refusal = new DeliveryOfAnUnknownWorkflowException(
+        "pea", "test-module", "OnlyProcess", "approve", "io.example.Aggregate", "4711", "wf-99");
+
+    final var warnings = warningsOf(
+        () -> handler(List.of("OnlyProcess"))
+            .accept(new TaskInformation("utask-stranger", Map.of()), Map.of("id", "4711")));
+
+    assertEquals(1, warnings.size(), () -> "expected exactly one warning but got: "
+        + warnings);
+    final var said = warnings.getFirst();
+    assertTrue(
+        said.contains("utask-stranger") && said.contains("does not own"),
+        "expected a line naming the user task and the reason but got: "
+            + said);
+    assertTrue(
+        said.contains("stays untouched"),
+        "expected the line to say that the task was left where it is but got: "
+            + said);
+
+  }
+
+  /**
+   * What the handler logged at WARN or above while the given work ran.
+   */
+  private List<String> warningsOf(
+      final Runnable work) {
+
+    final var logWatcher = new ListAppender<ILoggingEvent>();
+    logWatcher.start();
+    final var logger = (Logger) LoggerFactory.getLogger(PeaUserTaskHandler.class);
+    logger.addAppender(logWatcher);
+    try {
+      work.run();
+    } finally {
+      logger.detachAppender(logWatcher);
+      logWatcher.stop();
+    }
+    return logWatcher.list
+        .stream()
+        .filter(event -> event.getLevel().isGreaterOrEqual(Level.WARN))
+        .map(ILoggingEvent::getFormattedMessage)
+        .toList();
 
   }
 
