@@ -837,8 +837,9 @@ engine which reads the count stops offering it and the ones with an incident con
 one. `PeaUserTaskHandler` writes one log line naming the workflow and saying that the task was
 left untouched, and returns normally, because returning normally is what keeps the same
 delivery from circling through the pull cycle. So on user tasks the refusal is visible in the
-log of the application which was wrongly served, and nowhere else. The decision entry for
-story 696 carries the reasoning, and `PeaTaskHandlerTest` and `PeaUserTaskHandlerTest` hold
+log of the application which was wrongly served, and nowhere else.
+[Decision 14](./DECISIONS.md#14-a-task-of-a-workflow-this-application-does-not-own-is-refused-as-far-as-this-api-allows)
+carries the reasoning, and `PeaTaskHandlerTest` and `PeaUserTaskHandlerTest` hold
 both halves.
 
 **Ready to be sent to bpm-crafters:** yes, and it is the same ask as entry 25 seen from the

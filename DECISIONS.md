@@ -298,3 +298,84 @@ entry into a superseded one. Until then a change which supplies a probe here has
 the two it got. `PeaOpenTaskProbeTest` fails when one appears anyway, and
 [What an application hears about a canceled task](./README.md#what-an-application-hears-about-a-canceled-task)
 is what an application reads instead.
+
+### 14. A task of a workflow this application does not own is refused as far as this API allows
+
+A delivery the core answers with `DeliveryOfAnUnknownWorkflowException` is not treated like any
+other failure here. A service task is failed with a retry count of zero, so an engine which reads
+the count stops offering it. A user task cannot be answered at all, so it ends in one log line which
+names the workflow and says the task was left untouched.
+
+The core's side of this is decision 99 of `adapter-platform-integration`, which words the refusal
+and counts it as `vanillabp.task.deliveries.unknown.workflow`. What each adapter does with it is the
+adapter's own decision, and this is this adapter's.
+
+It can happen here at all because a task subscription of the Process-Engine-API matches a task type
+globally, and there is no tenant (gap 15 in [`GAPS.md`](./GAPS.md)). Two applications which deploy a
+BPMN process of the same name are therefore served each other's tasks, and nothing in
+`SubscribeForTaskCmd` can narrow that: the restrictions of `CommonRestrictions` all name one running
+instance or one definition, and none of them says "only the workflows this application started".
+
+`PeaTaskHandler.determineBpmnProcessId` routes a delivery by the meta entry the engine fills, or by
+the single process of the subscription. It does not ask whether the routed process is one this
+application owns, and it could not answer that from the delivery anyway: the name is the same on
+both sides. So the first thing which notices is the core, when it looks the workflow aggregate up
+and finds nothing.
+
+What the API offers was read on 2026-09-27, on version 1.7, the newest on Maven Central.
+
+`ServiceTaskCompletionApi.failTask` takes a
+`FailTaskCmd(taskId, reason, errorDetails, retryCount, retryBackoff)`. The retry count is optional
+and the API says nothing about what a value of zero means, but it is the only lever a subscriber has
+over whether a delivery comes back. The reference
+implementation for an embedded Camunda 7 (`process-engine-adapter-camunda-platform-c7-embedded-core`
+2025.11.1) passes it straight into `externalTaskService.handleFailure`, where zero is what Camunda 7
+turns into an incident, and falls back to its own retry supplier where the command names no count.
+So a zero is read where an engine reads it and costs nothing where an engine ignores it.
+
+`UserTaskCompletionApi` has `completeTask` and `completeTaskByError`, and no failure command. Both
+of the two move the workflow on, and moving a stranger's workflow on is worse than anything else
+this could do. Throwing out of the handler is not an answer either: the reference implementation
+logs it, drops the subscription for the task and offers the same task again at the next pull cycle,
+for as long as both applications run.
+
+There is nothing else. No incident concept, no dead-letter, no way to give a task back, no way to
+ask the engine who owns a workflow. That is the honest answer for the user-task side, and gap 28
+records it as an ask to bpm-crafters.
+
+What was decided is this. The service task is failed with `PeaFailTaskCmd.withoutFurtherAttempts`,
+which is the ordinary failure plus a retry count of zero. The reason it carries is the core's whole
+message, so an engine which shows the reason to an operator shows the sentence which explains the
+situation. The log line drops the stack trace, because the message is the finding and a trace would
+only name the line of the core which read the database.
+
+The user task is not answered at the engine, and the handler returns normally. The log line says
+what the task is about, that it was not notified, and that the task stays untouched. It is a warning
+and not an error: nothing in this application is broken.
+
+The user-task handler still returns normally. This looks like the swallowing it replaces, and it is
+not the same thing. Returning normally is what keeps the delivery from circling. The reference
+engine's pull cycle treats a handler which returns as a delivery that happened and skips the task
+while it is unchanged, while a handler which throws deactivates the subscription and the next cycle
+hands the same task over as new. So throwing would buy one endless stream of the same log line and
+change nothing else.
+
+What changed is the line. It used to be `the CREATED notification for user task '...' failed! The
+user task itself stays available.`, at error level and with a stack trace, which reads as a defect
+of the code which ran. It is not one.
+
+The retries were not raised instead. The alternative was to make the refusal cost the owning
+application nothing: fail the service task with the engine's default retries and let the delivery
+come back until somebody separates the two applications. That is the quiet variant, and quiet is the
+problem. An application which takes another application's work and says nothing about it does so for
+months, and the first anybody hears of it is a workflow which never moved.
+
+Nothing is lost by the zero. The task stays in the engine, untouched and uncompleted, so the
+application which owns the workflow can still have it once the two are separated. What the zero
+costs is one incident on engines which have incidents, which is exactly the thing somebody has to
+see.
+
+Nothing is counted here. The core counts the refusal once, whichever adapter met it. A second
+counter in the adapter would count the same event under a second name.
+
+`PeaTaskHandlerTest` and `PeaUserTaskHandlerTest` hold both halves.
