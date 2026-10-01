@@ -11,6 +11,7 @@ import dev.bpmcrafters.processengineapi.task.TaskInformation;
 import io.vanillabp.integration.adapter.spi.NameClashAvoidanceSupport;
 import io.vanillabp.integration.adapter.spi.workflowtask.DeliveryOfAnUnknownWorkflowException;
 import io.vanillabp.integration.adapter.spi.workflowtask.TaskInvocationContext;
+import io.vanillabp.integration.adapter.spi.workflowtask.TaskKind;
 import io.vanillabp.integration.adapter.spi.workflowtask.WorkflowTaskInvoker;
 import io.vanillabp.integration.adapter.spi.workflowtask.WorkflowTaskOutcome;
 import io.vanillabp.pea.processservice.PeaProcessService;
@@ -547,6 +548,17 @@ public class PeaTaskHandler implements TaskHandler {
     public String getTaskId() {
 
       return taskId;
+
+    }
+
+    @Override
+    public TaskKind getTaskKind() {
+
+      // this handler serves task subscriptions and nothing else, so the id it reports is
+      // a task's. The engine takes it back through its SERVICE-task completion API. The
+      // user-task API of the same engine finds nothing under that id, and explaining
+      // exactly that is what the record is read for
+      return TaskKind.TASK;
 
     }
 
