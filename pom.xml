@@ -147,6 +147,25 @@
         <version>${adapter-platform.version}</version>
         <scope>test</scope>
       </dependency>
+      <!-- Managed here for the reason PublishedPomsTest asserts: a module POM which
+           writes '${adapter-platform.version}' carries no value for that name, and a
+           consumer reads that module POM against the NEWEST build of its snapshot parent
+           instead of the build the module went out with. This file defines the property,
+           so this is where the name may be written.
+           The version and nothing else. Both artifacts also arrive through the platform
+           integrations at compile scope, and a managed 'test' here would narrow those
+           transitive paths too, which took the Quarkus extension's compile path away. The
+           scope stays at the declaration, which is the only module it is about. -->
+      <dependency>
+        <groupId>io.vanillabp.adapter</groupId>
+        <artifactId>migration-adapter</artifactId>
+        <version>${adapter-platform.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>io.vanillabp</groupId>
+        <artifactId>vanillabp-spring-boot-support</artifactId>
+        <version>${adapter-platform.version}</version>
+      </dependency>
 
       <!-- Own modules -->
       <dependency>
