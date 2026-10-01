@@ -37,6 +37,7 @@ import dev.bpmcrafters.processengineapi.task.CompleteTaskByErrorCmd;
 import dev.bpmcrafters.processengineapi.task.CompleteTaskCmd;
 import dev.bpmcrafters.processengineapi.task.TaskInformation;
 import io.vanillabp.integration.spi.AggregatePersistenceAware;
+import io.vanillabp.integration.spi.TaskDeliveryLog;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 import io.vanillabp.integration.test.utils.delivery.TaskDeliveryLogReader;
 import io.vanillabp.pea.mock.InMemoryProcessEngine;
@@ -953,6 +954,52 @@ public class TaskProcessingIntegrationTest {
     final var record = recordOf("task-no-meta");
     assertEquals("t_happy", record.bpmnElementId(), "the element the model names");
     assertNull(record.workflowId(), "no workflow id was named");
+
+  }
+
+  @Autowired
+  private TaskDeliveryLog deliveryLog;
+
+  /**
+   * Which kind of task the record says an id belongs to.
+   * <p>
+   * Asked through the same method the BPMS election uses, so this reads what a caller
+   * naming that id reads. Only a task still left to the application is answered, and those
+   * are the ids an application ever names: a task this adapter completed itself is
+   * nobody's to address any more.
+   *
+   * @param aggregateId The workflow aggregate the task was delivered for
+   * @param taskId The engine's id of the task
+   * @return The kind as the record carries it
+   */
+  private String recordedKindOf(
+      final String aggregateId,
+      final String taskId) {
+
+    return deliveryLog
+        .recordOfTask(MODULE, PROCESS, aggregateId, taskId)
+        .orElseThrow(() -> new AssertionError("no open record of task "
+            + taskId))
+        .taskKind();
+
+  }
+
+  @Test
+  @DisplayName("The record says whether an open id is a task or a user task")
+  public void theRecordSaysWhichKindAnIdIs() {
+
+    seed("4744");
+    // a task left open by a @TaskId method. The application completes it through
+    // ProcessService#completeTask, and the engine takes the id back through its
+    // SERVICE-task completion API
+    engine.deliverTask("open-task", "peaAsync", PROCESS, Map.of("id", "4744"));
+    assertEquals("TASK", recordedKindOf("4744", "open-task"));
+
+    // a user-task notification. Same shape of id, different namespace. The application
+    // completes it through ProcessService#completeUserTask, and the engine takes it back
+    // through its USER-task completion API
+    engine.deliverTask("open-user-task", "peaApprove", PROCESS, Map.of("id", "4744"));
+    assertEquals("USER_TASK", recordedKindOf("4744", "open-user-task"));
 
   }
 
