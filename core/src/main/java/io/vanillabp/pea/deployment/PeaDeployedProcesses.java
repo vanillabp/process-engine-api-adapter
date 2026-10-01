@@ -98,8 +98,9 @@ public class PeaDeployedProcesses {
      *
      * @param bpmnTaskId The BPMN element id of the user task
      * @return The user task, or <code>null</code> where this process has no such user
-     *         task or the task has no external form reference and was therefore never
-     *         read
+     *         task or the task names no external form reference. The model keeps those
+     *         apart in {@code userTasksWithoutAFormReference}, because nothing is ever
+     *         delivered for them and whoever asks here asks about a delivery
      */
     public BpmnTaskSpec userTaskByElementId(
         final String bpmnTaskId) {

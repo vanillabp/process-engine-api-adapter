@@ -30,6 +30,13 @@ import io.vanillabp.integration.adapter.spi.workflowtask.BpmnTaskSpec;
  *          has no notion of task definitions in BPMN, see {@code GAPS.md})
  * @param userTasks The user tasks of the process, each with its element id, its external
  *          form reference and the name the modeller wrote on it
+ * @param userTasksWithoutAFormReference The user tasks which name no external form
+ *          reference, each with its element id and its name. Their task definition is
+ *          always <code>null</code>, because the model names none: such a task cannot be
+ *          subscribed for and never becomes a spec of the core, and it is carried so the
+ *          boot can name it to whoever drew it. Read in the same pass as the rest, so
+ *          nobody walks the same bytes a second time (decision 10 in the repository's
+ *          DECISIONS.md)
  */
 public record PeaBpmnModel(
                            String filename,
@@ -37,7 +44,8 @@ public record PeaBpmnModel(
                            String bpmnProcessId,
                            String processName,
                            List<BpmnTaskSpec> tasks,
-                           List<BpmnTaskSpec> userTasks) {
+                           List<BpmnTaskSpec> userTasks,
+                           List<BpmnTaskSpec> userTasksWithoutAFormReference) {
 
   /**
    * Convenience constructor for a process without a name and without user tasks.
@@ -53,7 +61,7 @@ public record PeaBpmnModel(
       final String bpmnProcessId,
       final List<BpmnTaskSpec> tasks) {
 
-    this(filename, resource, bpmnProcessId, null, tasks, List.of());
+    this(filename, resource, bpmnProcessId, null, tasks, List.of(), List.of());
 
   }
 
@@ -73,7 +81,30 @@ public record PeaBpmnModel(
       final List<BpmnTaskSpec> tasks,
       final List<BpmnTaskSpec> userTasks) {
 
-    this(filename, resource, bpmnProcessId, null, tasks, userTasks);
+    this(filename, resource, bpmnProcessId, null, tasks, userTasks, List.of());
+
+  }
+
+  /**
+   * Convenience constructor for a process whose user tasks all name an external form
+   * reference, which is the model VanillaBP asks for.
+   *
+   * @param filename The name of the BPMN resource
+   * @param resource The raw BPMN XML bytes
+   * @param bpmnProcessId The id of the executable process
+   * @param processName The <code>name</code> attribute of the process element
+   * @param tasks The service-like tasks of the process
+   * @param userTasks The user tasks of the process
+   */
+  public PeaBpmnModel(
+      final String filename,
+      final byte[] resource,
+      final String bpmnProcessId,
+      final String processName,
+      final List<BpmnTaskSpec> tasks,
+      final List<BpmnTaskSpec> userTasks) {
+
+    this(filename, resource, bpmnProcessId, processName, tasks, userTasks, List.of());
 
   }
 

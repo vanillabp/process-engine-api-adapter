@@ -232,6 +232,15 @@ replaces the mock with a real Process-Engine-API implementation.
   `completeUserTask`/`cancelUserTask` run through the `UserTaskCompletionApi` with the same
   PREFLIGHT_CHECK (phase one) / SYNC (phase two) mapping as service tasks; failing
   notifications are logged loudly but never break the user task itself.
+  A user task which reaches no method is named while the module boots, once per BPMN process, at
+  INFO, and only for a process one of your `@WorkflowService` classes claims. Nothing is refused:
+  the engine creates the task, a task list shows it and whoever finishes it moves the workflow on,
+  which is why the core hands a user task over as an optional spec. Two cases are named apart. A
+  user task whose external form reference no method names IS delivered here and the delivery is
+  dropped again, so your observers see it and your application does not. A user task which names
+  no external form reference never arrives at all, because the reference is the name a subscription
+  asks for, and a method alone would change nothing: the model needs the reference too. That second
+  case used to be one line on DEBUG and is now part of the report (`PeaUnservedUserTasksTest`).
 - **Message correlation:** `correlateMessage` sends a `CorrelateMessageCmd` with
   `correlationKey = correlationId ?? aggregate ID` after the caller's commit (outbox); no
   payload travels. `startWorkflowByMessage` sends a `StartProcessByMessageCmd` carrying only
