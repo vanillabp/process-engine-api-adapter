@@ -593,7 +593,7 @@ public class PeaDeploymentService implements AdapterDeploymentService<PeaBpmnMod
           process.bpmnProcessId(),
           new PeaBpmnModel(
               filename, resource, process.bpmnProcessId(), process.processName(), process.tasks(), process
-                  .userTasks())));
+                  .userTasks(), process.userTasksWithoutAFormReference())));
     }
     return result;
 
@@ -608,7 +608,8 @@ public class PeaDeploymentService implements AdapterDeploymentService<PeaBpmnMod
                                String bpmnProcessId,
                                String processName,
                                List<BpmnTaskSpec> tasks,
-                               List<BpmnTaskSpec> userTasks) {
+                               List<BpmnTaskSpec> userTasks,
+                               List<BpmnTaskSpec> userTasksWithoutAFormReference) {
   }
 
   /**
@@ -701,7 +702,8 @@ public class PeaDeploymentService implements AdapterDeploymentService<PeaBpmnMod
                 reader.getAttributeValue(null, "isExecutable")) && (bpmnProcessId != null) && !bpmnProcessId.isBlank()
                     ? new ParsedProcess(
                         bpmnProcessId, blankToNull(
-                            reader.getAttributeValue(null, "name")), new ArrayList<>(), new ArrayList<>())
+                            reader.getAttributeValue(null,
+                                "name")), new ArrayList<>(), new ArrayList<>(), new ArrayList<>())
                     : null;
             if (currentProcess != null) {
               processes.add(currentProcess);
@@ -754,13 +756,13 @@ public class PeaDeploymentService implements AdapterDeploymentService<PeaBpmnMod
           } else
             if ("userTask".equals(element) && (currentUserTaskId != null) && BPMN_NS.equals(reader.getNamespaceURI())) {
               if (!currentUserTaskHasFormReference && (currentProcess != null)) {
-                // a user task without an external form reference cannot be wired -
-                // fine, it is processed through forms/task lists only (no spec)
-                log.debug(
-                    "User task '{}' of BPMN file '{}' has no external form reference - VanillaBP "
-                        + "notifications are not available for it",
-                    currentUserTaskId,
-                    filename);
+                // a user task without an external form reference cannot be subscribed for, so it
+                // becomes no spec of the core and no subscription of this adapter. It is carried
+                // along all the same: the boot names it to whoever claims the process, because a
+                // method drawn into such a task is never called and nothing else would say so
+                currentProcess
+                    .userTasksWithoutAFormReference()
+                    .add(BpmnTaskSpec.userTask(currentUserTaskId, null, currentUserTaskName));
               }
               currentUserTaskId = null;
               currentUserTaskName = null;
@@ -815,7 +817,7 @@ public class PeaDeploymentService implements AdapterDeploymentService<PeaBpmnMod
             ? model
             : new PeaBpmnModel(
                 model.filename(), scopedResource, model.bpmnProcessId(), model.processName(), model.tasks(), model
-                    .userTasks()));
+                    .userTasks(), model.userTasksWithoutAFormReference()));
     return context;
 
   }
@@ -837,6 +839,7 @@ public class PeaDeploymentService implements AdapterDeploymentService<PeaBpmnMod
     failOnBpmsInitiatedStartEvents(workflowModuleId, filename, bpmnProcessId, model);
     warnAboutUnservedWorkflowEndedHandlers(workflowModuleId, bpmnProcessId);
     reportTheMissingVersionCatalog(workflowModuleId, bpmnProcessId);
+    nameTheUserTasksNothingServes(workflowModuleId, bpmnProcessId, model);
 
     log.info(
         "Process-Engine-API adapter '{}': wired {} task(s) of BPMN process '{}' (file '{}', workflow module '{}')",
@@ -914,6 +917,78 @@ public class PeaDeploymentService implements AdapterDeploymentService<PeaBpmnMod
             and ProcessService#startWorkflowByMessage), or run this workflow module on a BPMS whose \
             adapter supports it."""
             .formatted(bpmnProcessId, filename, workflowModuleId, String.join(", ", startEvents)));
+
+  }
+
+  /**
+   * Names the user tasks of one process which reach no <code>&#64;WorkflowTask</code> method.
+   * <p>
+   * Nothing is refused and nothing is warned about. The engine creates the user task, somebody
+   * finishes it from a task list and the workflow runs on, which is why the core hands a user
+   * task over as an OPTIONAL spec. The one thing missing is the notification, and a model whose
+   * user tasks are worked through a task list alone is a model which is meant that way. That is
+   * where this stops being the same case as the Camunda 8 adapter's: there a user task a job
+   * worker serves leaves the workflow standing, and the boot ends over it.
+   * <p>
+   * Only for a process a <code>&#64;WorkflowService</code> class of this application claims. The
+   * core answers the name of the workflow aggregate's id for such a process and refuses to answer
+   * for one nobody claimed, which is the same question the Camunda 8 adapter asks for the same
+   * split. Where nobody claims the process, no method of this application was meant to serve its
+   * tasks and there is nothing to say.
+   *
+   * @param workflowModuleId The workflow module ID
+   * @param bpmnProcessId The PLAIN BPMN process ID
+   * @param model The model this boot deploys
+   */
+  private void nameTheUserTasksNothingServes(
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final PeaBpmnModel model) {
+
+    if (!theApplicationClaims(workflowModuleId, bpmnProcessId)) {
+      return;
+    }
+    final var report = PeaUnservedUserTasks
+        .report(
+            PeaUnservedUserTasks
+                .unserved(
+                    model.userTasks(),
+                    key -> workflowTaskInvoker.workflowTaskHandlerExists(workflowModuleId, bpmnProcessId, key)),
+            model.userTasksWithoutAFormReference(),
+            bpmnProcessId,
+            workflowModuleId);
+    if (report == null) {
+      return;
+    }
+    log.info("Process-Engine-API adapter '{}': {}", adapterId, report);
+
+  }
+
+  /**
+   * Whether a <code>&#64;WorkflowService</code> class of this application claims the given BPMN
+   * process. Asked of the core, which knows the workflow aggregate of a claimed process and
+   * nothing about an unclaimed one.
+   *
+   * @param workflowModuleId The workflow module ID
+   * @param bpmnProcessId The PLAIN BPMN process ID
+   * @return Whether the application stands in for the process
+   */
+  private boolean theApplicationClaims(
+      final String workflowModuleId,
+      final String bpmnProcessId) {
+
+    try {
+      return workflowTaskWiring.resolveWorkflowAggregateIdName(workflowModuleId, bpmnProcessId) != null;
+    } catch (final RuntimeException e) {
+      log.debug(
+          "Process-Engine-API adapter '{}': no @WorkflowService class of this application claims "
+              + "BPMN process '{}' of workflow module '{}'",
+          adapterId,
+          bpmnProcessId,
+          workflowModuleId,
+          e);
+      return false;
+    }
 
   }
 
