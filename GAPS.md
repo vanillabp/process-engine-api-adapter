@@ -847,3 +847,39 @@ other end. A `failTask` on `UserTaskCompletionApi`, with the same optional retry
 service-task command has, would let a subscriber answer a user-task delivery without touching
 the workflow. What the engine does with it stays the engine's business, which is why the
 paragraph entry 25 asks for is part of this ask rather than a separate one.
+
+## 29. Models cannot be read and no expression language is named, so no expression is reported
+
+**Needed by VanillaBP:** an expression in a BPMN model reads the application's data, and the
+shape of what it reads decides what it costs. An expression naming one variable reads a getter
+of the workflow aggregate, which is the shape VanillaBP recommends. One reading a path binds the
+model to the shape of the application's data, and one calling a method binds it to the code. So
+VanillaBP asks each adapter, while it wires a process, for every expression of that process with
+the element it sits in, the place inside that element and the text the engine evaluates. The core
+turns that into one guiding message per process, and it counts how many of the expressions are
+already the recommended shape.
+
+**Offered by the Process-Engine-API:** nothing to read a model with (see entry 1 and entry 12),
+and no expression language either. The adapter never holds a BPMN model, so there is no element
+to walk. It does parse the deployed BPMN XML with the JDK's streaming reader, far enough to find
+the executable process ids, so the text of an attribute is within reach. The text alone does not
+answer the question. Nothing in the API says whether an expression is written as `${...}`, as
+`#{...}`, as a leading `=` or in some other way, so the adapter cannot tell an expression from a
+literal. Nothing says which places the engine behind the API evaluates either, and a place the
+engine reads as plain text is a place where naming an expression would be wrong. Guessing the
+delimiters of the engine somebody happens to run is how a startup message starts telling people
+things which are not true.
+
+**Consequence for the adapter:** it reports nothing, which switches the message off for
+applications on this adapter. The core stays silent rather than guessing from an absent answer,
+the same way it does for the concurrent-token hint of entry 21. Nothing else of the feature
+depends on it: the property which accepts the expressions of a model is read by the core and
+works here as everywhere, it just never has anything to accept.
+
+The versions the engine still holds are out of reach for the same reason, and that is the answer
+every adapter gives. Even where a model can be read, the expressions reported are those of the
+model being deployed, because that is the model a developer can still change.
+
+**Ready to be sent to bpm-crafters:** not on its own. It is entry 1 and entry 12 again, plus one
+more thing an engine would have to say about itself: which expression language it evaluates, and
+in which places. That belongs in the same ask as the model type rather than next to it.
