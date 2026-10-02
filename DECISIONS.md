@@ -379,3 +379,110 @@ Nothing is counted here. The core counts the refusal once, whichever adapter met
 counter in the adapter would count the same event under a second name.
 
 `PeaTaskHandlerTest` and `PeaUserTaskHandlerTest` hold both halves.
+
+### 15. A user task nothing serves is named in a claimed process, and nothing is refused
+
+A user task of this engine runs without a `@WorkflowTask` method. The engine creates the task,
+somebody works a task list and finishes it, and the workflow moves on. That is why the core hands a
+user task over as an OPTIONAL spec, and `validateTaskWiring` filters those out before it asks for a
+method. Until now this adapter said one line on DEBUG about a user task without an external form
+reference, and nothing at all about one whose reference no method names. Nobody reads DEBUG, so an
+application which drew a notification into its model and forgot the method found out in production,
+if at all.
+
+From now on the deployment names such a task. Once per BPMN process, at INFO, while the model is
+wired, and only for a process a `@WorkflowService` class of this application claims. The DEBUG line
+is gone.
+
+Two cases are named apart, because the way out differs.
+
+A user task whose external form reference no method names is subscribed for all the same: this
+adapter opens one subscription per reference the model carries, whatever the application serves. So
+the engine offers the task, `PeaUserTaskHandler` finds no method and drops the delivery. The
+observers of the application see it and the application itself does not. The way out is a method
+named after the reference or after the element.
+
+A user task which names no external form reference never arrives at all. The reference is the name a
+subscription asks for, so there is nothing to subscribe under, and a method alone would change
+nothing. The way out is the reference in the model plus the method. This is the case the old DEBUG
+line was about, and it is the one which loses the most.
+
+This is not the refusal the Camunda 8 adapter has. Decision 53 of that adapter refuses a user task a
+job worker serves in a claimed process. The reason it gives is what the shape costs: the cluster
+hands out a job, nothing fetches it and the workflow stands at the element with no incident and
+nothing in any log. The Process-Engine-API has no such shape. A user task here is the engine's own,
+it is delivered as a notification and nothing about it waits for this application.
+
+So the rule is the same where the two can be the same, and it stops where the API stops. What is
+taken over is the split: a process this application claims is a process it stands in for, and a
+process nobody claims is somebody else's model. What is not taken over is the level. A refusal would
+end the boot of an application whose model is right, which would be stricter than the core, whose
+own field says a handler is optional. A WARN would be the same claim in a quieter voice, on every
+boot, for a model nobody has to change.
+
+Other shapes were looked at and turned down.
+
+Refusing it, the way Camunda 8 refuses its own case, would refuse every model whose user tasks are
+worked through a task list, which is a normal model here. A flag to switch the refusal off would be
+a flag for the normal case.
+
+A WARN instead of an INFO says that something needs attention. Here the model may be exactly what
+the modeller meant, and a warning on every boot for a correct model is how a log teaches people to
+skip warnings.
+
+Refusing the user task which names no external form reference was the tempting one, because such an
+element is unreachable for VanillaBP whatever the application does. It is still a model which runs:
+the engine creates the task and a task list finishes it. An application which uses this adapter for
+its service tasks and the engine's own task list for its user tasks is doing nothing wrong, and the
+boot of such an application may not end over a user task somebody meant to work by hand.
+
+The check could also sit in the core, which holds `optional` and knows which method serves which
+spec, and it could then name the unserved optional specs of a claimed process once for all adapters.
+It could not name the second case: a user task without an external form reference never becomes a
+spec, so the core never hears about it. The way out differs per BPMS as well, which is the half of
+the message worth reading. A report in the core would change the Camunda 8 adapter's boot output,
+which this entry does not touch.
+
+One thing is left open on purpose. The Camunda 8 adapter stays silent about the same case for a
+Camunda-managed user task whose external form reference no method names. Three adapters then say two
+different things about one situation. Closing that is either a change in that adapter or the
+core-side report above, and whoever takes it should start from this entry.
+
+`PeaUnservedUserTasksTest` holds both messages, both keys a method may be wired by, the silence
+about an unclaimed process, that the line is an INFO, and that a user task without a reference
+becomes neither a spec nor a subscription.
+
+### 16. This adapter reports no expression of a model, and the silence is the honest answer
+
+VanillaBP asks every adapter, while it wires a process, for the expressions of that process. It
+wants the element, the place inside the element and the text the engine evaluates, and the core
+turns that into one guiding message per process. This adapter answers with nothing, so the message
+never appears for an application running on it.
+
+Two things are missing, and either one is enough. The first is the model. The Process-Engine-API has
+no BPMN model type, so the adapter never holds one, neither the model being deployed nor a model the
+engine runs. That is gap 1 and gap 12 in [`GAPS.md`](./GAPS.md), and it is the same reason the
+concurrent-token hint is silent here (gap 21).
+
+The second is the expression language, and it is the one which would still stop us if the first were
+solved. The adapter does read the deployed BPMN XML with the JDK's streaming reader, far enough to
+find the executable process ids, so the text of an attribute is within reach. The text alone answers
+nothing. Camunda 7 marks an expression with `${...}` or `#{...}`, Camunda 8 marks one with a leading
+`=`, and the Process-Engine-API names neither, because it names no engine. So the adapter cannot
+tell an expression from a literal, and it does not know which places the engine behind the API
+evaluates at all. A place the engine reads as plain text is a place where naming an expression would
+be wrong.
+
+Reading the delimiters of the engine somebody happens to run was the alternative, and it was turned
+down. The adapter would have to guess, a wrong guess makes a startup message say something untrue,
+and a startup message which is sometimes untrue is worse than one which is absent. The whole point
+of this check is that a developer can act on it without reading documentation first.
+
+Nothing else of the feature is switched off. The property which accepts the expressions of a model
+is read by the core, so it behaves here the way it behaves everywhere. It just never has anything to
+accept.
+
+The way out is not a change in this adapter. An engine would have to say which expression language
+it evaluates and in which places, and that ask goes to bpm-crafters together with the model type
+rather than next to it. Entry 29 of [`GAPS.md`](./GAPS.md) says the same from the side of what this
+API cannot do.
