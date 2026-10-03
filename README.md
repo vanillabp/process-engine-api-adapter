@@ -602,6 +602,14 @@ Where an engine fills no workflow id the record carries none, and that is the no
 than a defect: the API defines no vocabulary for what a delivered task carries. The adapter SPI
 has a default of `null` for exactly this, meaning "this adapter names none".
 
+A start names a workflow id as well. Phase two of both starts, the plain one and the one by
+message, hands VanillaBP the `instanceId` the engine answered, and VanillaBP writes it down for
+the aggregate. The API does not say that this is the value a delivered task names under
+`processInstanceId`. The reference adapter for an embedded Camunda 7 fills both with the id of the
+process instance, and this adapter relies on that. An engine which answers a start with nothing
+leaves nothing to write down. `PeaTwoPhaseStartOutboxTest#preflightInTransactionAndSyncAfterCommit`
+and `TaskProcessingIntegrationTest#startWorkflowByMessagePublishesTheAggregateState` hold it.
+
 The element is answered even then, because this adapter deployed the models and can read them. A
 subscription asks the engine for one task definition, so once a delivery is routed to a BPMN
 process, the element carrying that name in that process is the element it belongs to. The engine
