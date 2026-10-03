@@ -8,6 +8,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.List;
 
+import javax.sql.DataSource;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -19,6 +21,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 
 import dev.bpmcrafters.processengineapi.ExecutionMode;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
+import io.vanillabp.integration.test.utils.delivery.TaskDeliveryLogReader;
 import io.vanillabp.pea.mock.InMemoryProcessEngine;
 import io.vanillabp.pea.mock.InMemoryProcessEngine.Invocation;
 import io.vanillabp.pea.processservice.PeaStartProcessCommand;
@@ -63,6 +66,9 @@ public class PeaTwoPhaseStartOutboxTest {
 
   @Autowired
   private AggregateRepository repository;
+
+  @Autowired
+  private DataSource dataSource;
 
   @BeforeEach
   public void resetEngine() {
@@ -137,6 +143,37 @@ public class PeaTwoPhaseStartOutboxTest {
     assertEquals(1, engine.getStartedInstances().size(), "SYNC must create exactly one instance");
     final var instance = engine.getStartedInstances().getFirst();
     assertEquals(attached.getId(), instance.variables().get(AGGREGATE_ID_VARIABLE));
+
+    // phase two reports the instance the engine created, and VanillaBP writes it down
+    // after the handler returned, so the row may come a moment after the instance
+    final var start = awaitTheStartOf(String.valueOf(attached.getId()), 10000);
+    assertNotNull(start, "the start of the workflow must be written to the delivery log");
+    assertEquals(instance.instanceId(), start.workflowId(), "the instance id the engine answered");
+    assertEquals(BPMN_PROCESS_ID, start.bpmnProcessId());
+
+  }
+
+  /**
+   * Waits for the row the start of a workflow leaves in the delivery log.
+   *
+   * @param aggregateId The aggregate whose workflow was started
+   * @param timeoutMs How long to wait
+   * @return The row, or <code>null</code> where none was written in time
+   */
+  private TaskDeliveryLogReader.Delivery awaitTheStartOf(
+      final String aggregateId,
+      final long timeoutMs) throws InterruptedException {
+
+    final var writtenDown = TaskDeliveryLogReader.of(dataSource);
+    final var deadline = System.currentTimeMillis() + timeoutMs;
+    while (System.currentTimeMillis() < deadline) {
+      final var starts = writtenDown.workflowStartsOfAggregate(aggregateId);
+      if (!starts.isEmpty()) {
+        return starts.getFirst();
+      }
+      Thread.sleep(50);
+    }
+    return null;
 
   }
 

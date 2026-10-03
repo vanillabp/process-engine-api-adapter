@@ -1158,11 +1158,12 @@ public class PeaProcessService<A> implements MigratableProcessService<A> {
     // (GAPS.md entry 11); schedule deduplication comes from the outbox key
     // 'module|process|aggregateId'
     try {
-      startProcessApi
+      final var started = startProcessApi
           .startProcess(new StartProcessByMessageCmd(
               scopedIdentifier(request.workflowModuleId(), request.messageName()), payloadOf(
                   request.aggregatePersistence(), request.workflowAggregateId(), null), Map.of()))
           .get();
+      reportTheStartedInstance(request, started);
       log.info(
           "PEA[{}]: started workflow by message '{}' for BPMN process '{}' of workflow module "
               + "'{}' (aggregate '{}')",
@@ -1217,7 +1218,7 @@ public class PeaProcessService<A> implements MigratableProcessService<A> {
     // by asking rather than remembered in a registry (decision 25 of the platform's
     // DECISIONS.md), and the core's probe before a re-dispatched start is what narrows
     // the window - which this adapter answers optimistically (GAPS.md, entry 11).
-    await(
+    final var started = await(
         startProcessApi.startProcess(
             new PeaStartProcessCommand(
                 scopedProcessId(request.workflowModuleId(), request.bpmnProcessId()), payloadOf(
@@ -1225,6 +1226,34 @@ public class PeaProcessService<A> implements MigratableProcessService<A> {
         "Starting the workflow (phase two)",
         request.bpmnProcessId(),
         request.workflowModuleId());
+    reportTheStartedInstance(request, started);
+
+  }
+
+  /**
+   * Tells VanillaBP which instance of the engine a start created, so it can later say which
+   * workflow an aggregate belongs to without asking the engine.
+   * <p>
+   * The id is the <code>instanceId</code> of the answer to the start command. The API does not
+   * promise that this is the same value a delivered task names under
+   * <code>processInstanceId</code>, which is what this adapter reports as the workflow id of a
+   * delivery. The API's own reference adapter for an embedded Camunda 7 fills both with the id
+   * of the process instance, and that is the assumption made here. An engine which answers a
+   * start with something else would make the two ids disagree. An engine which answers with
+   * nothing leaves nothing to report. VanillaBP then finds the workflow by asking the adapters
+   * in turn.
+   *
+   * @param request The phase-two request of the start
+   * @param started What the engine answered, <code>null</code> where it answered nothing
+   */
+  private static void reportTheStartedInstance(
+      final PhaseTwoRequest<?> request,
+      final ProcessInformation started) {
+
+    if (started == null) {
+      return;
+    }
+    request.reportStartedWorkflow(started.getInstanceId());
 
   }
 
@@ -1238,15 +1267,16 @@ public class PeaProcessService<A> implements MigratableProcessService<A> {
    * @param operation Description used in error messages
    * @param bpmnProcessId The BPMN process id (used in error messages)
    * @param workflowModuleId The workflow module id (used in error messages)
+   * @return What the engine answered
    */
-  private static void await(
+  private static ProcessInformation await(
       final CompletableFuture<ProcessInformation> future,
       final String operation,
       final String bpmnProcessId,
       final String workflowModuleId) {
 
     try {
-      future.get();
+      return future.get();
     } catch (final InterruptedException e) {
       Thread.currentThread().interrupt();
       throw new IllegalStateException(

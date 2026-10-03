@@ -881,6 +881,16 @@ public class TaskProcessingIntegrationTest {
     variables.remove("results");
     assertEquals(Map.of(), variables, "nothing else travels");
 
+    // the start by message reports the instance the engine created, just like the plain start
+    final var writtenDown = TaskDeliveryLogReader.of(deliveryLogDataSource);
+    awaitUntil(
+        () -> !writtenDown.workflowStartsOfAggregate("4743").isEmpty(),
+        "the start of the workflow to be written to the delivery log");
+    assertEquals(
+        instance.instanceId(),
+        writtenDown.workflowStartsOfAggregate("4743").getFirst().workflowId(),
+        "the instance id the engine answered");
+
   }
 
   @Autowired
