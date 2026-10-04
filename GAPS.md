@@ -907,3 +907,26 @@ application which only sends a process its own messages is not affected.
 **Ready to be sent to bpm-crafters:** not on its own. Either of two things would close it: a
 way to read the models (entry 1 and entry 12 again), or a start command which limits the
 message to one process definition.
+
+## 31. The answer to a start carries no version, so the start row has none
+
+**Needed by VanillaBP:** VanillaBP writes a row when a workflow starts, and the row names the
+version of the process definition the workflow runs on. An extension reads it to pick what it
+shows for that version, from the moment the workflow starts. The adapter reports the version
+in phase two of the start, next to the id of the started workflow, and in the same form a
+delivered task of that workflow carries. Here that form is the version tag (entry 19).
+
+**Offered by the Process-Engine-API:** `ProcessInformation`, the answer to a start command,
+has the `instanceId` and a free `meta` map. The API names no key for the version in that map.
+The API's own reference adapter for an embedded Camunda 7 fills the definition key, the
+business key, the tenant and the root instance there, and no version tag.
+
+**Consequence for the adapter:** it reports only the id of the started workflow, and the start
+row carries no version. Because the adapter reports `ReportedProcessVersion.VERSION_TAG`, a
+reader of that row learns that versions are reported here and that a later delivery may still
+bring the tag. So it waits for a delivery which carries one. Where the engine fills no tag on
+its tasks either, that delivery never brings one.
+
+**Ready to be sent to bpm-crafters:** together with entry 19. The answer to a start would need
+the version tag of the started process definition, under the key `processDefinitionVersionTag`
+which tasks already use.
