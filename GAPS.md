@@ -883,3 +883,27 @@ model being deployed, because that is the model a developer can still change.
 **Ready to be sent to bpm-crafters:** not on its own. It is entry 1 and entry 12 again, plus one
 more thing an engine would have to say about itself: which expression language it evaluates, and
 in which places. That belongs in the same ask as the model type rather than next to it.
+
+## 30. A start by message is not checked against the caller's process
+
+**Needed by VanillaBP:** `ProcessService#startWorkflowByMessage` starts the process of the
+`ProcessService` it is called on. A message which fires the start event of a different process
+would start that other process instead, and VanillaBP would write the start under the process
+of the caller. So the core asks each adapter, while it wires a process, which messages start
+that process. Where an adapter answers, the core refuses a message the process does not know
+with an `IllegalArgumentException`, before anything is started.
+
+**Offered by the Process-Engine-API:** nothing to read a model with (see entry 1 and entry 12),
+and `StartProcessByMessageCmd` names a message only. It cannot say which process definition
+the message is meant for, so the engine starts whatever process knows the message.
+
+**Consequence for the adapter:** it does not report the start messages of a process, and the
+core does not check them here. It says so once per process while the application boots. A
+message which starts a different process starts it, and the start row in VanillaBP stands
+under the process of the caller: this adapter reports the `instanceId` of the answer as the
+workflow it started, and it cannot learn a start the engine made on its own (entry 16). An
+application which only sends a process its own messages is not affected.
+
+**Ready to be sent to bpm-crafters:** not on its own. Either of two things would close it: a
+way to read the models (entry 1 and entry 12 again), or a start command which limits the
+message to one process definition.
