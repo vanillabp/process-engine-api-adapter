@@ -149,6 +149,12 @@ public class InMemoryProcessEngine implements DeploymentApi, StartProcessApi, Co
    */
   private final Set<String> failNextSyncForProcessIds = ConcurrentHashMap.newKeySet();
 
+  /**
+   * What the answer to a created instance carries in its meta map. Empty unless a test says
+   * otherwise, like the answer of the API's reference adapter, which fills no version tag.
+   */
+  private final Map<String, String> metaOfStartAnswers = new ConcurrentHashMap<>();
+
   private final AtomicLong deploymentCounter = new AtomicLong();
 
   private final AtomicLong instanceCounter = new AtomicLong();
@@ -219,6 +225,21 @@ public class InMemoryProcessEngine implements DeploymentApi, StartProcessApi, Co
   }
 
   /**
+   * Lets every following start which creates an instance answer with this meta map (until
+   * {@link #reset()}). An engine adapter fills whatever it has there, and a test uses this to
+   * play an engine which names the version tag of the started process definition.
+   *
+   * @param meta What the answer to a start carries in its meta map
+   */
+  public void answerStartsWithMeta(
+      final Map<String, String> meta) {
+
+    metaOfStartAnswers.clear();
+    metaOfStartAnswers.putAll(meta);
+
+  }
+
+  /**
    * Clears the recordings and every injected failure while KEEPING deployments,
    * started instances and active subscriptions - for tests exercising several
    * operations against the subscriptions opened at startup. The start-failure
@@ -262,6 +283,7 @@ public class InMemoryProcessEngine implements DeploymentApi, StartProcessApi, Co
     correlatedMessages.clear();
     failPreflightForProcessIds.clear();
     failNextSyncForProcessIds.clear();
+    metaOfStartAnswers.clear();
 
   }
 
@@ -358,7 +380,7 @@ public class InMemoryProcessEngine implements DeploymentApi, StartProcessApi, Co
     // record LAST: tests await the SYNC invocation and then assert the started
     // instance - recording first would open a race window for the asserting thread
     record("StartProcessApi", "startProcess", cmd);
-    return CompletableFuture.completedFuture(new ProcessInformation(instanceId, Map.of()));
+    return CompletableFuture.completedFuture(new ProcessInformation(instanceId, Map.copyOf(metaOfStartAnswers)));
 
   }
 

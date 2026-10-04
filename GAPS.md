@@ -883,3 +883,52 @@ model being deployed, because that is the model a developer can still change.
 **Ready to be sent to bpm-crafters:** not on its own. It is entry 1 and entry 12 again, plus one
 more thing an engine would have to say about itself: which expression language it evaluates, and
 in which places. That belongs in the same ask as the model type rather than next to it.
+
+## 30. A start by message is not checked against the caller's process
+
+**Needed by VanillaBP:** `ProcessService#startWorkflowByMessage` starts the process of the
+`ProcessService` it is called on. A message which fires the start event of a different process
+would start that other process instead, and VanillaBP would write the start under the process
+of the caller. So the core asks each adapter, while it wires a process, which messages start
+that process. Where an adapter answers, the core refuses a message the process does not know
+with an `IllegalArgumentException`, before anything is started.
+
+**Offered by the Process-Engine-API:** nothing to read a model with (see entry 1 and entry 12),
+and `StartProcessByMessageCmd` names a message only. It cannot say which process definition
+the message is meant for, so the engine starts whatever process knows the message.
+
+**Consequence for the adapter:** it does not report the start messages of a process, and the
+core does not check them here. It says so once per process while the application boots. A
+message which starts a different process starts it, and the start row in VanillaBP stands
+under the process of the caller: this adapter reports the `instanceId` of the answer as the
+workflow it started, and it cannot learn a start the engine made on its own (entry 16). An
+application which only sends a process its own messages is not affected.
+
+**Ready to be sent to bpm-crafters:** not on its own. Either of two things would close it: a
+way to read the models (entry 1 and entry 12 again), or a start command which limits the
+message to one process definition.
+
+## 31. The answer to a start names no version, so the start row has one only where the engine adds it
+
+**Needed by VanillaBP:** VanillaBP writes a row when a workflow starts, and the row names the
+version of the process definition the workflow runs on. An extension reads it to pick what it
+shows for that version, from the moment the workflow starts. The adapter reports the version
+in phase two of the start, next to the id of the started workflow, and in the same form a
+delivered task of that workflow carries. Here that form is the version tag (entry 19).
+
+**Offered by the Process-Engine-API:** `ProcessInformation`, the answer to a start command,
+has the `instanceId` and a free `meta` map. The API names no key for the version in that map.
+The API's own reference adapter for an embedded Camunda 7 fills the definition key, the
+business key, the tenant and the root instance there, and no version tag.
+
+**Consequence for the adapter:** it reads the tag from the `meta` map of the answer, under
+`processDefinitionVersionTag`, the key a delivered task uses for it. Where an engine adapter
+puts the tag there, the start row carries it. Where it does not, as with the reference adapter
+today, the row has no version. Because this adapter reports `ReportedProcessVersion.VERSION_TAG`,
+a reader of such a row learns that versions are reported here and that a later delivery may
+still bring the tag, so it waits for a delivery which carries one. Where the engine fills no tag
+on its tasks either, that delivery never brings one.
+
+**Ready to be sent to bpm-crafters:** together with entry 19. The answer to a start should name
+the version tag of the started process definition, under the key `processDefinitionVersionTag`
+which tasks already use.

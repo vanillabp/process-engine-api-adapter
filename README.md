@@ -610,6 +610,12 @@ process instance, and this adapter relies on that. An engine which answers a sta
 leaves nothing to write down. `PeaTwoPhaseStartOutboxTest#preflightInTransactionAndSyncAfterCommit`
 and `TaskProcessingIntegrationTest#startWorkflowByMessagePublishesTheAggregateState` hold it.
 
+The version of the started process goes with the id. The adapter reads it from the `meta` map of
+the answer, under `processDefinitionVersionTag`, the key a delivered task carries its tag under.
+The reference adapter fills no such key in the answer to a start, so there the version is empty
+and VanillaBP waits for a delivery to bring it (`GAPS.md`, entry 31).
+`PeaTwoPhaseStartOutboxTest#theStartRowCarriesTheVersionTagOfTheAnswer` holds it.
+
 The element is answered even then, because this adapter deployed the models and can read them. A
 subscription asks the engine for one task definition, so once a delivery is routed to a BPMN
 process, the element carrying that name in that process is the element it belongs to. The engine

@@ -3,10 +3,12 @@ package io.vanillabp.pea.springboot.outbox;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrowsExactly;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.List;
+import java.util.Map;
 
 import javax.sql.DataSource;
 
@@ -25,6 +27,7 @@ import io.vanillabp.integration.test.utils.delivery.TaskDeliveryLogReader;
 import io.vanillabp.pea.mock.InMemoryProcessEngine;
 import io.vanillabp.pea.mock.InMemoryProcessEngine.Invocation;
 import io.vanillabp.pea.processservice.PeaStartProcessCommand;
+import io.vanillabp.pea.wiring.PeaTaskMeta;
 import io.vanillabp.spi.process.ProcessService;
 
 /**
@@ -150,6 +153,27 @@ public class PeaTwoPhaseStartOutboxTest {
     assertNotNull(start, "the start of the workflow must be written to the delivery log");
     assertEquals(instance.instanceId(), start.workflowId(), "the instance id the engine answered");
     assertEquals(BPMN_PROCESS_ID, start.bpmnProcessId());
+    // the mock answers like the reference engine adapter, without a version tag
+    assertNull(start.processVersion(), "no version where the engine's answer names none");
+
+  }
+
+  @Test
+  @DisplayName("The start row carries the version tag the engine's answer names")
+  public void theStartRowCarriesTheVersionTagOfTheAnswer() throws Exception {
+
+    engine.answerStartsWithMeta(Map.of(PeaTaskMeta.PROCESS_VERSION_TAG, "release-2024"));
+
+    final var attached = transactionTemplate.execute(status -> {
+      final var aggregate = new Aggregate();
+      aggregate.setContent("version-tag");
+      return processService.startWorkflow(aggregate);
+    });
+
+    final var start = awaitTheStartOf(String.valueOf(attached.getId()), 10000);
+    assertNotNull(start, "the start of the workflow must be written to the delivery log");
+    assertEquals(engine.getStartedInstances().getFirst().instanceId(), start.workflowId());
+    assertEquals("release-2024", start.processVersion(), "the tag under the key a delivery reads");
 
   }
 
