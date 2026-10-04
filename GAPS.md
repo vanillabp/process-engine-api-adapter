@@ -908,7 +908,7 @@ application which only sends a process its own messages is not affected.
 way to read the models (entry 1 and entry 12 again), or a start command which limits the
 message to one process definition.
 
-## 31. The answer to a start carries no version, so the start row has none
+## 31. The answer to a start names no version, so the start row has one only where the engine adds it
 
 **Needed by VanillaBP:** VanillaBP writes a row when a workflow starts, and the row names the
 version of the process definition the workflow runs on. An extension reads it to pick what it
@@ -921,12 +921,14 @@ has the `instanceId` and a free `meta` map. The API names no key for the version
 The API's own reference adapter for an embedded Camunda 7 fills the definition key, the
 business key, the tenant and the root instance there, and no version tag.
 
-**Consequence for the adapter:** it reports only the id of the started workflow, and the start
-row carries no version. Because the adapter reports `ReportedProcessVersion.VERSION_TAG`, a
-reader of that row learns that versions are reported here and that a later delivery may still
-bring the tag. So it waits for a delivery which carries one. Where the engine fills no tag on
-its tasks either, that delivery never brings one.
+**Consequence for the adapter:** it reads the tag from the `meta` map of the answer, under
+`processDefinitionVersionTag`, the key a delivered task uses for it. Where an engine adapter
+puts the tag there, the start row carries it. Where it does not, as with the reference adapter
+today, the row has no version. Because this adapter reports `ReportedProcessVersion.VERSION_TAG`,
+a reader of such a row learns that versions are reported here and that a later delivery may
+still bring the tag, so it waits for a delivery which carries one. Where the engine fills no tag
+on its tasks either, that delivery never brings one.
 
-**Ready to be sent to bpm-crafters:** together with entry 19. The answer to a start would need
+**Ready to be sent to bpm-crafters:** together with entry 19. The answer to a start should name
 the version tag of the started process definition, under the key `processDefinitionVersionTag`
 which tasks already use.

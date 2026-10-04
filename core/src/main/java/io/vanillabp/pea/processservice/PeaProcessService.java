@@ -38,6 +38,7 @@ import io.vanillabp.pea.PeaAdapter;
 import io.vanillabp.pea.deployment.PeaDeployedProcesses;
 import io.vanillabp.pea.wiring.PeaCompleteTaskByErrorCmd;
 import io.vanillabp.pea.wiring.PeaCompleteTaskCmd;
+import io.vanillabp.pea.wiring.PeaTaskMeta;
 import io.vanillabp.spi.process.ProcessDefinition;
 import io.vanillabp.spi.process.TaskNotFoundException;
 import io.vanillabp.spi.process.WorkflowHistory;
@@ -1242,6 +1243,13 @@ public class PeaProcessService<A> implements MigratableProcessService<A> {
    * start with something else would make the two ids disagree. An engine which answers with
    * nothing leaves nothing to report. VanillaBP then finds the workflow by asking the adapters
    * in turn.
+   * <p>
+   * The version goes with the id, read from the meta map of the answer under the same key a
+   * delivered task carries its version tag ({@link PeaTaskMeta#PROCESS_VERSION_TAG}), so the start
+   * and the deliveries of one workflow name its version the same way. The API names no such key
+   * for the answer to a start, and its reference adapter for an embedded Camunda 7 fills none
+   * there. Then the version is <code>null</code>, which tells VanillaBP that a delivery may still
+   * bring it (see <code>GAPS.md</code>, entry 31).
    *
    * @param request The phase-two request of the start
    * @param started What the engine answered, <code>null</code> where it answered nothing
@@ -1253,7 +1261,15 @@ public class PeaProcessService<A> implements MigratableProcessService<A> {
     if (started == null) {
       return;
     }
-    request.reportStartedWorkflow(started.getInstanceId());
+    final var meta = started.getMeta();
+    final var versionTag = meta == null
+        ? null
+        : meta.get(PeaTaskMeta.PROCESS_VERSION_TAG);
+    // a blank tag counts as none, as it does when a delivery is read
+    request.reportStartedWorkflow(
+        started.getInstanceId(), (versionTag == null) || versionTag.isBlank()
+            ? null
+            : versionTag);
 
   }
 
