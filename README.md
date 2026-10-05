@@ -178,7 +178,7 @@ replaces the mock with a real Process-Engine-API implementation.
   platform's `DECISIONS.md`), and what narrows the window is the core's probe before a
   re-dispatched start - which this adapter cannot answer, see
   [`GAPS.md`](GAPS.md), entry 11, and the residual described by the
-  [Camunda 8 adapter](https://github.com/vanillabp/camunda8-adapter/blob/main/README.md#idempotency-limitation).
+  [Camunda 8 adapter](https://github.com/camunda-community-hub/vanillabp-camunda8-adapter/blob/main/README.md#idempotency-limitation).
 - **Platform coverage:** deployment is wired and integration-tested on **both platforms**:
   Spring Boot (`PeaDeploymentServiceTest`, `DeploymentIntegrationTest`) and Quarkus
   (`PeaDeploymentPipelineTest` - the Quarkus platform integration runs the
