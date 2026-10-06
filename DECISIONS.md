@@ -37,12 +37,12 @@ coming back from the engine is translated to plain before the core sees it.
 
 ### 3. A class opens its fields one by one, not as a whole
 
-The process service and the deployment service of this adapter hold dozens of fields, most of
-them collaborators nobody outside the class needs. Which of them a caller may read belongs to
-the surface of the class, so an accessor is declared per field, and `@Getter` on the class is
-refused even where an IDE offers it: it would publish the current field list and then keep
-publishing whatever field a later change adds. `@SuppressWarnings("LombokGetterMayBeUsed")` on
-such a class is what keeps that offer from coming back.
+The process service and the deployment service of this adapter hold about a dozen fields each,
+most of them collaborators nobody outside the class needs. Which of them a caller may read or
+set belongs to the surface of the class, so an accessor is declared per field, and `@Getter` or
+`@Setter` on the class is refused even where an IDE offers it: it would publish the current field
+list and then keep publishing whatever field a later change adds. `@SuppressWarnings("LombokSetterMayBeUsed")`
+on such a class is what keeps that offer from coming back.
 
 ### 4. What has to be asked before the commit is a preflight, the work itself runs after it
 
@@ -153,9 +153,9 @@ entry of a user task the new model does not carry.
 
 The answer carries the model rather than a trimmed record, because whoever asks reads more of it
 than such a record would carry and the adapter holds it anyway. A form reference is not unique
-inside a workflow module, so that lookup answers a collection and the caller decides; the
-element id answers one, because nothing keeps two processes of one module from using the same
-one. The same pass which reads the process id now also reads the name the modeller wrote on the
+inside a workflow module, so that lookup answers a collection and the caller decides. The element
+id lookup answers a collection too: an element id is unique within one BPMN file, but nothing keeps
+two processes of one module from using the same one. The same pass which reads the process id now also reads the name the modeller wrote on the
 process, next to the user-task names it already read, so nobody has to walk the same bytes a
 second time for them.
 
