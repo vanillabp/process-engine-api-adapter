@@ -234,8 +234,9 @@ replaces the mock with a real Process-Engine-API implementation.
   notifications are logged loudly but never break the user task itself.
   A user task of a process one of your `@WorkflowService` classes claims needs a method, or the
   line `implemented-externally=true` saying that something else serves it, a task list for example.
-  Without either the boot ends, with the message of the core (`DECISIONS.pending/834.md`). A user
-  task which names no external form reference never arrives here, because the reference is the
+  Without either the boot ends, with the message of the core
+  ([decision 17](./DECISIONS.md#17-a-user-task-needs-a-method-or-a-line-one-without-a-form-reference-the-line-only)).
+  A user task which names no external form reference never arrives here, because the reference is the
   name a subscription asks for, so a method could not serve it. Such a task ends the boot of a
   claimed process unless the line marks it, and the message says to add the reference and a method
   or the line.
