@@ -301,6 +301,8 @@ is what an application reads instead.
 
 ### 14. A task of a workflow this application does not own is refused as far as this API allows
 
+*Narrowed by `DECISIONS.pending/937.md`: no subscription is opened for a process of this application nobody claims, so its tasks no longer reach this refusal. What is left is the case this entry is about, a task of another application under the same task type.*
+
 A delivery the core answers with `DeliveryOfAnUnknownWorkflowException` is not treated like any
 other failure here. A service task is failed with a retry count of zero, so an engine which reads
 the count stops offering it. A user task cannot be answered at all, so it ends in one log line which
@@ -383,6 +385,8 @@ counter in the adapter would count the same event under a second name.
 ### 15. A user task nothing serves is named in a claimed process, and nothing is refused
 
 *Superseded by decision 17: a user task of a claimed process now needs a `@WorkflowTask` method or the line `implemented-externally=true`, the INFO report is gone, and the core holds the rule for every adapter.*
+
+*Its split between a claimed process and one nobody claims goes further with `DECISIONS.pending/937.md`: a process nobody claims gets no subscription either, so its user tasks are not delivered and dropped any more.*
 
 A user task of this engine runs without a `@WorkflowTask` method. The engine creates the task,
 somebody works a task list and finishes it, and the workflow moves on. That is why the core hands a

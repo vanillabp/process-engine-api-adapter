@@ -268,17 +268,16 @@ public class PeaFetchVariablesTest {
   }
 
   @Test
-  @DisplayName("A BPMN process no workflow service serves is asked blindly rather than incompletely")
-  public void anUnknownAggregateFallsBackToEverything() {
+  @DisplayName("A BPMN process no workflow service claims gets no subscription at all")
+  public void aProcessNobodyClaimsGetsNoSubscription() {
 
     final var service = deploymentService(invoker(bpmnProcessId -> null, taskDefinition -> List.of()));
 
     service.startWorkflowProcessing(MODULE, wire(service, "two.bpmn", TWO_PROCESSES));
 
-    Assertions.assertEquals(
-        Set.of(),
-        payloadOf("approve"),
-        "a set missing exactly the name the handler needs would be worse than the old behaviour");
+    Assertions.assertTrue(
+        engine.getSubscriptions().isEmpty(),
+        "a process nobody claims is deployed with its file and left alone");
 
   }
 

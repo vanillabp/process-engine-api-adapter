@@ -10,3 +10,6 @@ vanillabp:
       adapters:
         pea:
           resources-location: classpath:pea-test-module/processes/deploy
+      workflows:
+        PeaTestProcess:
+          implemented-externally: true
