@@ -727,6 +727,83 @@ public class PeaDeploymentServiceTest {
 
   }
 
+  /**
+   * A model whose only user task names no external form reference, which this adapter cannot
+   * subscribe for.
+   */
+  private static PeaBpmnModel aModelWithAUserTaskWithoutAFormReference() {
+
+    return new PeaBpmnModel(
+        "by-hand.bpmn", "bytes".getBytes(StandardCharsets.UTF_8), "ByHandProcess", null, List.of(), List.of(), List
+            .of(BpmnTaskSpec.userTask("t_byHand", null, "Sign by hand")));
+
+  }
+
+  @Test
+  @DisplayName("A user task without a form reference ends the boot of a claimed process, naming the line")
+  public void aUserTaskWithoutAFormReferenceEndsTheBoot() {
+
+    final var model = aModelWithAUserTaskWithoutAFormReference();
+
+    final var refused = Assertions
+        .assertThrows(IllegalStateException.class,
+            () -> service.wireBpmn("mod", "by-hand.bpmn", "ByHandProcess", model, null))
+        .getMessage();
+
+    Assertions.assertTrue(refused.contains("'t_byHand'"), refused);
+    Assertions.assertTrue(refused.contains("never reaches a @WorkflowTask method"), refused);
+    Assertions
+        .assertTrue(
+            refused.contains(
+                "vanillabp.workflow-modules.mod.workflows.ByHandProcess.tasks.t_byHand.implemented-externally=true"),
+            refused);
+
+  }
+
+  @Test
+  @DisplayName("A user task without a form reference which the line marks goes to the core")
+  public void aMarkedUserTaskWithoutAFormReferenceGoesToTheCore() {
+
+    final var handedOver = new ArrayList<BpmnTaskSpec>();
+    final var core = new PermissiveInvoker() {
+
+      @Override
+      public boolean isImplementedExternally(
+          final String adapterId,
+          final String workflowModuleId,
+          final String bpmnProcessId,
+          final BpmnTaskSpec task) {
+
+        return "t_byHand".equals(task.activityId());
+
+      }
+
+      @Override
+      public void validateTaskWiring(
+          final String workflowModuleId,
+          final String bpmnProcessId,
+          final Collection<BpmnTaskSpec> tasks) {
+
+        handedOver.addAll(tasks);
+
+      }
+
+    };
+    final var marked = new PeaDeploymentService("pea", engine, TestCollaborators.of(core), engine, engine);
+
+    marked.wireBpmn("mod", "by-hand.bpmn", "ByHandProcess", aModelWithAUserTaskWithoutAFormReference(), null);
+
+    Assertions
+        .assertEquals(
+            List.of("t_byHand"),
+            handedOver
+                .stream()
+                .map(BpmnTaskSpec::activityId)
+                .toList(),
+            "the core holds the rule, a method next to the line included");
+
+  }
+
   @Test
   @DisplayName("Wiring says that this engine keeps no version catalog and carries a version tag")
   public void wiringSaysThereIsNoVersionCatalog() {

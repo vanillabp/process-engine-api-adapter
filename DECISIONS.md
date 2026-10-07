@@ -382,6 +382,8 @@ counter in the adapter would count the same event under a second name.
 
 ### 15. A user task nothing serves is named in a claimed process, and nothing is refused
 
+*Superseded by `DECISIONS.pending/834.md`: a user task of a claimed process now needs a `@WorkflowTask` method or the line `implemented-externally=true`, the INFO report is gone, and the core holds the rule for every adapter.*
+
 A user task of this engine runs without a `@WorkflowTask` method. The engine creates the task,
 somebody works a task list and finishes it, and the workflow moves on. That is why the core hands a
 user task over as an OPTIONAL spec, and `validateTaskWiring` filters those out before it asks for a

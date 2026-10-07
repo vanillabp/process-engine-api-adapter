@@ -11,3 +11,8 @@ vanillabp:
       adapters:
         pea:
           resources-location: classpath:pea-test-module/processes/observer
+      workflows:
+        QuarkusObserverProcess:
+          tasks:
+            t_unclaimed:
+              implemented-externally: true
