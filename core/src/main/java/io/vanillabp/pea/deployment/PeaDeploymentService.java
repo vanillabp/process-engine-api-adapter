@@ -732,8 +732,8 @@ public class PeaDeploymentService implements AdapterDeploymentService<PeaBpmnMod
               currentUserTaskHasFormReference = false;
             } else if ((currentUserTaskId != null) && "formDefinition".equals(element)) {
               // user tasks: the zeebe:formDefinition external reference
-              // IS the task definition (Camunda-8-style convention); the handler is
-              // OPTIONAL (notification only)
+              // IS the task definition (Camunda-8-style convention); the task needs a
+              // method or the property implemented-externally=true, like every task
               final var externalReference = reader.getAttributeValue(null, "externalReference");
               if ((externalReference != null) && !externalReference.isBlank()) {
                 currentProcess
@@ -834,12 +834,12 @@ public class PeaDeploymentService implements AdapterDeploymentService<PeaBpmnMod
     // throwing here honors the deployment-failure policy
     final var specs = new ArrayList<BpmnTaskSpec>(model.tasks());
     specs.addAll(model.userTasks());
-    workflowTaskWiring.validateTaskWiring(workflowModuleId, bpmnProcessId, specs);
+    specs.addAll(userTasksWithoutAFormReferenceSomebodyElseServes(workflowModuleId, bpmnProcessId, model));
+    workflowTaskWiring.validateTaskWiring(adapterId, workflowModuleId, bpmnProcessId, specs);
 
     failOnBpmsInitiatedStartEvents(workflowModuleId, filename, bpmnProcessId, model);
     warnAboutUnservedWorkflowEndedHandlers(workflowModuleId, bpmnProcessId);
     reportTheMissingVersionCatalog(workflowModuleId, bpmnProcessId);
-    nameTheUserTasksNothingServes(workflowModuleId, bpmnProcessId, model);
 
     log.info(
         "Process-Engine-API adapter '{}': wired {} task(s) of BPMN process '{}' (file '{}', workflow module '{}')",
@@ -921,74 +921,70 @@ public class PeaDeploymentService implements AdapterDeploymentService<PeaBpmnMod
   }
 
   /**
-   * Names the user tasks of one process which reach no <code>&#64;WorkflowTask</code> method.
+   * The user tasks of one process which name no external form reference and which the
+   * application marked as served by something else, and the refusal of the rest.
    * <p>
-   * Nothing is refused and nothing is warned about. The engine creates the user task, somebody
-   * finishes it from a task list and the workflow runs on, which is why the core hands a user
-   * task over as an OPTIONAL spec. The one thing missing is the notification, and a model whose
-   * user tasks are worked through a task list alone is a model which is meant that way. That is
-   * where this stops being the same case as the Camunda 8 adapter's: there a user task a job
-   * worker serves leaves the workflow standing, and the boot ends over it.
+   * This adapter subscribes for a user task by its external form reference, so a user task
+   * without one never reaches a method. In a process a <code>&#64;WorkflowService</code> class
+   * claims, every task needs a method or the property <code>implemented-externally=true</code>,
+   * and for such a task only the property is possible. So the boot ends over such a task unless
+   * the property says that somebody else serves it. A marked task goes to the core with the
+   * other tasks, which is where a method drawn into it next to the property is refused.
    * <p>
-   * Only for a process a <code>&#64;WorkflowService</code> class of this application claims. The
-   * core answers the name of the workflow aggregate's id for such a process and refuses to answer
-   * for one nobody claimed, which is the same question the Camunda 8 adapter asks for the same
-   * split. Where nobody claims the process, no method of this application was meant to serve its
-   * tasks and there is nothing to say.
+   * A process nobody claims is somebody else's model and nothing is asked of it.
    *
    * @param workflowModuleId The workflow module ID
    * @param bpmnProcessId The PLAIN BPMN process ID
    * @param model The model this boot deploys
+   * @return The marked user tasks without a form reference
+   * @throws IllegalStateException If the application claims the process and a user task without
+   *           a form reference is not marked
    */
-  private void nameTheUserTasksNothingServes(
+  private List<BpmnTaskSpec> userTasksWithoutAFormReferenceSomebodyElseServes(
       final String workflowModuleId,
       final String bpmnProcessId,
       final PeaBpmnModel model) {
 
-    if (!theApplicationClaims(workflowModuleId, bpmnProcessId)) {
-      return;
+    if (model.userTasksWithoutAFormReference()
+        .isEmpty() || !workflowTaskWiring.isClaimedByAWorkflowService(workflowModuleId, bpmnProcessId)) {
+      return List.of();
     }
-    final var report = PeaUnservedUserTasks
-        .report(
-            PeaUnservedUserTasks
-                .unserved(
-                    model.userTasks(),
-                    key -> workflowTaskInvoker.workflowTaskHandlerExists(workflowModuleId, bpmnProcessId, key)),
-            model.userTasksWithoutAFormReference(),
-            bpmnProcessId,
-            workflowModuleId);
-    if (report == null) {
-      return;
+    final var marked = model
+        .userTasksWithoutAFormReference()
+        .stream()
+        .filter(userTask -> workflowTaskWiring
+            .isImplementedExternally(adapterId, workflowModuleId, bpmnProcessId, userTask))
+        .toList();
+    final var unmarked = model
+        .userTasksWithoutAFormReference()
+        .stream()
+        .filter(userTask -> !marked.contains(userTask))
+        .toList();
+    if (unmarked.isEmpty()) {
+      return marked;
     }
-    log.info("Process-Engine-API adapter '{}': {}", adapterId, report);
-
-  }
-
-  /**
-   * Whether a <code>&#64;WorkflowService</code> class of this application claims the given BPMN
-   * process. Asked of the core, which knows the workflow aggregate of a claimed process and
-   * nothing about an unclaimed one.
-   *
-   * @param workflowModuleId The workflow module ID
-   * @param bpmnProcessId The PLAIN BPMN process ID
-   * @return Whether the application stands in for the process
-   */
-  private boolean theApplicationClaims(
-      final String workflowModuleId,
-      final String bpmnProcessId) {
-
-    try {
-      return workflowTaskWiring.resolveWorkflowAggregateIdName(workflowModuleId, bpmnProcessId) != null;
-    } catch (final RuntimeException e) {
-      log.debug(
-          "Process-Engine-API adapter '{}': no @WorkflowService class of this application claims "
-              + "BPMN process '{}' of workflow module '{}'",
-          adapterId,
-          bpmnProcessId,
-          workflowModuleId,
-          e);
-      return false;
-    }
+    throw new IllegalStateException(
+        """
+            Process-Engine-API adapter '%s' does not deploy BPMN process '%s' of workflow module \
+            '%s': %d user task(s) name no external form reference (zeebe:formDefinition \
+            externalReference): %s. This adapter subscribes for a user task by that reference, so \
+            such a task never reaches a @WorkflowTask method. Add the reference and a method \
+            named after it, or say that something other than this application serves the task:
+            %s"""
+            .formatted(
+                adapterId,
+                bpmnProcessId,
+                workflowModuleId,
+                unmarked.size(),
+                unmarked
+                    .stream()
+                    .map(userTask -> "'%s'".formatted(userTask.activityId()))
+                    .collect(java.util.stream.Collectors.joining(", ")),
+                unmarked
+                    .stream()
+                    .map(userTask -> io.vanillabp.integration.adapter.spi.workflowtask.ImplementedExternally
+                        .propertyLine(workflowModuleId, bpmnProcessId, userTask.activityId()))
+                    .collect(java.util.stream.Collectors.joining("\n"))));
 
   }
 

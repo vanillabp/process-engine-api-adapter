@@ -58,7 +58,7 @@ import io.vanillabp.spi.service.WorkflowTask;
 @SpringBootTest(
     classes = UserTaskObserverIntegrationTest.UserTaskObserverApplication.class,
     properties = {
-        "vanillabp.adapters.pea.type=process-engine-api", "vanillabp.adapters.pea.name-clash-avoidance=none", "vanillabp.prioritized-adapters=pea", "vanillabp.workflow-modules.pea-test-module.adapters.pea.resources-location=classpath*:pea-test-module/processes/observer"
+        "vanillabp.adapters.pea.type=process-engine-api", "vanillabp.adapters.pea.name-clash-avoidance=none", "vanillabp.prioritized-adapters=pea", "vanillabp.workflow-modules.pea-test-module.adapters.pea.resources-location=classpath*:pea-test-module/processes/observer", "vanillabp.workflow-modules.pea-test-module.workflows.PeaObserverProcess.tasks.t_unclaimed.implemented-externally=true"
     })
 @ExtendWith(SuppressOutputExtension.class)
 public class UserTaskObserverIntegrationTest {
@@ -305,7 +305,8 @@ public class UserTaskObserverIntegrationTest {
 
     /**
      * The claimed user task. Its sibling <code>peaUnclaimed</code> has no method here on
-     * purpose: a task list shows it anyway.
+     * purpose: a task list shows it anyway, and the configuration marks it with
+     * <code>implemented-externally</code>.
      */
     @WorkflowTask(taskDefinition = "peaObserved")
     public void peaObservedNotification(
