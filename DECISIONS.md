@@ -382,6 +382,8 @@ counter in the adapter would count the same event under a second name.
 
 ### 15. A user task nothing serves is named in a claimed process, and nothing is refused
 
+*Superseded by decision 17: a user task of a claimed process now needs a `@WorkflowTask` method or the line `implemented-externally=true`, the INFO report is gone, and the core holds the rule for every adapter.*
+
 A user task of this engine runs without a `@WorkflowTask` method. The engine creates the task,
 somebody works a task list and finishes it, and the workflow moves on. That is why the core hands a
 user task over as an OPTIONAL spec, and `validateTaskWiring` filters those out before it asks for a
@@ -486,3 +488,27 @@ The way out is not a change in this adapter. An engine would have to say which e
 it evaluates and in which places, and that ask goes to bpm-crafters together with the model type
 rather than next to it. Entry 29 of [`GAPS.md`](./GAPS.md) says the same from the side of what this
 API cannot do.
+
+### 17. A user task needs a method or a line, one without a form reference the line only
+
+Supersedes decision 15. The platform decided on 2026-10-07 that every task of a claimed BPMN process
+needs a `@WorkflowTask` method or the property `implemented-externally=true`, and that the core holds
+that rule for every adapter (decision 119 of `adapter-platform-integration`). The reason is the one the
+Camunda adapters give: version 1 asked for the method, and only the application can tell a task meant
+for a task list from a forgotten method. This adapter had no version 1, so for it the rule is simply
+the one all three adapters share.
+
+**A user task with an external form reference** is handed to the core as before, and the core asks for
+the method or the line. The INFO report of decision 15 and `PeaUnservedUserTasks` are gone, because
+the core's message now says what the report said, and ends the boot.
+
+**A user task without an external form reference** never becomes a spec of the core, because nothing
+can be subscribed for it and so no method can ever be called for it. Decision 15 named it in the
+report because the core could not. Now the adapter asks the core whether the line marks it
+(`WorkflowTaskWiring.isImplementedExternally`, by the element id). A marked one goes to the core as a
+spec, so a method drawn into it next to the line is refused there; an unmarked one ends the boot of a
+claimed process with a message of this adapter which names the reference to add or the line. Whether
+the process is claimed is asked through `WorkflowTaskWiring.isClaimedByAWorkflowService`.
+
+What decision 15 said against a refusal, that a model worked through a task list is normal here, is
+answered by the line: such a model stays normal, and the application says so once per task.

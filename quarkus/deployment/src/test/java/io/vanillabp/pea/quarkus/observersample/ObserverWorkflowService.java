@@ -13,7 +13,8 @@ import jakarta.inject.Singleton;
 /**
  * Workflow service of the Quarkus user-task observer test: one notification handler for the
  * claimed user task plus an inline in-memory persistence copying aggregates on save/load. The
- * second user task of the BPMN has no method here on purpose - an observer sees it anyway.
+ * second user task of the BPMN has no method here on purpose - an observer sees it anyway, and
+ * the configuration marks it with {@code implemented-externally}.
  */
 @Singleton
 @WorkflowService(
