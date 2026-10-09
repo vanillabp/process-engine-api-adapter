@@ -344,21 +344,9 @@ public class PeaDeploymentService implements AdapterDeploymentService<PeaBpmnMod
         // apply - and asking for more than derived is never wrong, only more expensive
         return PeaFetchVariables.Selection.everything();
       }
-      final String aggregateIdName;
-      try {
-        aggregateIdName = workflowTaskWiring
-            .resolveWorkflowAggregateIdName(workflowModuleId, task.bpmnProcessId());
-      } catch (final RuntimeException e) {
-        log.debug(
-            "Process-Engine-API adapter '{}': the BPMN process '{}' of workflow module '{}' has no "
-                + "known workflow aggregate - its subscriptions ask for all payload variables",
-            adapterId,
-            task.bpmnProcessId(),
-            workflowModuleId,
-            e);
-        return PeaFetchVariables.Selection.everything();
-      }
-      variables.add(aggregateIdName);
+      // a subscription serves the tasks of claimed processes only, and the old id of a renamed
+      // process is declared by a workflow service as well, so the core knows the name
+      variables.add(workflowTaskWiring.resolveWorkflowAggregateIdName(workflowModuleId, task.bpmnProcessId()));
       // what the handlers of this task read with @TaskParam: the core scanned those
       // names off the methods while wiring, and this adapter has no model to guess from.
       // Asked with BOTH keys a method can be wired by: a method naming the element id
@@ -830,6 +818,21 @@ public class PeaDeploymentService implements AdapterDeploymentService<PeaBpmnMod
       final PeaBpmnModel model,
       final PeaProcessingContext context) {
 
+    // a process nobody claims travels with its file and is left alone: nothing subscribes
+    // to its tasks and no check ends the boot because of it (see decision 18 of DECISIONS.md).
+    // The core ended the start over it already unless the application marked it as
+    // somebody else's
+    if (!workflowTaskWiring.isClaimedByAWorkflowService(workflowModuleId, bpmnProcessId)) {
+      log.debug(
+          "Process-Engine-API adapter '{}': BPMN process '{}' of file '{}' (workflow module '{}') is "
+              + "claimed by no @WorkflowService and is deployed as it was modelled",
+          adapterId,
+          bpmnProcessId,
+          filename,
+          workflowModuleId);
+      return;
+    }
+
     // validate the BPMN's tasks against the registered @WorkflowTask methods;
     // throwing here honors the deployment-failure policy
     final var specs = new ArrayList<BpmnTaskSpec>(model.tasks());
@@ -931,7 +934,7 @@ public class PeaDeploymentService implements AdapterDeploymentService<PeaBpmnMod
    * the property says that somebody else serves it. A marked task goes to the core with the
    * other tasks, which is where a method drawn into it next to the property is refused.
    * <p>
-   * A process nobody claims is somebody else's model and nothing is asked of it.
+   * A process nobody claims never gets here.
    *
    * @param workflowModuleId The workflow module ID
    * @param bpmnProcessId The PLAIN BPMN process ID
@@ -945,8 +948,7 @@ public class PeaDeploymentService implements AdapterDeploymentService<PeaBpmnMod
       final String bpmnProcessId,
       final PeaBpmnModel model) {
 
-    if (model.userTasksWithoutAFormReference()
-        .isEmpty() || !workflowTaskWiring.isClaimedByAWorkflowService(workflowModuleId, bpmnProcessId)) {
+    if (model.userTasksWithoutAFormReference().isEmpty()) {
       return List.of();
     }
     final var marked = model
@@ -1409,10 +1411,13 @@ public class PeaDeploymentService implements AdapterDeploymentService<PeaBpmnMod
     // handler dispatches through the core's WorkflowTaskInvoker. The BPMN process
     // a delivered task belongs to travels in TaskInformation.meta (adapter
     // convention key 'bpmnProcessId' - see GAPS.md); if absent, the task
-    // definition has to be unique across the module's processes
+    // definition has to be unique across the module's processes. Only a claimed process
+    // is subscribed for: a process nobody claims is deployed with its file and left alone
     final var processesByTaskDefinition = new LinkedHashMap<String, List<ServedTask>>();
     bpmsProcessingContext
         .getModels()
+        .stream()
+        .filter(model -> workflowTaskWiring.isClaimedByAWorkflowService(workflowModuleId, model.bpmnProcessId()))
         .forEach(model -> model
             .tasks()
             .stream()
@@ -1429,6 +1434,8 @@ public class PeaDeploymentService implements AdapterDeploymentService<PeaBpmnMod
     final var processesByUserTaskReference = new LinkedHashMap<String, List<ServedTask>>();
     bpmsProcessingContext
         .getModels()
+        .stream()
+        .filter(model -> workflowTaskWiring.isClaimedByAWorkflowService(workflowModuleId, model.bpmnProcessId()))
         .forEach(model -> model
             .userTasks()
             .forEach(userTask -> processesByUserTaskReference

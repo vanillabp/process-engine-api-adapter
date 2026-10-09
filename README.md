@@ -257,8 +257,8 @@ replaces the mock with a real Process-Engine-API implementation.
   TASKS only, so both phases throw with a guiding message ([`GAPS.md`](GAPS.md), entry 18) -
   phase ONE already, so the application sees it at its call instead of in an outbox dispatch.
 - **Starts the engine performs itself, and the end of a workflow** ([`GAPS.md`](GAPS.md),
-  entries 16 and 17): nothing in the API reports either. A process carrying a timer, signal
-  or conditional start event is rejected during `wireBpmn` (through the deployment-failure
+  entries 16 and 17): nothing in the API reports either. A claimed process carrying a timer,
+  signal or conditional start event is rejected during `wireBpmn` (through the deployment-failure
   policy, so a non-first-priority adapter degrades it to a warning), because deploying it
   would produce workflows without an aggregate. A `@WorkflowEnded` method only WARNs, since
   the workflow runs perfectly well and just the notification is missing. A
@@ -303,6 +303,16 @@ signal is `PeaSendSignalTest`, and the viewer API is `PeaViewerApiTest`. That a 
 the engine fires itself is refused while deploying and that a `@WorkflowEnded` method only
 warns are `PeaDeploymentServiceTest` respectively the WARN the Quarkus lifecycle test boots
 with.
+
+## Only a claimed process is served
+
+A BPMN file goes to the engine as a whole, so a workflow module may deploy a process no
+`@WorkflowService` class claims. The core ends the start over such a process unless the
+application marks it with `vanillabp.workflow-modules.<module>.workflows.<process>.implemented-externally=true`.
+A process which reaches this adapter unclaimed is therefore somebody else's: `wireBpmn` returns for
+it before anything is checked, and `startWorkflowProcessing` opens no subscription for its tasks.
+The question is `WorkflowTaskWiring#isClaimedByAWorkflowService`. Why:
+[decision 18](./DECISIONS.md#18-a-process-nobody-claims-gets-no-subscription-and-no-check). `PeaUnclaimedProcessTest` holds it.
 
 ## What a subscription asks the engine for
 

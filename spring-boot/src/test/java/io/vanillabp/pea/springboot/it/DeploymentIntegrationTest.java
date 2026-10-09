@@ -18,7 +18,9 @@ import io.vanillabp.pea.mock.InMemoryProcessEngine;
 @SpringBootTest(
     classes = DeploymentIntegrationTestApplication.class,
     properties = {
-        "vanillabp.workflow-modules.pea-test-module.adapters.pea.resources-location=classpath*:pea-test-module/processes/deploy"
+        "vanillabp.workflow-modules.pea-test-module.adapters.pea.resources-location=classpath*:pea-test-module/processes/deploy",
+        // no workflow service of this application claims the process of that file
+        "vanillabp.workflow-modules.pea-test-module.workflows.PeaTestProcess.implemented-externally=true"
     })
 @ExtendWith(SuppressOutputExtension.class)
 public class DeploymentIntegrationTest {
