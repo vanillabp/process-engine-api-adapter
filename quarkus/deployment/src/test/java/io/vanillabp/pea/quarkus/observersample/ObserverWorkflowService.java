@@ -6,6 +6,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import io.vanillabp.integration.spi.AggregatePersistenceAware;
 import io.vanillabp.spi.service.BpmnProcess;
 import io.vanillabp.spi.service.TaskId;
+import io.vanillabp.spi.service.TaskParam;
 import io.vanillabp.spi.service.WorkflowService;
 import io.vanillabp.spi.service.WorkflowTask;
 import jakarta.inject.Singleton;
@@ -91,6 +92,17 @@ public class ObserverWorkflowService implements AggregatePersistenceAware<Observ
     aggregate.results = "notified:"
         + taskId;
 
+  }
+
+  /**
+   * The extension's method for the unclaimed user task. It reads a process variable no
+   * <code>&#64;WorkflowTask</code> method reads.
+   *
+   * @param shown The process variable only this method reads
+   */
+  @Glimpse(element = "t_unclaimed")
+  public void glimpseOfTheUnclaimedTask(
+      @TaskParam("cockpitOnly") final String shown) {
   }
 
 }

@@ -120,6 +120,33 @@ public class PeaUserTaskObserverTest {
   }
 
   @Test
+  public void aVariableOnlyAnExtensionReadsIsDelivered() {
+
+    Assertions.assertEquals(
+        java.util.Set.of("cockpitOnly", "id"),
+        inMemoryProcessEngine
+            .getSubscriptions()
+            .stream()
+            .filter(subscription -> subscription.taskDescriptionKey().equals("quarkusUnclaimed"))
+            .findFirst()
+            .orElseThrow()
+            .payloadDescription(),
+        "the engine hands the task to this subscription alone, so it asks for what the "
+            + "extension reads as well");
+
+    inMemoryProcessEngine.deliverTask(
+        "q-obs-7",
+        "quarkusUnclaimed",
+        "QuarkusObserverProcess",
+        Map.of("id", "q-5001", "cockpitOnly", "shown", "nobodyReads", "dropped"));
+
+    Assertions.assertEquals(
+        Map.of("id", "q-5001", "cockpitOnly", "shown"),
+        RecordingUserTaskObserver.DELIVERED.getFirst().payload());
+
+  }
+
+  @Test
   public void deliveredUserTaskReachesTheObserver() {
 
     inMemoryProcessEngine.deliverTask(
