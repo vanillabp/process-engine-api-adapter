@@ -333,9 +333,20 @@ task definition alone, such a method declared a `@TaskParam` nobody fetched, and
 parameter fails the delivery here rather than arriving as `null`. Both service-task and user-task
 subscriptions go through it - a notification carries a payload like every other delivery.
 
+It asks a third question per BPMN task, `extensionTaskParameterNames`, for the variables the
+methods of the extensions read. The engine hands a task to exactly one subscription, so an
+extension has none of its own here: it reads what this subscription delivered, through a user-task
+observer. The question goes with the keys an extension looks a task up by, the element id first and
+the task definition second, which is the order of the Business Cockpit. A task of a process nobody
+deployed has no element id, so it is asked by the task definition alone (decision 20 in
+[`DECISIONS.md`](DECISIONS.md)). `PeaFetchVariablesTest#aVariableOnlyAnExtensionReadsIsAskedFor`
+holds it in the core, and `UserTaskObserverIntegrationTest` on Spring Boot and
+`PeaUserTaskObserverTest` on Quarkus deliver such a variable to an observer.
+
 The core is the only possible source here. This adapter never sees a BPMN model of a deployed
 process ([`GAPS.md`](GAPS.md), entry 1), so unlike Camunda 8 it could not even have guessed the
-names from the model; what it can do is ask which variables the `@WorkflowTask` methods read.
+names from the model; what it can do is ask which variables the `@WorkflowTask` methods and the
+extensions read.
 
 Two answers mirror Camunda 8 deliberately, because two adapters answering one question
 differently is what the migration design exists to prevent: no configuration asks for more

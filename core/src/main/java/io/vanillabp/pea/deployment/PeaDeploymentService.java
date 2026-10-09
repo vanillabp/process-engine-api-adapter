@@ -334,8 +334,32 @@ public class PeaDeploymentService implements AdapterDeploymentService<PeaBpmnMod
                 workflowTaskWiring
                     .taskParameterNames(workflowModuleId, task.bpmnProcessId(), task.elementId()));
       }
+      // and what the extensions read. The engine hands this task to this subscription
+      // alone, so an extension reads what this delivery carries and has no subscription
+      // to ask for its own variables (see decision 20 in the repository's DECISIONS.md)
+      variables
+          .addAll(
+              workflowTaskWiring
+                  .extensionTaskParameterNames(workflowModuleId, task.bpmnProcessId(), lookupKeysOf(task)));
     }
     return PeaFetchVariables.Selection.of(variables);
+
+  }
+
+  /**
+   * The keys an extension finds its methods for a task by, in the order it tries them: the
+   * element id first, then the task definition. That is the order the Business Cockpit uses,
+   * so the variables fetched here are those of the method which runs there.
+   *
+   * @param task A task one subscription serves
+   * @return The keys, the element id left out where no model names it
+   */
+  static List<String> lookupKeysOf(
+      final ServedTask task) {
+
+    return task.elementId() == null
+        ? List.of(task.taskDefinition())
+        : List.of(task.elementId(), task.taskDefinition());
 
   }
 

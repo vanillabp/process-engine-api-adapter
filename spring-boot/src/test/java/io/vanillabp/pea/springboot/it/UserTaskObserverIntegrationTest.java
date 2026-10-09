@@ -5,6 +5,10 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.lang.annotation.ElementType;
+import java.lang.annotation.Retention;
+import java.lang.annotation.RetentionPolicy;
+import java.lang.annotation.Target;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -17,6 +21,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.springframework.beans.factory.InitializingBean;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -32,6 +37,9 @@ import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
 import dev.bpmcrafters.processengineapi.task.TaskInformation;
+import io.vanillabp.integration.extension.spi.handler.CoreHandlerParameter;
+import io.vanillabp.integration.extension.spi.handler.ExtensionHandlers;
+import io.vanillabp.integration.extension.spi.handler.HandlerContract;
 import io.vanillabp.integration.spi.AggregatePersistenceAware;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 import io.vanillabp.pea.deployment.PeaDeployedProcesses;
@@ -44,6 +52,7 @@ import io.vanillabp.pea.springboot.TestPersistenceConfiguration;
 import io.vanillabp.spi.process.ProcessService;
 import io.vanillabp.spi.service.BpmnProcess;
 import io.vanillabp.spi.service.TaskId;
+import io.vanillabp.spi.service.TaskParam;
 import io.vanillabp.spi.service.WorkflowService;
 import io.vanillabp.spi.service.WorkflowTask;
 
@@ -74,6 +83,18 @@ public class UserTaskObserverIntegrationTest {
       TestPersistenceConfiguration.class, UserTaskObserverConfiguration.class, ObserverWorkflowService.class
   })
   public static class UserTaskObserverApplication {
+  }
+
+  /**
+   * The annotation of an extension which reads what this adapter's subscription delivers,
+   * the way a details provider of a cockpit does.
+   */
+  @Retention(RetentionPolicy.RUNTIME)
+  @Target(ElementType.METHOD)
+  public @interface Glimpse {
+
+    String element();
+
   }
 
   public static class ObserverAggregate {
@@ -214,6 +235,23 @@ public class UserTaskObserverIntegrationTest {
 
     }
 
+    /**
+     * Registers the extension's contract while the application starts, which is before the
+     * adapter opens its subscriptions.
+     */
+    @Bean
+    InitializingBean glimpseContract(
+        final ExtensionHandlers handlers) {
+
+      return () -> handlers
+          .register(HandlerContract
+              .of("glimpsing", Glimpse.class)
+              .lookupKeys(annotation -> List.of(((Glimpse) annotation).element()))
+              .coreParameters(CoreHandlerParameter.TASK_PARAM)
+              .build());
+
+    }
+
     @Bean
     AggregatePersistenceAware<ObserverAggregate> observerPersistence() {
 
@@ -316,6 +354,17 @@ public class UserTaskObserverIntegrationTest {
       aggregate.results = "notified:"
           + taskId;
 
+    }
+
+    /**
+     * The extension's method for the unclaimed user task. It reads a process variable no
+     * <code>&#64;WorkflowTask</code> method reads.
+     *
+     * @param shown The process variable only this method reads
+     */
+    @Glimpse(element = "t_unclaimed")
+    public void glimpseOfTheUnclaimedTask(
+        @TaskParam("cockpitOnly") final String shown) {
     }
 
   }
@@ -479,6 +528,31 @@ public class UserTaskObserverIntegrationTest {
     assertNull(
         UserTaskObserverConfiguration.AGGREGATES.get("5001").results,
         "no method claims this task, so nothing of the application ran");
+
+  }
+
+  @Test
+  @DisplayName("A variable only an extension reads reaches the observers")
+  public void aVariableOnlyAnExtensionReadsIsDelivered() {
+
+    assertEquals(
+        java.util.Set.of("cockpitOnly", "id"),
+        engine
+            .getSubscriptions()
+            .stream()
+            .filter(subscription -> subscription.taskDescriptionKey().equals("peaUnclaimed"))
+            .findFirst()
+            .orElseThrow()
+            .payloadDescription(),
+        "the engine hands the task to this subscription alone, so it asks for what the "
+            + "extension reads as well");
+
+    engine.deliverTask(
+        "obs-7", "peaUnclaimed", PROCESS, Map.of("id", "5001", "cockpitOnly", "shown", "nobodyReads", "dropped"));
+
+    assertEquals(
+        Map.of("id", "5001", "cockpitOnly", "shown"),
+        UserTaskObserverConfiguration.SECOND.delivered.getFirst().payload());
 
   }
 

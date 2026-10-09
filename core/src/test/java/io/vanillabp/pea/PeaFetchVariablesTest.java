@@ -244,6 +244,63 @@ public class PeaFetchVariablesTest {
 
   }
 
+  /**
+   * A core where an extension reads <code>cockpitOnly</code> for the user task
+   * <code>ut1</code> and no workflow method reads anything, noting the keys it was asked
+   * with.
+   */
+  private static PeaDeploymentServiceTest.PermissiveInvoker extensionReading(
+      final List<List<String>> askedKeys) {
+
+    return new PeaDeploymentServiceTest.PermissiveInvoker() {
+
+      @Override
+      public String resolveWorkflowAggregateIdName(
+          final String workflowModuleId,
+          final String bpmnProcessId) {
+
+        return "id";
+
+      }
+
+      @Override
+      public Collection<String> extensionTaskParameterNames(
+          final String workflowModuleId,
+          final String bpmnProcessId,
+          final List<String> lookupKeys) {
+
+        askedKeys.add(lookupKeys);
+        return "ut1".equals(lookupKeys.getFirst())
+            ? List.of("cockpitOnly")
+            : List.of();
+
+      }
+
+    };
+
+  }
+
+  @Test
+  @DisplayName("A variable only an extension reads travels with the delivery")
+  public void aVariableOnlyAnExtensionReadsIsAskedFor() {
+
+    final var askedKeys = new java.util.ArrayList<List<String>>();
+    final var service = deploymentService(extensionReading(askedKeys));
+
+    service.startWorkflowProcessing(MODULE, wire(service, "ut.bpmn", USER_TASK_PROCESS));
+
+    Assertions.assertEquals(
+        Set.of("cockpitOnly", "id"),
+        payloadOf("utApprove"),
+        "the engine hands the task to this subscription alone, so it has to ask for what an "
+            + "extension reads from the delivery as well");
+    Assertions.assertEquals(
+        List.of(List.of("ut1", "utApprove")),
+        askedKeys,
+        "asked with the element id first, which is the order an extension looks a task up in");
+
+  }
+
   @Test
   @DisplayName("A BPMN process no workflow service claims gets no subscription at all")
   public void aProcessNobodyClaimsGetsNoSubscription() {

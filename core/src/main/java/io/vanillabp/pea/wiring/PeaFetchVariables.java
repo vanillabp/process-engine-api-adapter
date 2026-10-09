@@ -30,6 +30,10 @@ import java.util.TreeSet;
  * methods and the core reads them off the annotations while the application wires itself
  * - the adapter itself never sees a BPMN model here (see {@code GAPS.md} 1), so this is
  * the only place they could come from.</li>
+ * <li>every variable a {@code @TaskParam} of an extension's method reads for the served tasks
+ * ({@code WorkflowTaskWiring#extensionTaskParameterNames}). The engine hands a task to this
+ * one subscription, so an extension reads what it delivered and has no subscription of its
+ * own to ask with.</li>
  * </ul>
  *
  * <p>

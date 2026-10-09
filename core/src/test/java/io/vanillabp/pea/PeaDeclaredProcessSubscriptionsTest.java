@@ -70,6 +70,20 @@ public class PeaDeclaredProcessSubscriptionsTest {
 
     String invokedBpmnProcessId;
 
+    /** The keys the extensions were asked about, in the order asked. */
+    final List<List<String>> extensionKeys = new java.util.ArrayList<>();
+
+    @Override
+    public Collection<String> extensionTaskParameterNames(
+        final String workflowModuleId,
+        final String bpmnProcessId,
+        final List<String> lookupKeys) {
+
+      extensionKeys.add(lookupKeys);
+      return List.of();
+
+    }
+
     @Override
     public Map<String, Collection<String>> taskWiringOfProcessesNobodyDeployed(
         final String workflowModuleId) {
@@ -164,6 +178,10 @@ public class PeaDeclaredProcessSubscriptionsTest {
         logged.contains("subscribed twice"),
         () -> "and says why there are two subscriptions per name: "
             + logged);
+    assertEquals(
+        List.of(List.of(TASK_DEFINITION), List.of(TASK_DEFINITION)),
+        core.extensionKeys,
+        "no model names an element here, so an extension is asked by the task definition alone");
 
   }
 
