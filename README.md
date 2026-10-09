@@ -337,26 +337,31 @@ The core is the only possible source here. This adapter never sees a BPMN model 
 process ([`GAPS.md`](GAPS.md), entry 1), so unlike Camunda 8 it could not even have guessed the
 names from the model; what it can do is ask which variables the `@WorkflowTask` methods read.
 
-Three answers mirror Camunda 8 deliberately, because two adapters answering one question
-differently is what the migration design exists to prevent: the escape hatch is
-`vanillabp.adapters.<id>.fetch-variables: all` with the same two values and the same four
-resolution levels, `all` at any served task makes the whole subscription ask for everything,
-and a BPMN process no workflow service serves falls back to everything rather than to a set
-which may be missing what its handler reads. The overlay lives in each platform module
-(`VanillaBpPeaProperties`), which on Quarkus is also what makes the key writable at all: a key
-no registered mapping models fails the startup there.
+Two answers mirror Camunda 8 deliberately, because two adapters answering one question
+differently is what the migration design exists to prevent: no configuration asks for more
+than the derived set, and a BPMN process no workflow service claims gets no subscription at all.
+A handler which needs a value no `@TaskParam` declares reads it from the workflow aggregate.
+
+Snapshots of version 2.0 had the key `vanillabp.adapters.<id>.fetch-variables: all`, which made
+a subscription ask for everything. It is gone. The overlay in each platform module
+(`VanillaBpPeaProperties`) still binds it at all four levels, only so that
+`PeaFetchVariables#rejectTheRemovedKey` can end the start with a message naming every key which
+sets it. On Quarkus that is also what keeps SmallRye from failing the start with a message of its
+own: a key no registered mapping models fails the startup there.
 
 The handlers carry the `Selection` for their messages. `PeaTaskHandler` and `PeaUserTaskHandler`
 name it when the aggregate-id variable is absent, and their invocation contexts throw when
 `getTaskParameter` is asked for a name outside it - practically unreachable for a statically
-named `@TaskParam`, and kept for a name a handler computes at runtime.
+named `@TaskParam`, and kept for a name a handler computes at runtime. That message points to
+the workflow aggregate.
 
 The mock engine narrows a delivered payload to what the subscription asked for
 (`InMemoryProcessEngine.ActiveSubscription#narrow`). Without that the derivation would be
 asserted and never exercised. `PeaFetchVariablesTest` holds all of it, from
 `theSubscriptionNamesWhatItReads` and `theUnionCoversEverythingTheSubscriptionServes`
-through `aParameterOfAnIdWiredMethodIsAskedFor` and `theEscapeHatchAsksForEverything` to
-`anUnknownAggregateFallsBackToEverything`.
+through `aParameterOfAnIdWiredMethodIsAskedFor` to `aProcessNobodyClaimsGetsNoSubscription`
+and `theRemovedKeyEndsTheStart`. `RemovedFetchVariablesBootTest` on Spring Boot and
+`PeaRemovedFetchVariablesTest` on Quarkus hold that a start with the key set ends.
 
 ## What a `@TaskParam` receives
 

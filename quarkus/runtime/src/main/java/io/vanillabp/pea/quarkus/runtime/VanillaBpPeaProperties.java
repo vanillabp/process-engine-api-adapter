@@ -1,29 +1,29 @@
 package io.vanillabp.pea.quarkus.runtime;
 
-import java.util.LinkedList;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Optional;
-import java.util.stream.Stream;
 
 import io.quarkus.runtime.annotations.ConfigPhase;
 import io.quarkus.runtime.annotations.ConfigRoot;
 import io.quarkus.runtime.annotations.StaticInitSafe;
 import io.smallrye.config.ConfigMapping;
 import io.vanillabp.pea.wiring.PeaFetchVariables;
-import io.vanillabp.pea.wiring.PeaFetchVariablesResolver;
 
 /**
  * The Process-Engine-API adapter's OVERLAY of the shared <code>vanillabp.*</code>
  * configuration tree. The adapter has no connection settings of its own - the engine is
- * provided by the application as beans - so the only key here is
+ * provided by the application as beans. The only key here is the removed
  * <code>fetch-variables</code>, at the canonical per-adapter location
  * <code>vanillabp.adapters.&lt;id&gt;.fetch-variables</code> plus the three scoped levels
- * below it.
+ * below it. It is bound only so the start can refuse it, see
+ * {@link PeaFetchVariables#rejectTheRemovedKey}.
  * <p>
  * Quarkus knows no blanket {@code withMappingIgnore} for the {@code vanillabp} prefix any
  * more, so a key no registered mapping models fails the startup. This overlay is
- * therefore what makes the adapter's key writable at all.
+ * therefore what lets the start answer the removed key with a message of this adapter
+ * instead of SmallRye's "does not map to any root".
  * <p>
  * Never {@code @Inject} this mapping: injecting it turns it into a STATIC-INIT mapping and
  * the whole tree is validated before the adapter extensions registered their RUN_TIME
@@ -44,81 +44,71 @@ public interface VanillaBpPeaProperties {
   Map<String, PeaScopedKeys> adapters();
 
   /**
-   * The workflow-module sections of the shared tree - the overlay mirrors the levels of
-   * the most-specific-wins resolution (task &gt; workflow &gt; workflow-module &gt;
-   * adapter).
+   * The workflow-module sections of the shared tree, down to the task level, where the
+   * removed key could be set too.
    *
    * @return The workflow-module sections, keyed by workflow module ID
    */
   Map<String, ModuleOverlay> workflowModules();
 
   /**
-   * Resolves whether a subscription asks for the DERIVED payload variables or for all of
-   * them, most specific wins; falls back to the adapter-level value and finally the
-   * default {@code derived}.
+   * Every key which still sets the removed <code>fetch-variables</code> for one adapter, at
+   * the adapter level and at the three levels below it. The start refuses them all in one
+   * message, see {@link PeaFetchVariables#rejectTheRemovedKey}.
    *
-   * @param workflowModuleId The workflow module ID
-   * @param bpmnProcessId The BPMN process ID
-   * @param taskDefinition The task definition
    * @param adapterId The adapter ID
-   * @return The most specific configured mode or the default
+   * @return The full keys, empty where nobody sets it
    */
-  default PeaFetchVariables.Mode fetchVariablesFor(
-      final String workflowModuleId,
-      final String bpmnProcessId,
-      final String taskDefinition,
+  default List<String> fetchVariablesKeys(
       final String adapterId) {
 
-    final var scoped = scopedKeysMostSpecificFirst(workflowModuleId, bpmnProcessId, taskDefinition, adapterId)
-        .map(PeaScopedKeys::fetchVariables)
-        .flatMap(Optional::stream)
-        .findFirst();
-    if (scoped.isPresent()) {
-      return scoped.get();
+    final var keys = new ArrayList<String>();
+    if (setsFetchVariables(adapters(), adapterId)) {
+      keys.add("vanillabp.adapters.%s.%s".formatted(adapterId, PeaFetchVariables.REMOVED_KEY));
     }
-    final var adapter = adapters().get(adapterId);
-    return adapter != null
-        ? adapter
-            .fetchVariables()
-            .orElse(PeaFetchVariablesResolver.DEFAULT_FETCH_VARIABLES)
-        : PeaFetchVariablesResolver.DEFAULT_FETCH_VARIABLES;
+    workflowModules().forEach((
+        moduleId,
+        module) -> {
+      if (setsFetchVariables(module.adapters(), adapterId)) {
+        keys.add("vanillabp.workflow-modules.%s.adapters.%s.%s"
+            .formatted(moduleId, adapterId, PeaFetchVariables.REMOVED_KEY));
+      }
+      module.workflows().forEach((
+          workflowId,
+          workflow) -> {
+        if (setsFetchVariables(workflow.adapters(), adapterId)) {
+          keys.add("vanillabp.workflow-modules.%s.workflows.%s.adapters.%s.%s"
+              .formatted(moduleId, workflowId, adapterId, PeaFetchVariables.REMOVED_KEY));
+        }
+        workflow.tasks().forEach((
+            taskId,
+            task) -> {
+          if (setsFetchVariables(task.adapters(), adapterId)) {
+            keys.add("vanillabp.workflow-modules.%s.workflows.%s.tasks.%s.adapters.%s.%s"
+                .formatted(moduleId, workflowId, taskId, adapterId, PeaFetchVariables.REMOVED_KEY));
+          }
+        });
+      });
+    });
+    return keys;
 
   }
 
   /**
-   * The <code>adapters.&lt;id&gt;</code> sections of the three levels below the adapter,
-   * most specific first.
+   * Whether one level sets the removed key for one adapter.
+   *
+   * @param level The <code>adapters</code> section of the level
+   * @param adapterId The adapter ID
+   * @return Whether the key is there
    */
-  private Stream<PeaScopedKeys> scopedKeysMostSpecificFirst(
-      final String workflowModuleId,
-      final String bpmnProcessId,
-      final String taskDefinition,
+  private static boolean setsFetchVariables(
+      final Map<String, PeaScopedKeys> level,
       final String adapterId) {
 
-    final var module = workflowModuleId != null
-        ? workflowModules().get(workflowModuleId)
-        : null;
-    final var workflow = (module != null) && (bpmnProcessId != null)
-        ? module.workflows().get(bpmnProcessId)
-        : null;
-    final var task = (workflow != null) && (taskDefinition != null)
-        ? workflow.tasks().get(taskDefinition)
-        : null;
-
-    final var levelsMostSpecificFirst = new LinkedList<Map<String, PeaScopedKeys>>();
-    if (task != null) {
-      levelsMostSpecificFirst.add(task.adapters());
-    }
-    if (workflow != null) {
-      levelsMostSpecificFirst.add(workflow.adapters());
-    }
-    if (module != null) {
-      levelsMostSpecificFirst.add(module.adapters());
-    }
-    return levelsMostSpecificFirst
-        .stream()
-        .map(level -> level.get(adapterId))
-        .filter(Objects::nonNull);
+    final var keys = level == null
+        ? null
+        : level.get(adapterId);
+    return (keys != null) && keys.fetchVariables().isPresent();
 
   }
 
@@ -128,12 +118,12 @@ public interface VanillaBpPeaProperties {
   interface PeaScopedKeys {
 
     /**
-     * Whether a subscription asks for the derived payload variables or for all of them,
-     * at this level.
+     * The removed key <code>fetch-variables</code> at this level, bound only so the start
+     * can refuse it.
      *
-     * @return The mode
+     * @return What somebody wrote under the removed key
      */
-    Optional<PeaFetchVariables.Mode> fetchVariables();
+    Optional<String> fetchVariables();
 
   }
 

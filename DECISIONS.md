@@ -95,6 +95,8 @@ See [Which phase-two failures are repeated](./README.md#which-phase-two-failures
 
 ### 7. A subscription asks for exactly the variables the handlers declare
 
+*Superseded in part by `DECISIONS.pending/938.md`: the key `fetch-variables` is gone, and a start which still sets it ends. No message names it any more.*
+
 A subscription used to be opened with an empty set, so the engine decided what a task delivery
 carried. Now it names the aggregate-id variable of the process it serves plus the union of the
 `@TaskParam` names the core reports for that task definition, and user-task subscriptions do the

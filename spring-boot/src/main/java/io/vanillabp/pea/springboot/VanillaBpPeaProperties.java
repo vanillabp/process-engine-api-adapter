@@ -1,22 +1,21 @@
 package io.vanillabp.pea.springboot;
 
-import java.util.LinkedList;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
-import java.util.Objects;
-import java.util.stream.Stream;
 
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 import io.vanillabp.pea.wiring.PeaFetchVariables;
-import io.vanillabp.pea.wiring.PeaFetchVariablesResolver;
 
 /**
  * The Process-Engine-API adapter's OVERLAY of the shared <code>vanillabp.*</code>
  * configuration tree. The adapter has no connection settings of its own - the engine is
- * provided by the application as beans - so the only key here is
- * <code>fetch-variables</code>, and it sits at the canonical per-adapter location
+ * provided by the application as beans. The only key here is the removed
+ * <code>fetch-variables</code>, at the canonical per-adapter location
  * <code>vanillabp.adapters.&lt;id&gt;.fetch-variables</code> plus the three scoped levels
- * below it. A second {@code @ConfigurationProperties} class over the same prefix coexists
+ * below it. It is bound only so the start can refuse it, see
+ * {@link PeaFetchVariables#rejectTheRemovedKey}. A second {@code @ConfigurationProperties} class over the same prefix coexists
  * with the platform's binding of the core model; keys unknown to either view are ignored
  * by the JavaBean binding.
  * <p>
@@ -41,9 +40,8 @@ public class VanillaBpPeaProperties {
   private Map<String, PeaScopedKeys> adapters = Map.of();
 
   /**
-   * The workflow-module sections of the shared tree - the overlay mirrors the levels of
-   * the most-specific-wins resolution (task &gt; workflow &gt; workflow-module &gt;
-   * adapter).
+   * The workflow-module sections of the shared tree, down to the task level, where the
+   * removed key could be set too.
    */
   private Map<String, ModuleOverlay> workflowModules = Map.of();
 
@@ -94,70 +92,56 @@ public class VanillaBpPeaProperties {
   }
 
   /**
-   * Resolves whether a subscription asks for the DERIVED payload variables or for all of
-   * them, most specific wins; falls back to the adapter-level value and finally the
-   * default {@code derived}.
+   * Every key which still sets the removed <code>fetch-variables</code> for one adapter, at
+   * the adapter level and at the three levels below it. The start refuses them all in one
+   * message, see {@link PeaFetchVariables#rejectTheRemovedKey}.
    *
-   * @param workflowModuleId The workflow module ID
-   * @param bpmnProcessId The BPMN process ID
-   * @param taskDefinition The task definition
    * @param adapterId The adapter ID
-   * @return The most specific configured mode or the default
+   * @return The full keys, empty where nobody sets it
    */
-  public PeaFetchVariables.Mode fetchVariablesFor(
-      final String workflowModuleId,
-      final String bpmnProcessId,
-      final String taskDefinition,
+  public List<String> fetchVariablesKeys(
       final String adapterId) {
 
-    final var scoped = scopedKeysMostSpecificFirst(workflowModuleId, bpmnProcessId, taskDefinition, adapterId)
-        .map(PeaScopedKeys::getFetchVariables)
-        .filter(Objects::nonNull)
-        .findFirst();
-    if (scoped.isPresent()) {
-      return scoped.get();
+    final var keys = new ArrayList<String>();
+    if (setsFetchVariables(adapters, adapterId)) {
+      keys.add("vanillabp.adapters.%s.%s".formatted(adapterId, PeaFetchVariables.REMOVED_KEY));
     }
-    final var adapter = adapters.get(adapterId);
-    return (adapter != null) && (adapter.getFetchVariables() != null)
-        ? adapter.getFetchVariables()
-        : PeaFetchVariablesResolver.DEFAULT_FETCH_VARIABLES;
+    workflowModules.forEach((
+        moduleId,
+        module) -> {
+      if (setsFetchVariables(module.getAdapters(), adapterId)) {
+        keys.add("vanillabp.workflow-modules.%s.adapters.%s.%s"
+            .formatted(moduleId, adapterId, PeaFetchVariables.REMOVED_KEY));
+      }
+      module.getWorkflows().forEach((
+          workflowId,
+          workflow) -> {
+        if (setsFetchVariables(workflow.getAdapters(), adapterId)) {
+          keys.add("vanillabp.workflow-modules.%s.workflows.%s.adapters.%s.%s"
+              .formatted(moduleId, workflowId, adapterId, PeaFetchVariables.REMOVED_KEY));
+        }
+        workflow.getTasks().forEach((
+            taskId,
+            task) -> {
+          if (setsFetchVariables(task.getAdapters(), adapterId)) {
+            keys.add("vanillabp.workflow-modules.%s.workflows.%s.tasks.%s.adapters.%s.%s"
+                .formatted(moduleId, workflowId, taskId, adapterId, PeaFetchVariables.REMOVED_KEY));
+          }
+        });
+      });
+    });
+    return keys;
 
   }
 
-  /**
-   * The <code>adapters.&lt;id&gt;</code> sections of the three levels below the adapter,
-   * most specific first.
-   */
-  private Stream<PeaScopedKeys> scopedKeysMostSpecificFirst(
-      final String workflowModuleId,
-      final String bpmnProcessId,
-      final String taskDefinition,
+  private static boolean setsFetchVariables(
+      final Map<String, PeaScopedKeys> level,
       final String adapterId) {
 
-    final var module = workflowModuleId != null
-        ? workflowModules.get(workflowModuleId)
-        : null;
-    final var workflow = (module != null) && (bpmnProcessId != null)
-        ? module.getWorkflows().get(bpmnProcessId)
-        : null;
-    final var task = (workflow != null) && (taskDefinition != null)
-        ? workflow.getTasks().get(taskDefinition)
-        : null;
-
-    final var levelsMostSpecificFirst = new LinkedList<Map<String, PeaScopedKeys>>();
-    if (task != null) {
-      levelsMostSpecificFirst.add(task.getAdapters());
-    }
-    if (workflow != null) {
-      levelsMostSpecificFirst.add(workflow.getAdapters());
-    }
-    if (module != null) {
-      levelsMostSpecificFirst.add(module.getAdapters());
-    }
-    return levelsMostSpecificFirst
-        .stream()
-        .map(level -> level.get(adapterId))
-        .filter(Objects::nonNull);
+    final var keys = level == null
+        ? null
+        : level.get(adapterId);
+    return (keys != null) && (keys.getFetchVariables() != null);
 
   }
 
@@ -167,40 +151,38 @@ public class VanillaBpPeaProperties {
   public static class PeaScopedKeys {
 
     /**
-     * Spring Boot builds one per section it finds. An unset mode is what makes the level
-     * fall through to the next less specific one.
+     * Spring Boot builds one per section it finds.
      */
     public PeaScopedKeys() {
 
     }
 
     /**
-     * Whether a subscription of this level asks for the derived payload variables or for
-     * all of them, <code>null</code> where the level says nothing.
+     * The removed key <code>fetch-variables</code> at this level, bound only so the start
+     * can refuse it. It is a text, so every value somebody wrote reaches that message
+     * rather than a conversion error.
      */
-    private PeaFetchVariables.Mode fetchVariables;
+    private String fetchVariables;
 
     /**
-     * Whether a subscription of this level asks for the derived payload variables or for
-     * all of them.
+     * The removed key <code>fetch-variables</code> at this level.
      *
-     * @return The mode, <code>null</code> where this level says nothing
+     * @return The value somebody wrote, <code>null</code> where this level says nothing
      */
-    public PeaFetchVariables.Mode getFetchVariables() {
+    public String getFetchVariables() {
 
       return fetchVariables;
 
     }
 
     /**
-     * Whether a subscription of this level asks for the derived payload variables or for
-     * all of them.
+     * The removed key <code>fetch-variables</code> at this level.
      *
-     * @param fetchVariables The mode, <code>null</code> to fall through to the next less
-     *          specific level
+     * @param fetchVariables The value somebody wrote, <code>null</code> where this level
+     *          says nothing
      */
     public void setFetchVariables(
-        final PeaFetchVariables.Mode fetchVariables) {
+        final String fetchVariables) {
 
       this.fetchVariables = fetchVariables;
 

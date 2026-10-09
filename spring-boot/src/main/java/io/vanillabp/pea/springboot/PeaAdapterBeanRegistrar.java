@@ -17,6 +17,7 @@ import io.vanillabp.pea.deployment.PeaDeployedProcessesRegistry;
 import io.vanillabp.pea.deployment.PeaDeploymentService;
 import io.vanillabp.pea.observation.PeaUserTaskObserver;
 import io.vanillabp.pea.processservice.PeaProcessService;
+import io.vanillabp.pea.wiring.PeaFetchVariables;
 
 /**
  * Registers the Process-Engine-API adapter's per-adapter-id beans: for EACH configured
@@ -86,6 +87,10 @@ public class PeaAdapterBeanRegistrar implements BeanRegistrar {
               "Pea_DeploymentService_%s".formatted(adapterId),
               PeaDeploymentService.class,
               spec -> spec.supplier(supplierContext -> {
+                // a removed key is refused before anything else, wherever it is set: the
+                // subscriptions no longer read it, and silence would hide that
+                PeaFetchVariables.rejectTheRemovedKey(
+                    adapterId, supplierContext.bean(VanillaBpPeaProperties.class).fetchVariablesKeys(adapterId));
                 final var deploymentService = new PeaDeploymentService(
                     adapterId, supplierContext.bean(DeploymentApi.class), AdapterBeanRegistrarSupport
                         .collaborators(supplierContext, adapterId), supplierContext
@@ -96,14 +101,6 @@ public class PeaAdapterBeanRegistrar implements BeanRegistrar {
                                             .bean(
                                                 PeaDeployedProcessesRegistry.class)
                                             .forAdapter(adapterId));
-                // What each subscription asks the engine for, resolvable down
-                // to task level
-                final var overlay = supplierContext.bean(VanillaBpPeaProperties.class);
-                deploymentService.setFetchVariablesResolver((
-                    workflowModuleId,
-                    bpmnProcessId,
-                    taskDefinition) -> overlay.fetchVariablesFor(
-                        workflowModuleId, bpmnProcessId, taskDefinition, adapterId));
                 // who watches the user tasks this adapter is delivered: beans of the
                 // application, ordered the way Spring orders any collected bean, and the
                 // same list for every configured adapter id - see decision 9 in the

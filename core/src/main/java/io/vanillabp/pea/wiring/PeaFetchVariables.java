@@ -40,11 +40,11 @@ import java.util.TreeSet;
  * </p>
  *
  * <p>
- * <strong>The escape hatch</strong> is
- * {@code vanillabp.adapters.<id>.fetch-variables: all}, the same key and the same two
- * values as on Camunda 8, resolvable down to task level. What it is for is a name no
- * annotation carries - a value read through a path the scanner cannot see. A statically
- * named {@code @TaskParam} needs none of it.
+ * <strong>No key asks for more.</strong> A name no annotation carries, read through a path
+ * the scanner cannot see, fails the delivery with a message which says so. The handler reads
+ * such a value from the workflow aggregate. The key <code>fetch-variables</code> asked for
+ * the complete payload in snapshots of version 2.0 and was removed. A key still set ends the
+ * start ({@link #rejectTheRemovedKey}).
  * </p>
  * <p>
  * Why the core reports the names instead of a scan of the model deriving them is decision 7 in the
@@ -53,22 +53,6 @@ import java.util.TreeSet;
 public final class PeaFetchVariables {
 
   private PeaFetchVariables() {
-  }
-
-  /**
-   * What {@code vanillabp.adapters.<id>.fetch-variables} may say.
-   */
-  public enum Mode {
-    /**
-     * Ask for the variables the adapter derived - the default, and what keeps a delivery
-     * at what VanillaBP actually reads.
-     */
-    DERIVED,
-    /**
-     * Ask for the complete payload of the process instance, which is what a
-     * Process-Engine-API subscription does when it names nothing.
-     */
-    ALL
   }
 
   /**
@@ -83,7 +67,8 @@ public final class PeaFetchVariables {
 
     /**
      * Asks the engine for everything the process instance holds. More than the handlers
-     * declared, which costs payload on every delivery and never a missing value.
+     * declared, which costs payload on every delivery and never a missing value. Only
+     * handlers and tests built without a selection get it.
      *
      * @return A selection asking for the complete payload
      */
@@ -155,29 +140,51 @@ public final class PeaFetchVariables {
   }
 
   /**
-   * The property key of the escape hatch, at the level a reader has to change it.
+   * The last part of the removed key, at every level it could be set at.
+   */
+  public static final String REMOVED_KEY = "fetch-variables";
+
+  /**
+   * Ends the start where somebody still sets the removed key <code>fetch-variables</code>.
+   * Ignoring it would be silent: a value of <code>all</code> was set for a handler which
+   * reads a variable nobody declared, and that handler would now fail its delivery long
+   * after the start. The message names every key it found and says what applies instead.
    *
    * @param adapterId The adapter id
-   * @return The full property key
+   * @param keys The full keys which set it, at the adapter level and below; empty where
+   *          nobody does
+   * @throws IllegalStateException If any key sets it
    */
-  public static String propertyKey(
-      final String adapterId) {
+  public static void rejectTheRemovedKey(
+      final String adapterId,
+      final List<String> keys) {
 
-    return "vanillabp.adapters.%s.fetch-variables".formatted(adapterId);
+    if ((keys == null) || keys.isEmpty()) {
+      return;
+    }
+    throw new IllegalStateException(
+        """
+            Process-Engine-API adapter '%s' is configured with '%s', which does not exist any more:
+              %s
+            Remove the key. A subscription now always asks the engine for the variables \
+            VanillaBP reads: the variable holding the workflow aggregate's ID and every name a \
+            @TaskParam of the served tasks declares. A handler which needs more reads it from the \
+            workflow aggregate."""
+            .formatted(adapterId, REMOVED_KEY, String.join("\n  ", keys)));
 
   }
 
   /**
    * What a delivery says when the variable holding the workflow aggregate's ID is not
-   * there. Two causes lead here: a workflow started past VanillaBP, and a subscription
-   * whose named set does not carry the name. The message therefore names the set too.
+   * there. A subscription always asks for that variable, so the cause is the process
+   * instance: a workflow started past VanillaBP, or a model which removed the variable. The
+   * message still names the set, because that is the first thing a reader checks.
    *
    * @param what What kind of task it is, capitalized ("Task", "User task")
    * @param taskId The engine's task id
    * @param taskDefinition The task definition, as the core knows it
    * @param bpmnProcessId The BPMN process id, as the core knows it
    * @param aggregateIdName The variable the aggregate's ID was expected in
-   * @param adapterId The adapter id, for the property key
    * @param selection What this subscription asks for
    * @return The message
    */
@@ -187,22 +194,20 @@ public final class PeaFetchVariables {
       final String taskDefinition,
       final String bpmnProcessId,
       final String aggregateIdName,
-      final String adapterId,
       final Selection selection) {
 
     return """
         %s '%s' (definition '%s') of BPMN process '%s' carries no payload variable '%s' holding \
-        the workflow aggregate's ID! Either the workflow was not started through VanillaBP (the \
-        variable is written on start), or its subscription did not ask for that variable: it \
-        asks for %s. Set '%s' to 'all' to have this subscription ask for the complete payload."""
+        the workflow aggregate's ID! Its subscription asks for %s. Either the workflow was not \
+        started through VanillaBP (the variable is written on start), or something in the process \
+        removed or overwrote that variable."""
         .formatted(
             what,
             taskId,
             taskDefinition,
             bpmnProcessId,
             aggregateIdName,
-            selection.describe(),
-            propertyKey(adapterId));
+            selection.describe());
 
   }
 
@@ -219,14 +224,12 @@ public final class PeaFetchVariables {
    *
    * @param name The variable the method asked for
    * @param taskDefinition The task definition, as the core knows it
-   * @param adapterId The adapter id, for the property key
    * @param selection What this subscription asks for
    * @return The message
    */
   public static String unfetchedTaskParameter(
       final String name,
       final String taskDefinition,
-      final String adapterId,
       final Selection selection) {
 
     return """
@@ -235,9 +238,8 @@ public final class PeaFetchVariables {
         every name a @TaskParam of its tasks declares, so this name reached the delivery some \
         other way - through a value computed at runtime rather than through @TaskParam("%s"). \
         Either declare it that way, or read the value from the workflow aggregate, which is what \
-        VanillaBP is about, or set '%s' to 'all' - at task level for this one task, or at \
-        workflow, workflow-module or adapter level."""
-        .formatted(taskDefinition, name, selection.describe(), name, propertyKey(adapterId));
+        VanillaBP is about."""
+        .formatted(taskDefinition, name, selection.describe(), name);
 
   }
 

@@ -118,8 +118,7 @@ The package holds three types:
 
 Where it is called from:
 
-- `PeaDeploymentService` takes the observers through `setUserTaskObservers(...)`, the way it
-  takes the `fetch-variables` resolver, and hands them to every `PeaUserTaskHandler` it builds
+- `PeaDeploymentService` takes the observers through `setUserTaskObservers(...)` and hands them to every `PeaUserTaskHandler` it builds
   while opening the user-task subscriptions of a workflow module.
 - `PeaUserTaskHandler.accept` calls `userTaskDelivered` before anything can drop the delivery:
   before the routing failure of a form reference several BPMN processes share, and before the

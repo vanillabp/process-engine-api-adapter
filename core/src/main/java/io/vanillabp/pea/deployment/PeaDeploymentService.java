@@ -44,7 +44,6 @@ import io.vanillabp.pea.PeaProcessingContext;
 import io.vanillabp.pea.observation.PeaUserTaskObserver;
 import io.vanillabp.pea.observation.PeaUserTaskObservers;
 import io.vanillabp.pea.wiring.PeaFetchVariables;
-import io.vanillabp.pea.wiring.PeaFetchVariablesResolver;
 import io.vanillabp.pea.wiring.PeaTaskHandler;
 import io.vanillabp.pea.wiring.PeaTaskMeta;
 import io.vanillabp.pea.wiring.PeaUserTaskHandler;
@@ -175,31 +174,11 @@ public class PeaDeploymentService implements AdapterDeploymentService<PeaBpmnMod
   private final AdapterCollaborators collaborators;
 
   /**
-   * Resolves whether a subscription asks for the DERIVED payload variables or for all of
-   * them, supplied by the platform modules. May be <code>null</code> (tests):
-   * the derived set applies.
-   */
-  private PeaFetchVariablesResolver fetchVariablesResolver;
-
-  /**
    * Who watches the user tasks this adapter is delivered - hook beans of the application,
    * collected by the platform modules. Empty unless something registered one, and then this
    * service behaves exactly as it did before the seam existed.
    */
   private PeaUserTaskObservers userTaskObservers;
-
-  /**
-   * Sets the <code>fetch-variables</code> resolver (the platform modules construct this
-   * service and inject it afterwards).
-   *
-   * @param fetchVariablesResolver The resolver, or <code>null</code> for the default
-   */
-  public void setFetchVariablesResolver(
-      final PeaFetchVariablesResolver fetchVariablesResolver) {
-
-    this.fetchVariablesResolver = fetchVariablesResolver;
-
-  }
 
   /**
    * Sets who watches this adapter's user-task deliveries (the platform modules collect the
@@ -324,8 +303,7 @@ public class PeaDeploymentService implements AdapterDeploymentService<PeaBpmnMod
 
   /**
    * What one subscription asks the engine for: the union of the aggregate-ID
-   * variables and the declared <code>&#64;TaskParam</code> names of everything it serves,
-   * unless a level of the configuration says <code>all</code>.
+   * variables and the declared <code>&#64;TaskParam</code> names of everything it serves.
    *
    * @param workflowModuleId The workflow module
    * @param served The tasks this subscription serves
@@ -337,13 +315,6 @@ public class PeaDeploymentService implements AdapterDeploymentService<PeaBpmnMod
 
     final var variables = new TreeSet<String>();
     for (final var task : served) {
-      final var mode = PeaFetchVariablesResolver
-          .resolve(fetchVariablesResolver, workflowModuleId, task.bpmnProcessId(), task.taskDefinition());
-      if (mode == PeaFetchVariables.Mode.ALL) {
-        // one subscription serves a task definition, so the two values cannot both
-        // apply - and asking for more than derived is never wrong, only more expensive
-        return PeaFetchVariables.Selection.everything();
-      }
       // a subscription serves the tasks of claimed processes only, and the old id of a renamed
       // process is declared by a workflow service as well, so the core knows the name
       variables.add(workflowTaskWiring.resolveWorkflowAggregateIdName(workflowModuleId, task.bpmnProcessId()));
