@@ -819,7 +819,7 @@ public class PeaDeploymentService implements AdapterDeploymentService<PeaBpmnMod
       final PeaProcessingContext context) {
 
     // a process nobody claims travels with its file and is left alone: nothing subscribes
-    // to its tasks and no check ends the boot because of it (see DECISIONS.pending/937.md).
+    // to its tasks and no check ends the boot because of it (see decision 18 of DECISIONS.md).
     // The core ended the start over it already unless the application marked it as
     // somebody else's
     if (!workflowTaskWiring.isClaimedByAWorkflowService(workflowModuleId, bpmnProcessId)) {

@@ -301,7 +301,7 @@ is what an application reads instead.
 
 ### 14. A task of a workflow this application does not own is refused as far as this API allows
 
-*Narrowed by `DECISIONS.pending/937.md`: no subscription is opened for a process of this application nobody claims, so its tasks no longer reach this refusal. What is left is the case this entry is about, a task of another application under the same task type.*
+*Narrowed by decision 18: no subscription is opened for a process of this application nobody claims, so its tasks no longer reach this refusal. What is left is the case this entry is about, a task of another application under the same task type.*
 
 A delivery the core answers with `DeliveryOfAnUnknownWorkflowException` is not treated like any
 other failure here. A service task is failed with a retry count of zero, so an engine which reads
@@ -386,7 +386,7 @@ counter in the adapter would count the same event under a second name.
 
 *Superseded by decision 17: a user task of a claimed process now needs a `@WorkflowTask` method or the line `implemented-externally=true`, the INFO report is gone, and the core holds the rule for every adapter.*
 
-*Its split between a claimed process and one nobody claims goes further with `DECISIONS.pending/937.md`: a process nobody claims gets no subscription either, so its user tasks are not delivered and dropped any more.*
+*Its split between a claimed process and one nobody claims goes further with decision 18: a process nobody claims gets no subscription either, so its user tasks are not delivered and dropped any more.*
 
 A user task of this engine runs without a `@WorkflowTask` method. The engine creates the task,
 somebody works a task list and finishes it, and the workflow moves on. That is why the core hands a
@@ -516,3 +516,37 @@ the process is claimed is asked through `WorkflowTaskWiring.isClaimedByAWorkflow
 
 What decision 15 said against a refusal, that a model worked through a task list is normal here, is
 answered by the line: such a model stays normal, and the application says so once per task.
+
+### 18. A process nobody claims gets no subscription and no check
+
+Proposed by story 937. Decided by the maintainer on 2026-10-07.
+
+The platform decided on 2026-10-07 that a process nobody claims is not supported, in a decision of
+`adapter-platform-integration` of its own. The core ends the start over a deployed process no
+`@WorkflowService` class claims, unless the application marks it with
+`vanillabp.workflow-modules.<module>.workflows.<process>.implemented-externally=true`. A process
+nobody claims which reaches this adapter is therefore one somebody else serves, and the adapter
+leaves it alone:
+
+- It goes to the engine with its file, under the prefix of `use-prefix` where that mode is set,
+  because the bundle is deployed as a whole.
+- `wireBpmn` returns for it right away. The core is not asked about its tasks, and a timer, signal
+  or conditional start event of it is not refused. That refusal stays for a claimed process, where
+  VanillaBP would have to build the aggregate of a start it never hears about.
+- `startWorkflowProcessing` opens no subscription for its tasks and user tasks. A delivery for it
+  could only end in the refusal of decision 14, so it is better not to ask the engine for one.
+
+Before, every task of such a process got a subscription, and a service task ended in `failTask` with
+the default retries. Now a workflow of it stops at its first task until whatever serves it takes the
+task.
+
+Every question whether a process is claimed goes to `WorkflowTaskWiring.isClaimedByAWorkflowService`.
+`fetchVariablesOf` no longer catches the exception of `resolveWorkflowAggregateIdName`: it only sees
+tasks of claimed processes, and the declared id of a renamed process is claimed as well.
+
+What this does not change: the viewer API still lists the definitions of every model this adapter
+deployed, a marked process included, because it reports what is deployed.
+
+`PeaUnclaimedProcessTest` holds the timer start which ends nothing, the deployment of the whole file
+and the subscription of the claimed process alone. `PeaFetchVariablesTest` holds that a process
+nobody claims gets no subscription.

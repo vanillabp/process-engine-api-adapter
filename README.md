@@ -312,7 +312,7 @@ application marks it with `vanillabp.workflow-modules.<module>.workflows.<proces
 A process which reaches this adapter unclaimed is therefore somebody else's: `wireBpmn` returns for
 it before anything is checked, and `startWorkflowProcessing` opens no subscription for its tasks.
 The question is `WorkflowTaskWiring#isClaimedByAWorkflowService`. Why:
-`DECISIONS.pending/937.md`. `PeaUnclaimedProcessTest` holds it.
+[decision 18](./DECISIONS.md#18-a-process-nobody-claims-gets-no-subscription-and-no-check). `PeaUnclaimedProcessTest` holds it.
 
 ## What a subscription asks the engine for
 
