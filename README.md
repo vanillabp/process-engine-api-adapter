@@ -816,7 +816,7 @@ as a break of the platform or as a break of this repository.
 2. **Quarkus** (core + Quarkus extension + the Quarkus end-to-end tests) - into
    `test-coverage-report/quarkus/report`
 
-Both are published to GitHub Pages by the *Publish to GitHub Packages* workflow on every push to
+Both are published to GitHub Pages by the *Build and publish snapshots* workflow on every push to
 the default branch. Click the [platform's badge](#documentation-and-supported-platforms) to open
 the respective report.
 
