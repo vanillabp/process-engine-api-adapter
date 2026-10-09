@@ -467,8 +467,8 @@ public class PeaTaskHandlerTest {
     assertEquals(1, engine.getFailedTasks().size());
     final var reason = engine.getFailedTasks().getFirst().reason();
     assertTrue(
-        reason.contains("bigPayload") && reason.contains("vanillabp.adapters.pea.fetch-variables"),
-        "expected a guiding failure naming the variable and the escape hatch but got: "
+        reason.contains("bigPayload") && reason.contains("workflow aggregate") && !reason.contains("fetch-variables"),
+        "expected a guiding failure naming the variable and the workflow aggregate, and no removed key, but got: "
             + reason);
 
   }

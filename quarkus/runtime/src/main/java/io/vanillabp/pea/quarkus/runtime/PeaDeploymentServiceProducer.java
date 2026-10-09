@@ -21,6 +21,7 @@ import io.vanillabp.pea.PeaAdapter;
 import io.vanillabp.pea.deployment.PeaDeployedProcessesRegistry;
 import io.vanillabp.pea.deployment.PeaDeploymentService;
 import io.vanillabp.pea.observation.PeaUserTaskObserver;
+import io.vanillabp.pea.wiring.PeaFetchVariables;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.inject.Any;
 import jakarta.enterprise.inject.Instance;
@@ -117,19 +118,15 @@ public class PeaDeploymentServiceProducer {
         .map(Map.Entry::getKey)
         .sorted()
         .map(adapterId -> {
+          // a removed key is refused before anything else, wherever it is set: the
+          // subscriptions no longer read it, and silence would hide that
+          PeaFetchVariables.rejectTheRemovedKey(adapterId, overlay.fetchVariablesKeys(adapterId));
           final var deploymentService = new PeaDeploymentService(
               adapterId, deploymentApi, PeaProcessServiceProducer
                   .collaboratorsOf(
                       adapterId, workflowTaskRegistry, scoping, aggregateSync, preCommitRegistrar, workflowEndedInvoker,
                       bpmsInitiatedStartInvoker), taskSubscriptionApi, serviceTaskCompletionApi, deployedProcessesRegistry
                           .forAdapter(adapterId));
-          // What each subscription asks the engine for, resolvable down to
-          // task level
-          deploymentService.setFetchVariablesResolver((
-              workflowModuleId,
-              bpmnProcessId,
-              taskDefinition) -> overlay.fetchVariablesFor(
-                  workflowModuleId, bpmnProcessId, taskDefinition, adapterId));
           deploymentService.setUserTaskObservers(observers);
           return deploymentService;
         })

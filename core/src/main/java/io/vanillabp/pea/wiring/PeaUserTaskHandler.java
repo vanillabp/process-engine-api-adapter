@@ -193,7 +193,7 @@ public class PeaUserTaskHandler implements TaskHandler {
       if (aggregateId == null) {
         throw new IllegalStateException(
             PeaFetchVariables.missingAggregateId(
-                "User task", taskId, taskDefinition, bpmnProcessId, aggregateIdName, adapterId, fetchVariables));
+                "User task", taskId, taskDefinition, bpmnProcessId, aggregateIdName, fetchVariables));
       }
       final var outcome = workflowTaskInvoker.invokeWorkflowTask(
           workflowModuleId,
@@ -667,7 +667,7 @@ public class PeaUserTaskHandler implements TaskHandler {
 
       if (!fetchVariables.covers(name)) {
         throw new IllegalStateException(
-            PeaFetchVariables.unfetchedTaskParameter(name, externalFormReference, adapterId, fetchVariables));
+            PeaFetchVariables.unfetchedTaskParameter(name, externalFormReference, fetchVariables));
       }
       return payload.get(name);
 

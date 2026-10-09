@@ -18,7 +18,6 @@ import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 import io.vanillabp.pea.deployment.PeaDeploymentService;
 import io.vanillabp.pea.mock.InMemoryProcessEngine;
 import io.vanillabp.pea.wiring.PeaFetchVariables;
-import io.vanillabp.pea.wiring.PeaFetchVariablesResolver;
 
 /**
  * What a task subscription of this adapter asks the engine for, asserted where
@@ -246,28 +245,6 @@ public class PeaFetchVariablesTest {
   }
 
   @Test
-  @DisplayName("'all' makes the subscription ask for the complete payload again")
-  public void theEscapeHatchAsksForEverything() {
-
-    final var service = deploymentService(invoker(bpmnProcessId -> "id", taskDefinition -> List.of()));
-    service.setFetchVariablesResolver((
-        workflowModuleId,
-        bpmnProcessId,
-        taskDefinition) -> "Cards".equals(bpmnProcessId)
-            ? PeaFetchVariables.Mode.ALL
-            : PeaFetchVariables.Mode.DERIVED);
-
-    service.startWorkflowProcessing(MODULE, wire(service, "two.bpmn", TWO_PROCESSES));
-
-    Assertions.assertEquals(
-        Set.of(),
-        payloadOf("approve"),
-        "one subscription serves one task definition, and asking for more than derived is never "
-            + "wrong - so the escape hatch wins for the whole subscription");
-
-  }
-
-  @Test
   @DisplayName("A BPMN process no workflow service claims gets no subscription at all")
   public void aProcessNobodyClaimsGetsNoSubscription() {
 
@@ -316,12 +293,16 @@ public class PeaFetchVariablesTest {
     Assertions.assertEquals(Set.of(), PeaFetchVariables.Selection.everything().payloadDescription());
 
     final var missing = PeaFetchVariables
-        .missingAggregateId("Task", "t-1", "approve", "Loans", "loanId", "pea", selection);
-    Assertions.assertTrue(missing.contains("vanillabp.adapters.pea.fetch-variables"), missing);
+        .missingAggregateId("Task", "t-1", "approve", "Loans", "loanId", selection);
+    Assertions.assertFalse(missing.contains("fetch-variables"), "the key is gone, so no message names it: "
+        + missing);
     Assertions.assertTrue(missing.contains("[id]"), missing);
 
-    final var unfetched = PeaFetchVariables.unfetchedTaskParameter("bigPayload", "approve", "pea", selection);
-    Assertions.assertTrue(unfetched.contains("vanillabp.adapters.pea.fetch-variables"), unfetched);
+    final var unfetched = PeaFetchVariables.unfetchedTaskParameter("bigPayload", "approve", selection);
+    Assertions.assertFalse(unfetched.contains("fetch-variables"), "the key is gone, so no message names it: "
+        + unfetched);
+    Assertions.assertTrue(unfetched.contains("workflow aggregate"), "the way out is the aggregate: "
+        + unfetched);
     Assertions.assertTrue(
         unfetched.contains("@TaskParam(\"bigPayload\")"),
         "since the subscription asks for every declared name, reaching this message means the "
@@ -331,21 +312,27 @@ public class PeaFetchVariablesTest {
   }
 
   @Test
-  @DisplayName("Without a resolver the default is the derived set")
-  public void theDefaultIsDerived() {
+  @DisplayName("The removed key fetch-variables ends the start, naming every key which sets it")
+  public void theRemovedKeyEndsTheStart() {
 
-    Assertions
-        .assertEquals(
-            PeaFetchVariables.Mode.DERIVED,
-            PeaFetchVariablesResolver.resolve(null, MODULE, "Loans", "approve"));
-    Assertions
-        .assertEquals(
-            PeaFetchVariables.Mode.DERIVED,
-            PeaFetchVariablesResolver.resolve((
-                m,
-                p,
-                t) -> null, MODULE, "Loans", "approve"),
-            "a resolver answering nothing is a level configuring nothing");
+    PeaFetchVariables.rejectTheRemovedKey("pea", List.of());
+
+    final var keys = List.of(
+        "vanillabp.adapters.pea.fetch-variables",
+        "vanillabp.workflow-modules.loans.workflows.Loans.tasks.approve.adapters.pea.fetch-variables");
+    final var failure = Assertions.assertThrows(
+        IllegalStateException.class,
+        () -> PeaFetchVariables.rejectTheRemovedKey("pea", keys));
+    final var message = failure.getMessage();
+    Assertions.assertTrue(message.contains("does not exist any more"), message);
+    keys.forEach(key -> Assertions.assertTrue(message.contains(key), "names "
+        + key
+        + ": "
+        + message));
+    Assertions.assertTrue(message.contains("Remove the key"), "says what to do: "
+        + message);
+    Assertions.assertTrue(message.contains("workflow aggregate"), "says what applies instead: "
+        + message);
 
   }
 

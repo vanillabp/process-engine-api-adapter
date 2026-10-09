@@ -5,16 +5,8 @@ vanillabp:
     pea:
       type: process-engine-api
       name-clash-avoidance: none
-      fetch-variables: derived
   workflow-modules:
     pea-test-module:
       adapters:
         pea:
           resources-location: classpath:pea-test-module/processes/tasks
-      workflows:
-        QuarkusTaskProcess:
-          tasks:
-            someOtherTask:
-              adapters:
-                pea:
-                  fetch-variables: all

@@ -95,6 +95,8 @@ See [Which phase-two failures are repeated](./README.md#which-phase-two-failures
 
 ### 7. A subscription asks for exactly the variables the handlers declare
 
+*Superseded in part by decision 19: the key `fetch-variables` is gone, and a start which still sets it ends. No message names it any more.*
+
 A subscription used to be opened with an empty set, so the engine decided what a task delivery
 carried. Now it names the aggregate-id variable of the process it serves plus the union of the
 `@TaskParam` names the core reports for that task definition, and user-task subscriptions do the
@@ -550,3 +552,45 @@ deployed, a marked process included, because it reports what is deployed.
 `PeaUnclaimedProcessTest` holds the timer start which ends nothing, the deployment of the whole file
 and the subscription of the claimed process alone. `PeaFetchVariablesTest` holds that a process
 nobody claims gets no subscription.
+
+### 19. The key `fetch-variables` is gone, and a start which still sets it ends
+
+Proposed by story 938. Decided by the maintainer on 2026-10-07 and 2026-10-09.
+
+`vanillabp.adapters.<id>.fetch-variables: all` let a subscription ask the engine for the complete
+payload of the process instance instead of the set of decision 7. It could be set at four levels,
+down to a single task, with the same name and values as on Camunda 8. It was there for a
+`@TaskParam` name the core cannot see because it is put together while the delivery runs.
+
+In VanillaBP 2.0 a handler reads its data from the workflow aggregate. A `@TaskParam` name which is
+not on the method is not a case 2.0 has to support. A key is surface which cannot be removed after
+the release without breaking every application which sets it, so it goes now, on this adapter and
+on Camunda 8 together:
+
+- No subscription reads the key. The set of decision 7 is the only answer, at every level.
+- An application which still sets the key, with any value and at any of the four levels, does not
+  start. The message names every key which sets it, says to remove it and says what a subscription
+  asks for now. The platforms still bind the key as text for this message only. On Quarkus that
+  also keeps SmallRye from ending the start with a message of its own.
+- The two messages of a delivery which misses a variable no longer name the key. The one for a
+  `@TaskParam` outside the set points to the workflow aggregate.
+
+What was checked before: no part of 2.0 needs `all` on this adapter. The adapter has no
+multi-instance variables of its own to fetch, and a process no workflow service claims gets no
+subscription at all (decision 18).
+
+The Business Cockpit was the one user. On this adapter a `@TaskParam` of a
+`@UserTaskDetailsProvider` got a variable which no `@WorkflowTask` method reads only through `all`,
+because the cockpit reads the payload of the adapter's own subscription and cannot open a second
+one. On Camunda 8 such a parameter never gets a process variable. Now it gets one on neither BPMS
+unless a `@WorkflowTask` method of the module declares the same name. A details provider reads its
+data from the workflow aggregate, and the cockpit strand updates its documentation.
+
+This adapter did not exist in version 1, so there is no `UPGRADE.md` entry.
+
+`PeaFetchVariablesTest#theRemovedKeyEndsTheStart` holds the message, and
+`RemovedFetchVariablesBootTest` on Spring Boot and `PeaRemovedFetchVariablesTest` on Quarkus hold
+that a start with the key set at adapter and at task level ends with it.
+`PeaFetchVariablesTest#aNameOutsideTheSubscriptionFailsGuiding` and
+`PeaTaskHandlerTest#aTaskParameterOutsideTheSubscriptionFailsGuiding` hold that no message names the
+key.
