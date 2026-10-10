@@ -5,12 +5,14 @@ import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicLong;
 
+import dev.bpmcrafters.processengineapi.CommonRestrictions;
 import dev.bpmcrafters.processengineapi.Empty;
 import dev.bpmcrafters.processengineapi.ExecutionMode;
 import dev.bpmcrafters.processengineapi.ExecutionModeAware;
@@ -61,6 +63,12 @@ import dev.bpmcrafters.processengineapi.task.UserTaskCompletionApi;
  * start created, the open subscriptions, which task went to which of them, and what a
  * completion carried. A task is delivered by a test calling {@code deliverTask}, because
  * nothing here polls. {@link #reset()} clears all of it between tests.
+ * <p>
+ * <b>A task names the instance it belongs to.</b> The API promises that the
+ * <code>instanceId</code> of the answer to a start is the <code>processInstanceId</code> in the
+ * meta of every task of that instance. This engine keeps that promise for the instances it
+ * started: see {@link #deliverTask(String, String, String, Map, Map)} for how it finds the
+ * instance of a delivered task.
  * <p>
  * <b>It refuses what the engines behind the API refuse</b> - a preflight against a task
  * which is not open, a completion of a task which is gone - and no more than that. A fake
@@ -114,8 +122,39 @@ public class InMemoryProcessEngine implements DeploymentApi, StartProcessApi, Co
    *
    * @param instanceId The generated instance id
    * @param variables The process variables the instance was started with
+   * @param bpmnProcessId The BPMN process the instance was started for, or <code>null</code>
+   *          where the start command did not say
    */
-  public record StartedInstance(String instanceId, Map<String, Object> variables) {
+  public record StartedInstance(String instanceId, Map<String, Object> variables, String bpmnProcessId) {
+
+    /**
+     * Whether a task with this payload is a task of this instance. Nothing here runs a model,
+     * so the mock goes by what an instance carries: the task has to name at least one of the
+     * variables the instance was started with, and with the same value for every one it names.
+     * The aggregate-ID variable is such a variable, and it never changes. A shared value which
+     * changed since the start makes the task match no instance, and then it names none, as it
+     * did before the mock kept the promise.
+     *
+     * @param bpmnProcessIdOfTask The BPMN process the task was delivered as
+     * @param payload What the task carries
+     * @return <code>true</code> if the task belongs to this instance
+     */
+    boolean holds(
+        final String bpmnProcessIdOfTask,
+        final Map<String, Object> payload) {
+
+      if ((bpmnProcessIdOfTask == null) || !bpmnProcessIdOfTask.equals(bpmnProcessId)) {
+        return false;
+      }
+      final var common = payload
+          .keySet()
+          .stream()
+          .filter(variables::containsKey)
+          .toList();
+      return !common.isEmpty() && common.stream()
+          .allMatch(name -> Objects.equals(payload.get(name), variables.get(name)));
+
+    }
 
   }
 
@@ -257,6 +296,7 @@ public class InMemoryProcessEngine implements DeploymentApi, StartProcessApi, Co
     openTaskIds.clear();
     deliveredTo.clear();
     deliveredAs.clear();
+    deliveredIn.clear();
     correlatedMessages.clear();
     failPreflightForProcessIds.clear();
     failNextSyncForProcessIds.clear();
@@ -280,6 +320,7 @@ public class InMemoryProcessEngine implements DeploymentApi, StartProcessApi, Co
     openTaskIds.clear();
     deliveredTo.clear();
     deliveredAs.clear();
+    deliveredIn.clear();
     correlatedMessages.clear();
     failPreflightForProcessIds.clear();
     failNextSyncForProcessIds.clear();
@@ -376,7 +417,7 @@ public class InMemoryProcessEngine implements DeploymentApi, StartProcessApi, Co
         : new LinkedHashMap<String, Object>(payload);
     final var instanceId = "mock-instance-"
         + instanceCounter.incrementAndGet();
-    startedInstances.add(new StartedInstance(instanceId, variables));
+    startedInstances.add(new StartedInstance(instanceId, variables, bpmnProcessId));
     // record LAST: tests await the SYNC invocation and then assert the started
     // instance - recording first would open a race window for the asserting thread
     record("StartProcessApi", "startProcess", cmd);
@@ -544,6 +585,13 @@ public class InMemoryProcessEngine implements DeploymentApi, StartProcessApi, Co
    * The keys are the engine's own words. What they are called on the adapter's side is
    * {@code PeaTaskMeta}, which the mock cannot reach: the adapter depends on this module,
    * not the other way round.
+   * <p>
+   * The task names its instance under {@link CommonRestrictions#PROCESS_INSTANCE_ID}: the
+   * latest instance this engine started for that BPMN process whose start variables the
+   * payload agrees with (see {@link StartedInstance}). The id is the one the start answered
+   * with. A task which matches no started instance names none. A <code>meta</code> which
+   * names an instance itself wins: that is how a test plays a task of a called process,
+   * which sits in an instance the application never started.
    *
    * @param taskId The delivered task's ID
    * @param taskDefinition The task definition (matched against subscriptions)
@@ -566,10 +614,11 @@ public class InMemoryProcessEngine implements DeploymentApi, StartProcessApi, Co
     // and the termination callback would be two unrelated things here
     deliveredTo.put(taskId, subscription);
     deliveredAs.put(taskId, bpmnProcessId);
+    final var all = withInstance(taskId, bpmnProcessId, payload, meta);
     subscription
         .handler()
         .accept(
-            new TaskInformation(taskId, metaOf(bpmnProcessId, meta)),
+            new TaskInformation(taskId, metaOf(bpmnProcessId, all)),
             // an engine hands the subscriber what the subscription asked for, and the
             // adapter's derivation is only worth anything if the mock does the same
             subscription.narrow(payload));
@@ -594,6 +643,64 @@ public class InMemoryProcessEngine implements DeploymentApi, StartProcessApi, Co
       all.put("bpmnProcessId", bpmnProcessId);
     }
     return Map.copyOf(all);
+
+  }
+
+  /**
+   * Adds the instance a delivered task belongs to, unless the caller named one, and remembers
+   * it for the termination of that task.
+   *
+   * @param taskId The delivered task
+   * @param bpmnProcessId The BPMN process the task is delivered as, or <code>null</code>
+   * @param payload What the task carries
+   * @param meta What the caller says about the task
+   * @return The meta map with the instance, where one is known
+   */
+  private Map<String, String> withInstance(
+      final String taskId,
+      final String bpmnProcessId,
+      final Map<String, Object> payload,
+      final Map<String, String> meta) {
+
+    final var named = meta.get(CommonRestrictions.PROCESS_INSTANCE_ID);
+    final var instanceId = named != null
+        ? named
+        : startedInstances
+            .reversed()
+            .stream()
+            .filter(instance -> instance.holds(bpmnProcessId, payload))
+            .map(StartedInstance::instanceId)
+            .findFirst()
+            .orElse(null);
+    if (instanceId == null) {
+      deliveredIn.remove(taskId);
+      return meta;
+    }
+    deliveredIn.put(taskId, instanceId);
+    final var all = new LinkedHashMap<String, String>(meta);
+    all.put(CommonRestrictions.PROCESS_INSTANCE_ID, instanceId);
+    return all;
+
+  }
+
+  /**
+   * The meta of a termination: the instance the task was delivered in, unless the caller named
+   * one. An engine names the instance when it withdraws a task as well.
+   *
+   * @param instanceId The instance the task was delivered in, or <code>null</code>
+   * @param meta What the caller says about the task
+   * @return The meta map with the instance, where one is known
+   */
+  private static Map<String, String> withInstance(
+      final String instanceId,
+      final Map<String, String> meta) {
+
+    if ((instanceId == null) || meta.containsKey(CommonRestrictions.PROCESS_INSTANCE_ID)) {
+      return meta;
+    }
+    final var all = new LinkedHashMap<String, String>(meta);
+    all.put(CommonRestrictions.PROCESS_INSTANCE_ID, instanceId);
+    return all;
 
   }
 
@@ -642,7 +749,8 @@ public class InMemoryProcessEngine implements DeploymentApi, StartProcessApi, Co
     openTaskIds.remove(taskId);
     deliveredTo.remove(taskId);
     deliveredAs.remove(taskId);
-    terminate(subscriptionFor(taskDefinition), taskId, bpmnProcessId, reason, meta);
+    final var instanceId = deliveredIn.remove(taskId);
+    terminate(subscriptionFor(taskDefinition), taskId, bpmnProcessId, reason, withInstance(instanceId, meta));
 
   }
 
@@ -661,11 +769,12 @@ public class InMemoryProcessEngine implements DeploymentApi, StartProcessApi, Co
 
     final var subscription = deliveredTo.remove(taskId);
     final var bpmnProcessId = deliveredAs.remove(taskId);
+    final var instanceId = deliveredIn.remove(taskId);
     if (subscription == null) {
       // a task completed without ever having been delivered here: nobody to tell
       return;
     }
-    terminate(subscription, taskId, bpmnProcessId, reason, Map.of());
+    terminate(subscription, taskId, bpmnProcessId, reason, withInstance(instanceId, Map.of()));
 
   }
 
@@ -709,10 +818,11 @@ public class InMemoryProcessEngine implements DeploymentApi, StartProcessApi, Co
     if (bpmnProcessId != null) {
       deliveredAs.put(taskId, bpmnProcessId);
     }
+    final var meta = withInstance(taskId, bpmnProcessId, payload, Map.of());
     subscription
         .handler()
         .accept(
-            new TaskInformation(taskId, metaOf(bpmnProcessId, Map.of())),
+            new TaskInformation(taskId, metaOf(bpmnProcessId, meta)),
             subscription.narrow(payload));
 
   }
@@ -857,6 +967,11 @@ public class InMemoryProcessEngine implements DeploymentApi, StartProcessApi, Co
   private final Map<String, ActiveSubscription> deliveredTo = new ConcurrentHashMap<>();
 
   private final Map<String, String> deliveredAs = new ConcurrentHashMap<>();
+
+  /**
+   * Which instance a delivered task was given out in, so its termination names the same one.
+   */
+  private final Map<String, String> deliveredIn = new ConcurrentHashMap<>();
 
   /**
    * The tasks this engine considers open: delivered and neither completed nor terminated.

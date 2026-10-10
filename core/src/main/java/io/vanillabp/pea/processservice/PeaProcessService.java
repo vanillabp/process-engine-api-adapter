@@ -1235,14 +1235,12 @@ public class PeaProcessService<A> implements MigratableProcessService<A> {
    * Tells VanillaBP which instance of the engine a start created, so it can later say which
    * workflow an aggregate belongs to without asking the engine.
    * <p>
-   * The id is the <code>instanceId</code> of the answer to the start command. The API does not
-   * promise that this is the same value a delivered task names under
-   * <code>processInstanceId</code>, which is what this adapter reports as the workflow id of a
-   * delivery. The API's own reference adapter for an embedded Camunda 7 fills both with the id
-   * of the process instance, and that is the assumption made here. An engine which answers a
-   * start with something else would make the two ids disagree. An engine which answers with
-   * nothing leaves nothing to report. VanillaBP then finds the workflow by asking the adapters
-   * in turn.
+   * The id is the <code>instanceId</code> of the answer to the start command. The API promises
+   * that this is the same value a delivered task names under <code>processInstanceId</code>, which
+   * is what this adapter reports as the workflow id of a delivery. An engine which answers a start
+   * with no instance id leaves nothing to report. A Camunda 8 engine started by a message may do
+   * that, because it learns the id only later. VanillaBP then finds the workflow by asking the
+   * adapters in turn.
    * <p>
    * The version goes with the id, read from the meta map of the answer under the same key a
    * delivered task carries its version tag ({@link PeaTaskMeta#PROCESS_VERSION_TAG}), so the start
