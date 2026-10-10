@@ -12,6 +12,7 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 
 import dev.bpmcrafters.processengineapi.CommonRestrictions;
 import dev.bpmcrafters.processengineapi.ExecutionMode;
@@ -21,12 +22,14 @@ import dev.bpmcrafters.processengineapi.task.SubscribeForTaskCmd;
 import dev.bpmcrafters.processengineapi.task.TaskInformation;
 import dev.bpmcrafters.processengineapi.task.TaskTerminationHandler;
 import dev.bpmcrafters.processengineapi.task.TaskType;
+import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
 /**
  * The API promises that the <code>instanceId</code> a start answers with is the
  * <code>processInstanceId</code> in the meta of every task of that instance. The in-memory
  * engine keeps that promise, so an adapter tested against it may rely on it.
  */
+@ExtendWith(SuppressOutputExtension.class)
 public class InMemoryProcessEngineInstanceIdTest {
 
   private static final String PROCESS = "Order";
