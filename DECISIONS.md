@@ -71,7 +71,7 @@ So every phase-two operation propagates now, with a message naming operation, pr
 module and adapter, and saying that a blocked entry on an already finished task is the harmless
 reading: completing and canceling a task, the same for a user task, correlating a message,
 broadcasting a signal and starting a workflow by message. The last one had kept a second way to
-look successful after the other five were fixed. It waits on a future like all of them, and an
+look successful after the other operations were fixed. It waits on a future like all of them, and an
 interrupted wait returned normally, which marked the entry done although no workflow had been
 started, so the application's database carried an aggregate no engine knew about. An interrupt is
 therefore a failure of phase two like any other and reaches the outbox as one.
@@ -96,6 +96,8 @@ See [Which phase-two failures are repeated](./README.md#which-phase-two-failures
 ### 7. A subscription asks for exactly the variables the handlers declare
 
 *Superseded in part by decision 19: the key `fetch-variables` is gone, and a start which still sets it ends. No message names it any more.*
+
+*Extended by decision 20: the set also carries every variable a `@TaskParam` of an extension's method reads for the served tasks.*
 
 A subscription used to be opened with an empty set, so the engine decided what a task delivery
 carried. Now it names the aggregate-id variable of the process it serves plus the union of the
