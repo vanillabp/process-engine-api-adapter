@@ -1,8 +1,8 @@
 package io.vanillabp.pea.quarkus.tasksample;
 
 /**
- * The workflow aggregate of the Quarkus task-processing smoke test - held in a
- * static in-memory store (no database involved).
+ * The workflow aggregate of the Quarkus smoke test of task processing. It is kept in a static
+ * store in memory, without a database.
  */
 public class TaskAggregate {
 

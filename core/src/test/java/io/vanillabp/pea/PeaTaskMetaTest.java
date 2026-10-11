@@ -18,9 +18,9 @@ import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 import io.vanillabp.pea.wiring.PeaTaskMeta;
 
 /**
- * The vocabulary of the meta map an engine delivers a task with: the keys the adapter and
- * whoever watches its user tasks agree on, and the three ways of reading a value out of a map
- * whose entries an engine may simply not have filled.
+ * The words of the meta map an engine delivers a task with. These are the keys which the
+ * adapter and whoever watches its user tasks agree on. And there are three ways to read a
+ * value from a map whose entries an engine may not have filled.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class PeaTaskMetaTest {

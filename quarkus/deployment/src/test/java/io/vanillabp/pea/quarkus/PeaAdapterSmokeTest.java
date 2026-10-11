@@ -15,11 +15,11 @@ import io.vanillabp.spi.process.ProcessService;
 import jakarta.inject.Inject;
 
 /**
- * Smoke test proving the Process-Engine-API adapter is discovered by the VanillaBP Quarkus
- * integration on the CDI side: the application boots with the extension loaded, a
- * {@code ProcessService} is generated for the sample aggregate (which requires the adapter
- * to be announced and its process-service bean produced), and the default in-memory mock
- * engine is present with no recorded invocations. No Docker and no network involved.
+ * A smoke test which proves that the VanillaBP Quarkus integration finds this adapter on the
+ * CDI side. The application boots with the extension loaded. A {@code ProcessService} is
+ * generated for the sample aggregate, which needs the adapter to be announced and its
+ * process-service bean to be produced. The default mock engine is there and has recorded no
+ * calls. No Docker and no network are needed.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class PeaAdapterSmokeTest {
@@ -42,11 +42,10 @@ public class PeaAdapterSmokeTest {
   @Test
   public void testAdapterDiscoveredWithMockEngine() {
 
-    // the ProcessService could only be built if the Process-Engine-API adapter was
-    // discovered and its process-service bean produced
+    // The ProcessService can only be built if the adapter was found and its process-service
+    // bean was produced.
     Assertions.assertNotNull(sampleProcessService);
 
-    // the mock engine is present and untouched
     Assertions.assertNotNull(inMemoryProcessEngine);
     Assertions.assertTrue(inMemoryProcessEngine.getInvocations().isEmpty(),
         "no Process-Engine-API invocations are expected during a plain boot");

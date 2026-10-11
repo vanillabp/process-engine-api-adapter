@@ -6,24 +6,24 @@ import io.vanillabp.integration.adapter.spi.values.ValueDirection;
 import io.vanillabp.integration.adapter.spi.values.ValueTypeVerdict;
 
 /**
- * What the Process-Engine-API does with one Java type, answered for the startup check
- * which asks whether a value survives the way to the engine and back.
+ * What the Process-Engine-API does with one Java type. The startup check asks it whether a
+ * value survives the way to the engine and back.
  * <p>
- * This adapter knows less than the other two, and it says so. The Process-Engine-API is
- * deliberately engine-agnostic: it takes a payload and gives one back, and which engine
- * sits behind it, how that engine stores a variable and which expression language reads it
- * are all outside the API. So the only types this adapter can speak for are the ones the
- * API itself names, and for everything else the honest answer is that it cannot say.
+ * This adapter knows less than the other two, and it says so. The Process-Engine-API does
+ * not care on purpose which engine is behind it. It takes a payload and gives one back.
+ * Which engine sits behind it, how that engine stores a variable and which expression
+ * language reads it are all outside the API. So this adapter can only speak for the types
+ * the API itself names. For every other type the honest answer is that it cannot say.
  * <p>
- * That answer never ends a startup, which is the point of it being allowed at all (see
- * {@link ValueTypeVerdict}). It does cost the developer a warning, and the way out of the
+ * That answer never stops a startup. That is why it is allowed at all (see
+ * {@link ValueTypeVerdict}). It does give the developer a warning. The way out of the
  * warning is a test against the engine that is really used.
  */
 public final class PeaValueTypes {
 
   /**
-   * The types the payload of the Process-Engine-API carries as themselves. They are the
-   * ones every serialization of every engine behind the API has: a text and a boolean.
+   * The types the payload of the Process-Engine-API carries as they are. Every engine behind
+   * the API can store them, whatever its serialization: a text and a boolean.
    */
   private static final Set<Class<?>> THE_API_CARRIES_IT = Set
       .of(String.class, Boolean.class, boolean.class);

@@ -4,20 +4,19 @@ import dev.bpmcrafters.processengineapi.ExecutionMode;
 import dev.bpmcrafters.processengineapi.task.FailTaskCmd;
 
 /**
- * A {@code FailTaskCmd} carrying {@link ExecutionMode#SYNC} - see
- * {@link PeaCompleteTaskCmd} for the reasoning. The retry timeout is always left to the
- * engine's default, and so is the retry count of the ordinary failure: a handler which threw
- * once may well work the next time. The one failure which says otherwise is built by
- * {@link #withoutFurtherAttempts(String, String)}.
+ * A {@code FailTaskCmd} which carries {@link ExecutionMode#SYNC}. The reason is the same as
+ * for {@link PeaCompleteTaskCmd}. The engine always picks the retry timeout. For an ordinary
+ * failure it picks the retry count too, because a handler which threw once may well work the
+ * next time. Only {@link #withoutFurtherAttempts(String, String)} builds a failure which
+ * asks for no more attempts.
  * <p>
- * Why a subclass is needed to carry the execution mode is decision 4 in the repository's
- * DECISIONS.md.
+ * Why the execution mode needs a subclass is decision 4 in the repository's DECISIONS.md.
  */
 public class PeaFailTaskCmd extends FailTaskCmd {
 
   /**
    * Reports that the handler of a task threw. The number of retries and their timeout stay
-   * empty, so the engine behind the API applies whatever it does by default.
+   * empty, so the engine behind the API uses its own defaults.
    *
    * @param taskId The task which could not be handled
    * @param reason The short reason, which is what a task list or an incident shows
@@ -33,14 +32,14 @@ public class PeaFailTaskCmd extends FailTaskCmd {
   }
 
   /**
-   * Reports a failure the same delivery would meet again, so the engine is asked not to
-   * repeat it.
+   * Reports a failure which the same delivery would run into again. So the engine is asked
+   * not to repeat it.
    * <p>
-   * The retry count of the command is the only thing the Process-Engine-API offers a
-   * subscriber for that, and it is optional: an engine which reads it is asked for zero
-   * retries, which is what the engines with an incident concept turn into one, and an engine
-   * which ignores it falls back to the default it would have applied anyway. So this is never
-   * worse than leaving the count empty, and where it is read the task stops circling.
+   * The retry count of the command is the only way the Process-Engine-API gives a subscriber
+   * to ask for that, and an engine may ignore it. An engine which reads it gets zero
+   * retries, and an engine with incidents turns that into an incident. An engine which
+   * ignores it uses the default it would have used anyway. So this is never worse than an
+   * empty count, and where the engine reads it, the task stops coming back.
    *
    * @param taskId The task which cannot be handled by this application
    * @param reason Why, in the words a task list or an incident shows
@@ -65,10 +64,10 @@ public class PeaFailTaskCmd extends FailTaskCmd {
   }
 
   @Override
-  // javac warns that the overridden method is a bridge: 'executionMode()' is a default
-  // method of the Kotlin interface 'ExecutionModeAware', materialized as a bridge in the
-  // superclass. The warning is unavoidable - @SuppressWarnings does not cover it - and the
-  // API offers no constructor parameter to set the mode instead.
+  // javac warns that this overrides a bridge method. 'executionMode()' is a default method
+  // of the Kotlin interface 'ExecutionModeAware', and the superclass turns it into a bridge.
+  // @SuppressWarnings does not silence this warning. The API has no constructor parameter
+  // for the mode, so overriding is the only way.
   public ExecutionMode executionMode() {
 
     return ExecutionMode.SYNC;

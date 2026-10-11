@@ -15,13 +15,11 @@ import io.vanillabp.spi.process.ProcessService;
 import jakarta.inject.Inject;
 
 /**
- * Proves the platform's runtime deployment pipeline drives the
- * Process-Engine-API adapter on Quarkus: the BPMN resource below the configured
- * <code>resources-location</code> is read at boot
- * ({@code readBpmn}/{@code prepareBpmn}/{@code wireBpmn}) and
- * {@code deployResources} reaches the in-memory mock engine via the
- * {@code DeploymentApi} - the mock records a deployment containing the BPMN file.
- * No Docker and no network involved.
+ * Proves that the deployment pipeline of the platform runs this adapter on Quarkus. The BPMN
+ * resource below the configured <code>resources-location</code> is read at boot
+ * ({@code readBpmn}, {@code prepareBpmn}, {@code wireBpmn}). Then {@code deployResources}
+ * reaches the mock engine through the {@code DeploymentApi}, and the mock records a
+ * deployment with the BPMN file in it. No Docker and no network are needed.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class PeaDeploymentPipelineTest {

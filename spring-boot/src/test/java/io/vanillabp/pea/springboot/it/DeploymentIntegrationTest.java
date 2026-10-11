@@ -10,10 +10,10 @@ import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 import io.vanillabp.pea.mock.InMemoryProcessEngine;
 
 /**
- * Integration test proving that BPMN resources of a workflow module are deployed to the
- * Process-Engine-API on startup: the full VanillaBP Spring Boot integration boots, the
- * deployment lifecycle reads the module's BPMN (StAX parsing of the executable process id)
- * and deploys it through the mock {@code DeploymentApi}. No Docker and no network involved.
+ * The BPMN files of a workflow module reach the Process-Engine-API at startup. The full
+ * VanillaBP Spring Boot integration boots. The deployment reads the BPMN of the module and
+ * deploys it through the {@code DeploymentApi} of the mock. The test needs no Docker and no
+ * network.
  */
 @SpringBootTest(
     classes = DeploymentIntegrationTestApplication.class,
@@ -31,22 +31,22 @@ public class DeploymentIntegrationTest {
   @Test
   public void bpmnResourcesAreDeployedOnStartup() {
 
-    // exactly one deployment bundle was deployed during boot...
+    // Exactly one bundle was deployed during the boot.
     Assertions.assertEquals(1, inMemoryProcessEngine.getDeployments().size());
     final var deployment = inMemoryProcessEngine.getDeployments().get(0);
 
-    // ...containing the module's BPMN file...
+    // It holds the BPMN file of the module.
     Assertions.assertEquals(1, deployment.resources().size());
     Assertions.assertTrue(
         deployment.resources().get(0).getName().endsWith("pea-deploy-test.bpmn"),
         "the deployed resource is the module's BPMN file");
 
-    // ...and it was deployed via the Process-Engine-API DeploymentApi
+    // It went through the DeploymentApi of the Process-Engine-API.
     Assertions.assertTrue(
         inMemoryProcessEngine.getInvocations().stream().anyMatch(invocation -> "deploy".equals(invocation.method())),
         "a DeploymentApi.deploy invocation was recorded");
 
-    // no workflow was started during a plain boot
+    // A plain boot starts no workflow.
     Assertions.assertTrue(inMemoryProcessEngine.getStartedInstances().isEmpty());
 
   }

@@ -17,16 +17,14 @@ import io.vanillabp.pea.mock.InMemoryProcessEngine;
 import io.vanillabp.pea.processservice.PeaProcessService;
 
 /**
- * The viewer/history API of the Process-Engine-API adapter. The
- * Process-Engine-API has neither a repository nor a query/history API
- * ({@code GAPS.md} entries 12 and 13), so the adapter answers from what it
- * deployed at boot:
+ * The viewer and history API of the Process-Engine-API adapter. The Process-Engine-API has
+ * neither a repository nor a query or history API ({@code GAPS.md} entries 12 and 13). So
+ * the adapter answers from what it deployed at boot:
  * <ul>
- * <li>process definitions: the deployed process, versioned by the deployment
- * key;</li>
+ * <li>process definitions: the deployed process, with the deployment key as version;</li>
  * <li>BPMN XML: the deployed resource, byte for byte;</li>
- * <li>history: no elements (the SPI's "not supported by the underlying
- * BPMS").</li>
+ * <li>history: no elements, which the SPI defines as "not supported by the underlying
+ * BPMS".</li>
  * </ul>
  */
 @ExtendWith(SuppressOutputExtension.class)
@@ -106,7 +104,7 @@ public class PeaViewerApiTest {
     Assertions.assertEquals("ViewedProcess", definitions
         .getFirst()
         .bpmnProcessId());
-    // the Process-Engine-API's only version information is the deployment key
+    // The deployment key is the only version information of the Process-Engine-API.
     Assertions.assertNotNull(definitions
         .getFirst()
         .version());
@@ -140,7 +138,7 @@ public class PeaViewerApiTest {
     Assertions.assertNull(history.endTime());
     Assertions.assertNull(history.elementsHistory(), "the SPI expresses 'no element history' as null");
 
-    // secondary history contexts cannot exist without an element history
+    // Without an element history there can be no secondary history context.
     Assertions.assertNull(
         processService.getWorkflowHistory("test-module", "ViewedProcess", persistence(), "42", "any-context"));
     Assertions.assertTrue(
@@ -171,8 +169,8 @@ public class PeaViewerApiTest {
       final CapturedOutput output) {
 
     deploy();
-    // what the start does for every BPMN process id a workflow module serves without
-    // bringing a model for it - the old id of a renamed process
+    // The start does this for every BPMN process id a workflow module serves without a
+    // model of its own. That is the old id of a renamed process.
     deployedProcesses.recordDeclaredWithoutDeployment("test-module", "RenamedAwayProcess");
 
     Assertions.assertTrue(

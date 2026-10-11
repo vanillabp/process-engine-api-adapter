@@ -29,37 +29,36 @@ import jakarta.enterprise.inject.Produces;
 import jakarta.inject.Singleton;
 
 /**
- * Produces the Process-Engine-API adapter's {@link PeaDeploymentService} instances -
- * ONE per configured adapter id of type {@code process-engine-api} (the
- * per-adapter-id shape on Quarkus: a CDI producer cannot yield N element beans for N
- * runtime-configured ids), consumed by the VanillaBP Quarkus integration's runtime
- * deployment pipeline. The {@link DeploymentApi} is injected - by default it
- * resolves to the mock-backed {@link io.vanillabp.pea.mock.InMemoryProcessEngine}
- * default bean.
+ * Produces the {@link PeaDeploymentService} instances of this adapter, ONE per configured
+ * adapter id of type {@code process-engine-api}. The deployment pipeline of the VanillaBP
+ * Quarkus integration uses them at runtime. The producer returns a list, because a CDI
+ * producer cannot give N element beans for N ids which are only known at runtime. The
+ * {@link DeploymentApi} is injected. By default it is the default bean
+ * {@link io.vanillabp.pea.mock.InMemoryProcessEngine}, the mock.
  * <p>
- * Platform contract: the List's element type is the SPI interface with BOTH type
- * parameters literally {@code Object} - regardless of the adapter's actual model
- * ({@code PeaBpmnModel}) and context ({@code PeaProcessingContext}) classes: CDI's
- * parameterized-type matching of differing type arguments is not reliable across
- * modes, so the platform looks the beans up with the exact type. The pipeline
- * matches models via {@code getModelType()}/{@code getProcessContextType()}, never
- * via the generics. The producer method is {@code @Singleton} (deployment services
- * are not client-proxyable).
+ * What the platform expects: the element type of the list is the SPI interface with BOTH
+ * type parameters set to {@code Object}. That is so even though the adapter has its own model
+ * ({@code PeaBpmnModel}) and context ({@code PeaProcessingContext}) classes. CDI does not match
+ * parameterized types with different type arguments the same way in every mode. So the
+ * platform looks the beans up with the exact type. The pipeline matches models through
+ * {@code getModelType()} and {@code getProcessContextType()}, never through the generics.
+ * The producer method is {@code @Singleton}, because CDI cannot put a client proxy in front
+ * of a deployment service.
  */
 @ApplicationScoped
 public class PeaDeploymentServiceProducer {
 
   /**
-   * Quarkus builds the bean to call the producer below. It keeps no state: what the
-   * producer returns is a bean of its own and lives as long as the application does.
+   * Quarkus builds this bean to call the producer below. It keeps no state. What the producer
+   * returns is a bean of its own and lives as long as the application does.
    */
   public PeaDeploymentServiceProducer() {
 
   }
 
   /**
-   * One deployment service per configured adapter id of this type, as the list the platform
-   * looks the beans up as.
+   * One deployment service per configured adapter id of this type, in the list the platform
+   * looks the beans up by.
    *
    * @param properties The platform's own configuration, which is where the adapter ids come
    *          from
@@ -97,10 +96,10 @@ public class PeaDeploymentServiceProducer {
       @Any final Instance<BpmsInitiatedStartInvoker> bpmsInitiatedStartInvoker,
       @Any final Instance<PeaUserTaskObserver> userTaskObservers) {
 
-    // who watches the user tasks this adapter is delivered: CDI beans of the application,
-    // resolved once and handed to every configured adapter id - see decision 9 in the
-    // repository's DECISIONS.md. ArC removes a bean nothing injects, which is why the
-    // extension declares this type unremovable
+    // The observers of the user tasks this adapter is delivered are CDI beans of the
+    // application. They are resolved once and handed to every configured adapter id, see
+    // decision 9 in the repository's DECISIONS.md. ArC removes a bean nothing injects. That
+    // is why the extension declares this type unremovable.
     final var observers = userTaskObservers
         .stream()
         .toList();
@@ -118,8 +117,8 @@ public class PeaDeploymentServiceProducer {
         .map(Map.Entry::getKey)
         .sorted()
         .map(adapterId -> {
-          // a removed key is refused before anything else, wherever it is set: the
-          // subscriptions no longer read it, and silence would hide that
+          // A removed key is refused before anything else, wherever it is set. The
+          // subscriptions no longer read it, and saying nothing would hide that.
           PeaFetchVariables.rejectTheRemovedKey(adapterId, overlay.fetchVariablesKeys(adapterId));
           final var deploymentService = new PeaDeploymentService(
               adapterId, deploymentApi, PeaProcessServiceProducer

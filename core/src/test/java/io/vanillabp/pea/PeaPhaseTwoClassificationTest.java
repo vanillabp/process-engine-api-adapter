@@ -15,9 +15,9 @@ import io.vanillabp.pea.mock.InMemoryProcessEngine;
 import io.vanillabp.pea.processservice.PeaProcessService;
 
 /**
- * What this adapter can say about a failed phase-two operation. The API has no
- * typed exceptions, so exactly one family is classifiable - the one the adapter throws
- * itself when its API cannot do what VanillaBP asks.
+ * What this adapter can say about a failed operation in phase two. The API has no typed
+ * exceptions, so the adapter can classify only one kind: the one it throws itself when its
+ * API cannot do what VanillaBP asks.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class PeaPhaseTwoClassificationTest {
@@ -36,12 +36,12 @@ public class PeaPhaseTwoClassificationTest {
 
     final var service = service();
 
-    // the two cases this adapter throws itself: a signal without a SignalApi, and
-    // pushing a changed aggregate into a running instance
+    // The adapter throws this type itself in two cases: a signal without a SignalApi, and
+    // a changed aggregate pushed into a running instance.
     assertFalse(
         service.isPhaseTwoFailureRepeatable(
             new UnsupportedOperationException("no SignalApi")));
-    // the outbox hands over what the dispatch caught, so a wrapped cause counts too
+    // The outbox hands over what the dispatch caught, so a wrapped cause counts too.
     assertFalse(
         service.isPhaseTwoFailureRepeatable(
             new IllegalStateException("dispatching", new UnsupportedOperationException("no SignalApi"))));

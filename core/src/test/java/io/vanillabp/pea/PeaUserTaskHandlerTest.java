@@ -30,10 +30,10 @@ import io.vanillabp.pea.wiring.PeaUserTaskHandler;
 import io.vanillabp.spi.service.TaskEvent;
 
 /**
- * Edge cases of the {@link PeaUserTaskHandler}: the notification is
- * OPTIONAL (skipped without a handler), routing failures and handler defects are
- * logged loudly but never break the user task itself, and a TaskException in a
- * notification handler is a defect.
+ * Edge cases of the {@link PeaUserTaskHandler}. The notification is OPTIONAL, so without a
+ * handler it is skipped. Routing failures and defects of a handler are logged loudly, but
+ * they never break the user task itself. A TaskException in a notification handler is a
+ * defect.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class PeaUserTaskHandlerTest {
@@ -45,7 +45,7 @@ public class PeaUserTaskHandlerTest {
     WorkflowTaskOutcome outcome = WorkflowTaskOutcome.completed();
 
     /**
-     * What the core throws instead of answering, or <code>null</code> for a notification
+     * What the core throws instead of an answer, or <code>null</code> for a notification
      * which reaches a business method.
      */
     RuntimeException refusal;
@@ -79,9 +79,9 @@ public class PeaUserTaskHandlerTest {
 
     }
 
-    // The migration fallback, deprecated for removal and none of this
-    // BPMS's business: a test double implements it as long as the interface declares
-    // it, and the mandatory 'removal' lint needs the suppression
+    // The migration fallback. It is deprecated for removal, and this BPMS does not use it.
+    // A test double has to implement it while the interface declares it. The 'removal'
+    // lint is mandatory, so it needs the suppression.
     @SuppressWarnings("removal")
     @Override
     public boolean workflowAggregateHasProperty(
@@ -143,9 +143,9 @@ public class PeaUserTaskHandlerTest {
   }
 
   /**
-   * The handler of a subscription whose module avoids name clashes the given way - the
-   * mirror of the service-task side, so neither of the two can start reading the engine's
-   * meta entry differently again.
+   * The handler of a subscription whose module avoids name clashes the given way. It mirrors
+   * the service task side, so the two cannot start to read the engine's meta entry
+   * differently again.
    */
   private PeaUserTaskHandler handler(
       final List<String> bpmnProcessIds,
@@ -227,15 +227,15 @@ public class PeaUserTaskHandlerTest {
   @DisplayName("Defects never break the user task: missing variable, ambiguous routing, TaskException")
   public void defectsAreLoggedNotThrown() {
 
-    // missing aggregate-ID variable
+    // The aggregate ID variable is missing.
     handler(List.of("OnlyProcess"))
         .accept(new TaskInformation("utask-3", Map.of()), Map.of("unrelated", "x"));
 
-    // ambiguous routing without the meta entry
+    // Without the meta entry, the routing is ambiguous.
     handler(List.of("ProcessA", "ProcessB"))
         .accept(new TaskInformation("utask-4", Map.of()), Map.of("id", "4711"));
 
-    // a TaskException outcome is a defect - logged, not thrown
+    // A TaskException as outcome is a defect. It is logged, not thrown.
     invoker.outcome = WorkflowTaskOutcome.bpmnError("SOME_ERROR", null);
     handler(List.of("OnlyProcess"))
         .accept(new TaskInformation("utask-5", Map.of()), Map.of("id", "4711"));
@@ -246,11 +246,11 @@ public class PeaUserTaskHandlerTest {
   @DisplayName("A user task of a workflow this application does not own is said and left alone")
   public void aUserTaskOfAWorkflowWeDoNotOwnIsSaidAndLeftAlone() {
 
-    // the service-task side answers such a delivery at the engine. This side cannot:
-    // UserTaskCompletionApi offers completion and completion by error, and both of them
-    // would move a stranger's workflow on. So the log line is the whole answer, and the
-    // handler returns normally because a handler which throws makes the engine's pull cycle
-    // offer the same task again at every turn
+    // The service task side answers such a delivery at the engine. This side cannot.
+    // UserTaskCompletionApi offers completion and completion by error, and both would move
+    // a stranger's workflow on. So the log line is the whole answer. The handler returns
+    // normally, because if it throws, the engine's pull cycle offers the same task again
+    // at every turn.
     invoker.refusal = new DeliveryOfAnUnknownWorkflowException(
         "pea", "test-module", "OnlyProcess", "approve", "io.example.Aggregate", "4711", "wf-99");
 

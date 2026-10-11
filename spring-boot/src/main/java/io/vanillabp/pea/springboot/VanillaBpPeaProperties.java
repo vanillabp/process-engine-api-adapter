@@ -9,26 +9,26 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 import io.vanillabp.pea.wiring.PeaFetchVariables;
 
 /**
- * The Process-Engine-API adapter's OVERLAY of the shared <code>vanillabp.*</code>
- * configuration tree. The adapter has no connection settings of its own - the engine is
- * provided by the application as beans. The only key here is the removed
- * <code>fetch-variables</code>, at the canonical per-adapter location
- * <code>vanillabp.adapters.&lt;id&gt;.fetch-variables</code> plus the three scoped levels
- * below it. It is bound only so the start can refuse it, see
- * {@link PeaFetchVariables#rejectTheRemovedKey}. A second {@code @ConfigurationProperties} class over the same prefix coexists
- * with the platform's binding of the core model; keys unknown to either view are ignored
- * by the JavaBean binding.
+ * The view of the Process-Engine-API adapter on the shared <code>vanillabp.*</code>
+ * configuration tree. The adapter has no connection settings of its own, because the
+ * application provides the engine as beans. The only key here is the removed
+ * <code>fetch-variables</code>. It is read at
+ * <code>vanillabp.adapters.&lt;id&gt;.fetch-variables</code> and at the three levels below.
+ * It is bound only so the start can refuse it, see
+ * {@link PeaFetchVariables#rejectTheRemovedKey}.
  * <p>
- * The adapter-id set is NEVER derived from this overlay map - it always comes from the
- * platform's core properties; the overlay is a per-known-id lookup only.
+ * The platform binds the same prefix with its own {@code @ConfigurationProperties} class.
+ * The two live side by side. Each one ignores the keys it does not know.
+ * <p>
+ * The adapter ids never come from this class. They always come from the core properties of
+ * the platform. This class is only asked about an adapter id the platform already knows.
  */
 @ConfigurationProperties("vanillabp")
 public class VanillaBpPeaProperties {
 
   /**
-   * Spring Boot builds the class and fills it with the keys of this overlay it recognises.
-   * An application which configures nothing keeps the empty maps, and every lookup then
-   * answers the default.
+   * Spring Boot builds the class and fills in the keys it knows. An application which
+   * configures nothing keeps the empty maps, and every lookup then finds nothing.
    */
   public VanillaBpPeaProperties() {
 
@@ -158,9 +158,9 @@ public class VanillaBpPeaProperties {
     }
 
     /**
-     * The removed key <code>fetch-variables</code> at this level, bound only so the start
-     * can refuse it. It is a text, so every value somebody wrote reaches that message
-     * rather than a conversion error.
+     * The removed key <code>fetch-variables</code> at this level. It is bound only so the
+     * start can refuse it. It is a text, so every value somebody wrote reaches that message.
+     * A typed field would fail with a conversion error first.
      */
     private String fetchVariables;
 
@@ -331,7 +331,7 @@ public class VanillaBpPeaProperties {
   }
 
   /**
-   * The adapter's view of one task section - the MOST specific level.
+   * The adapter's view of one task section, the most specific level.
    */
   public static class TaskOverlay {
 

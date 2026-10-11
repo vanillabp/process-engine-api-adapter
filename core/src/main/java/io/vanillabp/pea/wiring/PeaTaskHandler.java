@@ -19,38 +19,37 @@ import lombok.Builder;
 import lombok.extern.slf4j.Slf4j;
 
 /**
- * The task handler of one Process-Engine-API task subscription (one per adapter ID
- * and task definition): builds the neutral invocation context from the delivered
- * task and dispatches through the core's {@link WorkflowTaskInvoker}. Deliveries
- * may arrive AT LEAST ONCE (depending on the underlying engine) - the business
- * method runs in a NEW local transaction which commits BEFORE the task is
- * completed, so a duplicate delivery converges idempotently.
+ * The task handler of one Process-Engine-API task subscription. There is one per adapter ID
+ * and task definition. It builds the neutral invocation context from the delivered task and
+ * passes it to the core through {@link WorkflowTaskInvoker}. Depending on the engine, a task
+ * may be delivered more than once. The business method runs in a NEW local transaction,
+ * and that transaction commits BEFORE the task is completed. So a second delivery of the
+ * same task does no harm, as long as the method is idempotent.
  * <p>
- * Outcome mapping (completion commands carry {@code ExecutionMode.SYNC} - they
- * advance the process AFTER the local commit, the phase-two shape):
+ * What each outcome turns into. The completion commands carry {@code ExecutionMode.SYNC},
+ * because they move the process on AFTER the local commit, which is phase two.
  * <ul>
- * <li>COMPLETED - {@code ServiceTaskCompletionApi.completeTask};</li>
- * <li>BPMN_ERROR ({@code TaskException}) -
- * {@code ServiceTaskCompletionApi.completeTaskByError} with the error code as the
- * deployed model carries it (see {@link #scopedErrorCode(String)}, aggregate changes
- * committed);</li>
- * <li>COMPLETION_PENDING ({@code @TaskId} methods) - nothing: the task stays open
- * for {@code ProcessService#completeTask};</li>
- * <li>a task of a workflow this application does not own
- * ({@code DeliveryOfAnUnknownWorkflowException}) - {@code failTask} with a retry count of
- * zero, see {@link #refuseTheStrangersTask(String, DeliveryOfAnUnknownWorkflowException)};</li>
- * <li>any other exception - {@code ServiceTaskCompletionApi.failTask} (the local
- * transaction was already rolled back by the core; retry semantics are the
- * engine's).</li>
+ * <li>COMPLETED: {@code ServiceTaskCompletionApi.completeTask}.</li>
+ * <li>BPMN_ERROR ({@code TaskException}):
+ * {@code ServiceTaskCompletionApi.completeTaskByError}, with the error code as the deployed
+ * model spells it (see {@link #scopedErrorCode(String)}). The changes to the aggregate are
+ * committed.</li>
+ * <li>COMPLETION_PENDING ({@code @TaskId} methods): nothing. The task stays open until
+ * {@code ProcessService#completeTask} is called.</li>
+ * <li>A task of a workflow this application does not own
+ * ({@code DeliveryOfAnUnknownWorkflowException}): {@code failTask} with a retry count of
+ * zero, see {@link #refuseTheStrangersTask(String, DeliveryOfAnUnknownWorkflowException)}.</li>
+ * <li>Any other exception: {@code ServiceTaskCompletionApi.failTask}. The core has already
+ * rolled the local transaction back. The engine decides about retries.</li>
  * </ul>
- * The BPMN process a task belongs to is read from the {@link TaskInformation}
- * meta key {@link PeaTaskMeta#BPMN_PROCESS_ID} (adapter convention - the API does
- * not define it, see {@code GAPS.md}) and translated back to the plain id the core is
- * keyed by; without the entry the task definition has to be unique across the module's
- * processes.
+ * The BPMN process of a task is read from the meta key {@link PeaTaskMeta#BPMN_PROCESS_ID}
+ * of the {@link TaskInformation}. That key is a convention of this adapter, the API does not
+ * define it (see {@code GAPS.md}). The value is translated back to the plain id the core
+ * uses. Without the entry, the task definition has to be unique across the processes of the
+ * module.
  * <p>
- * Why this path swallows nothing but also needs no outbox, unlike the phase-two operations of the
- * process service, is decision 5 in the repository's DECISIONS.md.
+ * Why this path swallows nothing and still needs no outbox, unlike the phase-two operations
+ * of the process service, is decision 5 in the repository's DECISIONS.md.
  */
 @Slf4j
 public class PeaTaskHandler implements TaskHandler {
@@ -64,18 +63,17 @@ public class PeaTaskHandler implements TaskHandler {
   private final List<String> bpmnProcessIds;
 
   /**
-   * The BPMN process ids the workflow module declares without deploying a model under
-   * them, whose task definitions compose the same name as this subscription's. They are
-   * not routing candidates - a delivery over a shared name is attributed to a deployed
-   * process - but a delivery which cannot be routed has to name them, because a workflow
-   * still running under the old id of a renamed process is one of the reasons. Never
-   * <code>null</code>.
+   * The BPMN process ids the workflow module declares without deploying a model under them,
+   * and whose task definitions make up the same name as this subscription. A delivery is
+   * never routed to them: a delivery over a shared name goes to a deployed process. But a
+   * delivery which cannot be routed has to name them. One possible reason is a workflow
+   * which still runs under the old id of a renamed process. Never <code>null</code>.
    */
   private final List<String> declaredBpmnProcessIds;
 
   /**
    * The BPMN element each process of this subscription delivers from, keyed by the plain BPMN
-   * process id. Read where the engine names no element of its own - see
+   * process id. It is read when the engine names no element itself, see
    * {@link #bpmnElementId(String, TaskInformation)}. Never <code>null</code>.
    */
   private final Map<String, String> bpmnElementIds;
@@ -85,22 +83,22 @@ public class PeaTaskHandler implements TaskHandler {
   private final ServiceTaskCompletionApi serviceTaskCompletionApi;
 
   /**
-   * Translates the identifiers the engine knows back into the plain ones
-   * - a no-op unless the module uses prefixes. May be <code>null</code>.
+   * Translates the identifiers the engine knows back into the plain ones. It changes nothing
+   * unless the module uses prefixes. May be <code>null</code>.
    */
   private final NameClashAvoidanceSupport scoping;
 
   /**
-   * What this subscription asked the engine for - the payload of a delivery
-   * carries exactly that, so a <code>&#64;TaskParam</code> naming anything else is
-   * answered with a guiding failure instead of a <code>null</code>.
+   * What this subscription asked the engine for. The payload of a delivery carries exactly
+   * that. So a <code>&#64;TaskParam</code> which names anything else gets a failure that says
+   * what to do, not a <code>null</code>.
    */
   private final PeaFetchVariables.Selection fetchVariables;
 
   /**
-   * The subscription this handler serves. Built through the generated
-   * <code>PeaTaskHandler.builder()</code>: some of these values may be left out and a
-   * positional list of that length no longer says which is which.
+   * The subscription this handler serves. Use the generated
+   * <code>PeaTaskHandler.builder()</code>. Some of these values may be left out, and in a
+   * list of arguments this long nobody can tell which is which.
    *
    * @param adapterId The adapter whose subscription delivers here
    * @param workflowModuleId The workflow module the subscribed tasks belong to
@@ -148,8 +146,8 @@ public class PeaTaskHandler implements TaskHandler {
   }
 
   /**
-   * The PLAIN task definition of this subscription (the subscription key is the
-   * scoped one under {@code use-prefix}).
+   * The PLAIN task definition of this subscription. Under {@code use-prefix}, the
+   * subscription itself uses the prefixed one.
    */
   private String plainTaskDefinition(
       final String bpmnProcessId) {
@@ -161,11 +159,11 @@ public class PeaTaskHandler implements TaskHandler {
   }
 
   /**
-   * The error code as the deployed model carries it. Under {@code use-prefix} the
-   * {@code errorCode} of a {@code bpmn:error} is prefixed like every other identifier of
-   * the module, so the code a {@code TaskException} names has to be translated on its way
-   * to the engine. Without it the engine is asked to throw a code no boundary event in the
-   * model catches.
+   * The error code as the deployed model spells it. Under {@code use-prefix}, the
+   * {@code errorCode} of a {@code bpmn:error} gets the prefix like every other identifier of
+   * the module. So the code a {@code TaskException} names has to be translated on its way to
+   * the engine. Otherwise the engine throws a code which no boundary event in the model
+   * catches.
    *
    * @param errorCode The code the business method raised
    * @return The code the engine knows it by
@@ -178,17 +176,17 @@ public class PeaTaskHandler implements TaskHandler {
   }
 
   /**
-   * Which BPMN element this delivery belongs to - the second key a
-   * <code>&#64;WorkflowTask</code> method is wired by, so a delivery which names none does not
-   * reach a method carrying <code>&#64;WorkflowTask(id = ...)</code>.
+   * The BPMN element this delivery belongs to. It is the second key a
+   * <code>&#64;WorkflowTask</code> method is wired by. A delivery which names no element does
+   * not reach a method with <code>&#64;WorkflowTask(id = ...)</code>.
    * <p>
-   * The engine answers it where it fills the meta entry, and it is the better answer: it is
-   * about THIS delivery and about the model the engine is running it under. The API promises
-   * no such entry though (see {@code GAPS.md}, entry 26), so where the engine names none the
-   * deployed model answers instead: this subscription asks for one task definition, and the
-   * element carrying that name in the process the delivery was routed to is the element it
-   * belongs to. A process whose model carries that name on several elements answers nothing,
-   * and the start said so.
+   * If the engine fills the meta entry, its answer wins. It is the better answer, because it
+   * is about THIS delivery and about the model the engine runs it under. But the API does not
+   * promise this entry (see {@code GAPS.md}, entry 26). So if the engine names no element,
+   * the deployed model answers. This subscription asks for one task definition. The element
+   * with that name, in the process the delivery was routed to, is the element it belongs to.
+   * If the model has that name on several elements, there is no answer, and the startup
+   * already said so.
    *
    * @param bpmnProcessId The plain BPMN process the delivery was routed to
    * @param taskInformation What the engine said about the task
@@ -237,8 +235,8 @@ public class PeaTaskHandler implements TaskHandler {
       refuseTheStrangersTask(taskId, refusal);
       return;
     } catch (final Exception e) {
-      // the core rolled the local transaction back - fail the task so the
-      // underlying engine applies its retry semantics
+      // the core has rolled the local transaction back. Failing the task lets the engine
+      // apply its own retry rules
       log.warn(
           "Process-Engine-API adapter '{}': processing task '{}' (definition '{}') failed - failing "
               + "the task",
@@ -281,22 +279,22 @@ public class PeaTaskHandler implements TaskHandler {
   }
 
   /**
-   * Hands a task of a workflow this application does not own back to the engine, and asks for
-   * no further attempt.
+   * Hands a task of a workflow this application does not own back to the engine, and asks
+   * for no further attempt.
    * <p>
-   * A task subscription of this API matches a task type globally and there is no tenant, so
-   * where two applications deploy a BPMN process of the same name, each of them is served the
-   * other's tasks. The core answers such a delivery with
-   * {@link DeliveryOfAnUnknownWorkflowException}, and nothing here can make the task run: the
-   * workflow aggregate it names lives in the other application. Repeating the delivery would
-   * therefore repeat the same refusal, which is why the retry count is zero rather than the
-   * engine's default. Zero and not a silent completion: the task is the other application's
-   * work and stays in the engine, and an application which quietly takes a stranger's task off
-   * the board takes it for good.
+   * A task subscription of this API matches a task type across the whole engine, and there
+   * are no tenants. So if two applications deploy a BPMN process of the same name, each one
+   * gets the tasks of the other. The core answers such a delivery with
+   * {@link DeliveryOfAnUnknownWorkflowException}. Nothing here can make the task run, because
+   * the workflow aggregate it names lives in the other application. A new delivery would
+   * only meet the same refusal, so the retry count is zero and not the engine's default. But
+   * the task is not completed quietly either. It is the work of the other application and
+   * stays in the engine. An application which quietly completes a task of another one takes
+   * it away for good.
    * <p>
-   * The log line leaves the stack trace out. The message of the refusal names the workflow,
-   * both situations it can be and what to do about each, and a trace would only add which line
-   * of the core read the database.
+   * The log line has no stack trace. The message of the refusal names the workflow, the two
+   * situations it may be, and what to do in each. A stack trace would only add which line of
+   * the core read the database.
    *
    * @param taskId The task which belongs somewhere else
    * @param refusal What the core said about it
@@ -322,15 +320,15 @@ public class PeaTaskHandler implements TaskHandler {
   }
 
   /**
-   * The payload a completion command carries: the values the workflow
-   * aggregate shares with the engine - the {@code @WorkflowTask} method just
-   * changed it and a gateway right behind this task has to see the NEW values -
-   * plus, always, the variable holding the aggregate's ID (the
-   * Process-Engine-API has no business-key slot).
+   * The payload a completion command carries. It holds the values the workflow aggregate
+   * shares with the engine. The {@code @WorkflowTask} method has just changed the aggregate,
+   * and a gateway right after this task has to see the NEW values. The payload always holds
+   * the variable with the ID of the aggregate too, because the Process-Engine-API has no
+   * slot for a business key.
    * <p>
-   * The core loads the aggregate in its OWN transaction (the task's one is
-   * committed at this point) and never throws: a failed read yields the ID
-   * variable only, so the task is still completed.
+   * The core loads the aggregate in a transaction of its OWN, because the one of the task
+   * has committed by now. It never throws. If the read fails, the payload holds only the ID
+   * variable, and the task is still completed.
    *
    * @param bpmnProcessId The BPMN process ID
    * @param aggregateIdName The name of the aggregate's ID property
@@ -356,8 +354,8 @@ public class PeaTaskHandler implements TaskHandler {
   private String determineBpmnProcessId(
       final TaskInformation taskInformation) {
 
-    // the entry carries the id the ENGINE knows, which is prefixed under 'use-prefix' -
-    // PeaTaskMeta translates it back, because the core is keyed by the plain id
+    // the entry holds the id the ENGINE knows, which has the prefix under 'use-prefix'.
+    // PeaTaskMeta translates it back, because the core uses the plain id
     final var fromMeta = PeaTaskMeta
         .plainBpmnProcessId(taskInformation, scoping, workflowModuleId, adapterId);
     if (fromMeta != null) {
@@ -396,9 +394,9 @@ public class PeaTaskHandler implements TaskHandler {
       call.run();
     } catch (final InterruptedException e) {
       Thread.currentThread().interrupt();
-      // the caller is a subscription thread of the engine, usually one being shut
-      // down: nobody up the stack acts on the flag, so an interrupt gets the same
-      // line a failure gets instead of leaving the task neither reported nor logged
+      // the caller is a subscription thread of the engine, usually one which is shutting
+      // down. Nobody further up acts on the flag. So an interrupt gets the same log line as
+      // a failure. Otherwise the task would be neither reported nor logged
       couldNotReportBack(taskId, description, e);
     } catch (final ExecutionException e) {
       couldNotReportBack(taskId, description, e.getCause());
@@ -409,9 +407,9 @@ public class PeaTaskHandler implements TaskHandler {
   /**
    * Says that the engine did not learn the outcome of a task.
    * <p>
-   * The local transaction is committed by now, so this is the documented
-   * at-least-once residual: the engine redelivers the task and the idempotent
-   * handler converges.
+   * The local transaction has committed by now. So this is the known gap of at-least-once
+   * delivery: the engine delivers the task again, and the idempotent business method runs
+   * once more without harm.
    *
    * @param taskId The task which stays open in the engine
    * @param description What was attempted, as a verb ("complete", "fail")
@@ -507,8 +505,8 @@ public class PeaTaskHandler implements TaskHandler {
     @Override
     public String getProcessVersion() {
 
-      // the version tag of the deployed process definition, or null - the
-      // Process-Engine-API knows no version number (GAPS.md)
+      // the version tag of the deployed process definition, or null. The
+      // Process-Engine-API has no version number (GAPS.md)
       return PeaTaskMeta.text(taskInformation, PeaTaskMeta.PROCESS_VERSION_TAG);
 
     }
@@ -523,9 +521,9 @@ public class PeaTaskHandler implements TaskHandler {
     @Override
     public String getWorkflowId() {
 
-      // the engine's own id of the running instance. An engine which names none leaves
-      // the delivery record without a workflow id, and that is not a defect either: the
-      // API defines no vocabulary for what a delivered task carries
+      // the engine's own id of the running instance. If an engine names none, the delivery
+      // record has no workflow id. That is not a defect, because the API does not say what
+      // a delivered task carries
       return PeaTaskMeta.text(taskInformation, PeaTaskMeta.WORKFLOW_ID);
 
     }
@@ -554,10 +552,10 @@ public class PeaTaskHandler implements TaskHandler {
     @Override
     public TaskKind getTaskKind() {
 
-      // this handler serves task subscriptions and nothing else, so the id it reports is
-      // a task's. The engine takes it back through its SERVICE-task completion API. The
-      // user-task API of the same engine finds nothing under that id, and explaining
-      // exactly that is what the record is read for
+      // this handler serves task subscriptions and nothing else, so the id it reports is the
+      // id of a task. The engine takes it back through its SERVICE-task completion API. The
+      // user-task API of the same engine finds nothing under that id. The record is read to
+      // explain exactly that
       return TaskKind.TASK;
 
     }
@@ -565,10 +563,10 @@ public class PeaTaskHandler implements TaskHandler {
     @Override
     public String getDeliveryId() {
 
-      // the engine's task ID identifies this piece of work: a task redelivered
-      // because the engine never learned the result arrives under the same ID, a new
-      // activation of the element under a different one - the identity the core
-      // remembers a processed delivery by
+      // the task ID of the engine names this piece of work. If the engine never learned the
+      // result and delivers the task again, it comes with the same ID. A new activation of
+      // the element comes with a different one. The core remembers a processed delivery by
+      // this ID
       return taskId;
 
     }
@@ -576,11 +574,11 @@ public class PeaTaskHandler implements TaskHandler {
     @Override
     public String getActivationId() {
 
-      // the same value as the delivery id, and deliberately: this engine creates one
-      // task per activation of an element and redelivers it under that id, so both
-      // contracts are satisfied by one value here. It is not a shortcut - an engine
-      // whose redelivery gets a new id would have to answer these two differently,
-      // and the Process-Engine-API does not
+      // the same value as the delivery id, on purpose. This engine creates one task per
+      // activation of an element and delivers it again under that id. So one value meets
+      // both contracts here. It is not a shortcut. An engine which gave a new id to every
+      // new delivery would have to answer the two differently, and the Process-Engine-API
+      // does not do that
       return taskId;
 
     }
@@ -597,9 +595,9 @@ public class PeaTaskHandler implements TaskHandler {
 
     }
 
-    // runInCurrentTransaction stays false: task handlers run on subscription
-    // threads without a transaction - the core opens a NEW one which commits
-    // BEFORE the task is completed (at-least-once ordering)
+    // runInCurrentTransaction stays false. Task handlers run on subscription threads which
+    // have no transaction. The core opens a NEW one, and it commits BEFORE the task is
+    // completed, which is the order at-least-once delivery needs
 
   }
 

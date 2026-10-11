@@ -16,9 +16,9 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
 /**
- * The workflow service of the Quarkus end-to-end application - the same shape the
- * Spring Boot suite drives, so both platforms run the identical set of documented
- * features against the in-memory mock engine.
+ * The workflow service of the Quarkus end-to-end application. It has the same shape as the
+ * one the Spring Boot tests drive. So both platforms run the same documented features
+ * against the mock engine in memory.
  */
 @ApplicationScoped
 @WorkflowService(
@@ -157,7 +157,7 @@ public class PeaE2eWorkflowService {
   public void e2eHappy(
       final PeaE2eAggregate aggregate) {
 
-    // idempotent: keyed on aggregate state, not on call count
+    // Safe to run twice: it looks at the state of the aggregate, not at how often it ran.
     if ((aggregate.getResults() == null) || !aggregate.getResults().contains("happy")) {
       aggregate.appendResult("happy");
     }

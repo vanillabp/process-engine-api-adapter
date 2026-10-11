@@ -21,25 +21,26 @@ import lombok.Builder;
 import lombok.extern.slf4j.Slf4j;
 
 /**
- * The handler of one USER-task subscription: a delivered user task is a
- * NOTIFICATION - the optional <code>&#64;WorkflowTask</code> method receives
- * {@link TaskEvent.Event#CREATED} with the user task's ID (as
- * <code>&#64;TaskId</code>) and never completes the task on return; completion
- * arrives via <code>ProcessService#completeUserTask</code>. Without a matching
- * method the delivery is skipped silently (user tasks are processed through
- * forms/task lists). CANCELED cannot be delivered to a
- * <code>&#64;WorkflowTask</code> method: the subscription's termination callback carries the
- * engine's {@link TaskInformation} but no payload, so the workflow aggregate the notification
- * would have to be dispatched for cannot be told (see {@code GAPS.md}). What the termination
- * does carry - the task, the engine's reason and the rest of its meta map - reaches the
- * {@link PeaUserTaskObserver}s of the application through {@link #terminated(TaskInformation)}.
+ * The handler of one USER-task subscription. A delivered user task is a NOTIFICATION. The
+ * <code>&#64;WorkflowTask</code> method, if there is one, receives
+ * {@link TaskEvent.Event#CREATED} with the ID of the user task (as <code>&#64;TaskId</code>).
+ * Returning from the method never completes the task. The completion comes through
+ * <code>ProcessService#completeUserTask</code>. If no method matches, the delivery is
+ * skipped without a word, because user tasks are worked on through forms and task lists.
+ * <p>
+ * CANCELED cannot reach a <code>&#64;WorkflowTask</code> method. The termination callback
+ * of the subscription carries the {@link TaskInformation} of the engine but no payload. So
+ * there is no way to tell which workflow aggregate the notification belongs to (see
+ * {@code GAPS.md}). What the termination does carry is the task, the reason of the engine
+ * and the rest of its meta map. That reaches the {@link PeaUserTaskObserver}s of the
+ * application through {@link #terminated(TaskInformation)}.
  */
 @Slf4j
 public class PeaUserTaskHandler implements TaskHandler {
 
   /**
-   * Translates the scoped task definition of this subscription back into
-   * the plain one. May be <code>null</code>.
+   * Translates the prefixed task definition of this subscription back into the plain one.
+   * May be <code>null</code>.
    */
   private final NameClashAvoidanceSupport scoping;
 
@@ -52,16 +53,16 @@ public class PeaUserTaskHandler implements TaskHandler {
   private final List<String> bpmnProcessIds;
 
   /**
-   * The BPMN process ids the workflow module declares without deploying a model under
-   * them, whose task definitions compose the same name as this subscription's. Not routing
-   * candidates, only what a notification which cannot be routed has to name as a further
-   * possibility. Never <code>null</code>.
+   * The BPMN process ids the workflow module declares without deploying a model under them,
+   * and whose task definitions make up the same name as this subscription. A notification is
+   * never routed to them. But a notification which cannot be routed names them as one more
+   * possible reason. Never <code>null</code>.
    */
   private final List<String> declaredBpmnProcessIds;
 
   /**
    * The BPMN element each process of this subscription delivers from, keyed by the plain BPMN
-   * process id. Read where the engine names no element of its own - see
+   * process id. It is read when the engine names no element itself, see
    * {@link #bpmnElementId(String, TaskInformation)}. Never <code>null</code>.
    */
   private final Map<String, String> bpmnElementIds;
@@ -69,21 +70,21 @@ public class PeaUserTaskHandler implements TaskHandler {
   private final WorkflowTaskInvoker workflowTaskInvoker;
 
   /**
-   * What this subscription asked the engine for - a user-task notification
-   * carries a payload like every other delivery, and it is narrowed the same way.
+   * What this subscription asked the engine for. A user-task notification carries a payload
+   * like every other delivery, and the payload is narrowed in the same way.
    */
   private final PeaFetchVariables.Selection fetchVariables;
 
   /**
-   * Who watches the user tasks this subscription is delivered. Never
-   * <code>null</code> - an application which registered no observer holds an empty list.
+   * Who watches the user tasks delivered to this subscription. Never <code>null</code>. If
+   * the application registered no observer, this list is empty.
    */
   private final PeaUserTaskObservers observers;
 
   /**
-   * The user-task subscription this handler serves. Built through the generated
-   * <code>PeaUserTaskHandler.builder()</code>: some of these values may be left out and
-   * a positional list of that length no longer says which is which.
+   * The user-task subscription this handler serves. Use the generated
+   * <code>PeaUserTaskHandler.builder()</code>. Some of these values may be left out, and in a
+   * list of arguments this long nobody can tell which is which.
    *
    * @param adapterId The adapter whose subscription delivers here
    * @param workflowModuleId The workflow module the subscribed user tasks belong to
@@ -139,16 +140,17 @@ public class PeaUserTaskHandler implements TaskHandler {
 
     final var taskId = taskInformation.getTaskId();
 
-    // an observer which failed makes this delivery fail, but only once the application has
-    // had its notification: the engine repeats a failed delivery, and a repetition is what
-    // the observer needs, while the application's @WorkflowTask method is called for a task
-    // exactly once because the core recognizes the repeated delivery by its task id
+    // a failed observer makes this delivery fail, but only after the application got its
+    // notification. The engine repeats a failed delivery, and the observer needs that
+    // repetition. The @WorkflowTask method of the application still runs only once per
+    // task, because the core recognizes the repeated delivery by its task id
     PeaUserTaskObserverFailure observerFailure = null;
     try {
       final var bpmnProcessId = bpmnProcessIdOrNull(taskInformation);
-      // what the payload holds the workflow aggregate's id under, asked once and answered
-      // leniently: an observer is told about a delivery this application cannot place, and
-      // the failure is kept for the strict path below, which is where it is a defect
+      // the name under which the payload holds the id of the workflow aggregate. It is
+      // asked for once, and a failure is not thrown yet. An observer is also told about a
+      // delivery this application cannot place. The failure is kept for the strict path
+      // below, because only there is it a defect
       String aggregateIdName = null;
       RuntimeException noAggregateIdName = null;
       if (bpmnProcessId != null) {
@@ -159,9 +161,9 @@ public class PeaUserTaskHandler implements TaskHandler {
           noAggregateIdName = e;
         }
       }
-      // whoever watches this application's user tasks sees every one of them: the two
-      // failures below drop a delivery which cannot be routed and one no @WorkflowTask
-      // method claims, and a task list shows a user task in both cases
+      // whoever watches the user tasks of this application sees every one of them. The
+      // checks below drop a delivery which cannot be routed, and one which no @WorkflowTask
+      // method claims. A task list shows the user task in both cases
       final var observedAggregateIdName = aggregateIdName;
       try {
         observers.delivered(
@@ -173,8 +175,8 @@ public class PeaUserTaskHandler implements TaskHandler {
       if (bpmnProcessId == null) {
         throw ambiguousRouting(taskInformation);
       }
-      // the core's registries are keyed by the plain identifiers, so what this subscription
-      // is keyed by is translated back before the core is asked anything
+      // the registries of the core use the plain identifiers. So the key of this
+      // subscription is translated back before the core is asked anything
       final var taskDefinition = plainTaskDefinition(bpmnProcessId);
       final var elementId = bpmnElementId(bpmnProcessId, taskInformation);
       if (!aMethodServesThisUserTask(bpmnProcessId, taskDefinition, elementId)) {
@@ -212,8 +214,8 @@ public class PeaUserTaskHandler implements TaskHandler {
     } catch (final DeliveryOfAnUnknownWorkflowException refusal) {
       sayTheUserTaskBelongsSomewhereElse(taskId, refusal);
     } catch (final Exception e) {
-      // a failing NOTIFICATION must not break the user task itself - the task
-      // stays available through forms/task lists; the defect is logged loudly
+      // a failing NOTIFICATION must not break the user task itself. The task stays
+      // available through forms and task lists. The defect is logged as an error
       log.error(
           "Process-Engine-API adapter '{}': the CREATED notification for user task '{}' (form "
               + "reference '{}') failed! The user task itself stays available.",
@@ -230,25 +232,25 @@ public class PeaUserTaskHandler implements TaskHandler {
 
   /**
    * Says that a delivered user task is about a workflow this application does not own, and
-   * that nothing else can be done about it here.
+   * that nothing more can be done about it here.
    * <p>
-   * A task subscription of this API matches a task type globally and there is no tenant, so
-   * two applications which deploy a BPMN process of the same name are served each other's user
-   * tasks. The service-task side answers such a delivery at the engine, with a failure carrying
-   * no further attempt. This side cannot: {@code UserTaskCompletionApi} offers completion and
-   * completion by error and nothing else, and both of them would move a stranger's workflow on.
-   * So the notification ends here, the user task stays where it is, and the log line is the
-   * whole answer.
+   * A task subscription of this API matches a task type across the whole engine, and there
+   * are no tenants. So two applications which deploy a BPMN process of the same name get the
+   * user tasks of each other. The service-task side answers such a delivery at the engine,
+   * with a failure which asks for no further attempt. This side cannot do that.
+   * {@code UserTaskCompletionApi} offers completion and completion by error and nothing else,
+   * and both would move the workflow of the other application on. So the notification ends
+   * here, the user task stays where it is, and the log line is the whole answer.
    * <p>
-   * Ending it here is also what keeps the delivery from circling. A notification which throws
-   * travels back into the engine's pull cycle, which drops the subscription for the task and
-   * offers it again at the next turn, for as long as both applications run. Returning normally
-   * leaves the task delivered, so the message is written once per activation instead of once
-   * per cycle.
+   * Ending it here also keeps the delivery from coming back again and again. A notification
+   * which throws goes back into the pull cycle of the engine. The engine then drops the
+   * subscription for the task and offers it again at the next turn, for as long as both
+   * applications run. Returning normally leaves the task delivered. So the message is
+   * written once per activation and not once per cycle.
    * <p>
-   * The stack trace is left out on purpose. The message of the refusal names the workflow, both
-   * situations it can be and what to do about each, and nothing in this application's code is
-   * at fault.
+   * The stack trace is left out on purpose. The message of the refusal names the workflow,
+   * the two situations it may be, and what to do in each. Nothing in the code of this
+   * application is at fault.
    *
    * @param taskId The user task which belongs somewhere else
    * @param refusal What the core said about it
@@ -269,16 +271,15 @@ public class PeaUserTaskHandler implements TaskHandler {
   }
 
   /**
-   * Whether a <code>&#64;WorkflowTask</code> method serves this user task, asked with BOTH keys
-   * a task is wired by: the task definition and the element id. A method names either of the
-   * two (<code>&#64;WorkflowTask(taskDefinition = ...)</code> respectively
-   * <code>&#64;WorkflowTask(id = ...)</code>), and the task definition of a user task is its
-   * external FORM REFERENCE here, so the two are different names more often than anywhere
-   * else.
+   * Whether a <code>&#64;WorkflowTask</code> method serves this user task. It asks with BOTH
+   * keys a task is wired by: the task definition and the element id. A method names one of
+   * the two, <code>&#64;WorkflowTask(taskDefinition = ...)</code> or
+   * <code>&#64;WorkflowTask(id = ...)</code>. Here the task definition of a user task is its
+   * external FORM REFERENCE, so the two names differ more often than anywhere else.
    * <p>
-   * Asked with the form reference alone, a user task whose handler names the element id
-   * answered "nobody serves this" and the notification was skipped without a word. That is
-   * worse than a notification which fails, because nothing happens at all.
+   * When only the form reference was asked, a user task whose method names the element id
+   * got the answer "nobody serves this", and the notification was skipped without a word.
+   * That is worse than a notification which fails, because nothing happens at all.
    *
    * @param bpmnProcessId The plain BPMN process the delivery was routed to
    * @param taskDefinition The plain external form reference
@@ -299,13 +300,13 @@ public class PeaUserTaskHandler implements TaskHandler {
   }
 
   /**
-   * Which BPMN element this notification belongs to - the second key a
-   * <code>&#64;WorkflowTask</code> method is wired by, so a notification which names none does
-   * not reach a method carrying <code>&#64;WorkflowTask(id = ...)</code>.
+   * The BPMN element this notification belongs to. It is the second key a
+   * <code>&#64;WorkflowTask</code> method is wired by. A notification which names no element
+   * does not reach a method with <code>&#64;WorkflowTask(id = ...)</code>.
    * <p>
-   * Read the same way the service-task side reads it, and for the same reasons - see
-   * {@link PeaTaskHandler}. The engine answers where it fills the meta entry, and the deployed
-   * model answers where it does not.
+   * It is read the same way as on the service-task side, for the same reasons, see
+   * {@link PeaTaskHandler}. If the engine fills the meta entry, the engine answers.
+   * Otherwise the deployed model answers.
    *
    * @param bpmnProcessId The plain BPMN process the delivery was routed to
    * @param taskInformation What the engine said about the user task
@@ -323,13 +324,13 @@ public class PeaUserTaskHandler implements TaskHandler {
   }
 
   /**
-   * The engine withdrew a user task it had delivered to this subscription - registered as the
-   * {@link TaskTerminationHandler} of the subscription, which is the overload carrying the
-   * engine's {@link TaskInformation} instead of the task id alone.
+   * The engine withdrew a user task it had delivered to this subscription. This method is
+   * registered as the {@link TaskTerminationHandler} of the subscription. That is the
+   * overload which gets the {@link TaskInformation} of the engine and not just the task id.
    * <p>
-   * The adapter itself has nothing to do here, because a CANCELED notification would need the
-   * workflow aggregate and a termination carries no payload. What it does is say so and hand
-   * the termination to the observers, reason included.
+   * The adapter itself has nothing to do here. A CANCELED notification would need the
+   * workflow aggregate, and a termination carries no payload. So the adapter only logs the
+   * termination and hands it to the observers, with the reason.
    *
    * @param taskInformation What the engine says about the terminated task
    * @throws PeaUserTaskObserverFailure If an observer failed on this termination
@@ -349,16 +350,16 @@ public class PeaUserTaskHandler implements TaskHandler {
       final var bpmnProcessId = bpmnProcessIdOrNull(taskInformation);
       observers.terminated(workflowModuleId, taskId, () -> new PeaUserTaskObservation(
           adapterId, workflowModuleId, bpmnProcessId, plainTaskDefinition(bpmnProcessId),
-          // a termination carries no payload, so the aggregate-id variable is not among
-          // the things the engine hands over
+          // a termination carries no payload, so the engine hands over no variable with
+          // the aggregate id
           null, taskInformation, Map.of()));
     } catch (final PeaUserTaskObserverFailure failure) {
-      // the observers are the only reason this callback exists, so a failure of one of them
-      // is the whole callback failing - and it goes out for the same reason as on a delivery
+      // the observers are the only reason this callback exists. So if one of them fails,
+      // the whole callback fails. It is thrown for the same reason as on a delivery
       throw failure;
     } catch (final Exception e) {
-      // like a failing notification: nobody is served by a termination callback which
-      // throws back into the engine's delivery thread
+      // the same as for a failing notification: a termination callback which throws back
+      // into the delivery thread of the engine helps nobody
       log.error(
           "Process-Engine-API adapter '{}': reporting the termination of user task '{}' (form "
               + "reference '{}') failed!",
@@ -371,18 +372,19 @@ public class PeaUserTaskHandler implements TaskHandler {
   }
 
   /**
-   * What an observer is handed. The identifiers are the PLAIN ones the application's BPMN and
-   * its configuration use: the subscription is keyed by the SCOPED task definition and the
-   * engine reports the scoped BPMN process id, and both are translated back before anybody
-   * outside the adapter sees them (decision 2 in the repository's DECISIONS.md).
+   * What an observer gets. The identifiers are the PLAIN ones, as the BPMN and the
+   * configuration of the application use them. The subscription uses the PREFIXED task
+   * definition, and the engine reports the prefixed BPMN process id. Both are translated
+   * back before anybody outside the adapter sees them (decision 2 in the repository's
+   * DECISIONS.md).
    * <p>
-   * <code>aggregateIdName</code> is what the caller resolved for this BPMN process, or
-   * <code>null</code> where the application declares no workflow aggregate for it. That case
-   * and a variable the subscription did not ask the engine for are the two which leave the
-   * observation without an aggregate id: an observer then sees a task it cannot place under a
-   * business case rather than no task at all. The application's own path is strict about the
-   * same value, because a delivery a <code>&#64;WorkflowTask</code> method claims without an
-   * aggregate id is a defect there.
+   * <code>aggregateIdName</code> is what the caller resolved for this BPMN process. It is
+   * <code>null</code> if the application declares no workflow aggregate for the process.
+   * Two cases leave the observation without an aggregate id: this one, and a variable the
+   * subscription did not ask the engine for. The observer then sees a task it cannot place
+   * under a business case, which is better than no task at all. The path of the application
+   * itself is strict about the same value. There, a delivery which a
+   * <code>&#64;WorkflowTask</code> method claims without an aggregate id is a defect.
    *
    * @param bpmnProcessId The plain BPMN process the delivery was routed to, or
    *          <code>null</code> where it cannot be told
@@ -405,15 +407,15 @@ public class PeaUserTaskHandler implements TaskHandler {
         adapterId, workflowModuleId, bpmnProcessId, plainTaskDefinition(bpmnProcessId), aggregateId == null
             ? null
             : String.valueOf(aggregateId), taskInformation,
-        // the record makes the one defensive copy there is - this map is only read
+        // the record makes the only defensive copy. This map is only read
         payloadAsDelivered(payload));
 
   }
 
   /**
-   * The delivered payload as the observation declares it. The engine hands over a map of
-   * unknown value type and the record one of <code>Object</code>: the same map, read through
-   * a wider door, and never written through either.
+   * The delivered payload, typed the way the observation declares it. The engine hands over a
+   * map with an unknown value type, the record wants values of type <code>Object</code>. It is
+   * the same map, only read through a wider type, and nobody writes to it through either.
    *
    * @param payload What the engine delivered
    * @return The same map
@@ -427,13 +429,13 @@ public class PeaUserTaskHandler implements TaskHandler {
   }
 
   /**
-   * The PLAIN task definition of this subscription - its key is the scoped one under
-   * {@code use-prefix}, where a task definition is scoped per BPMN process.
+   * The PLAIN task definition of this subscription. Under {@code use-prefix}, the key of the
+   * subscription is the prefixed one, and the prefix depends on the BPMN process.
    * <p>
-   * Without a BPMN process there is nothing to unscope by, and then there is nothing to
-   * unscope either: under {@code use-prefix} two processes sharing a form reference get one
-   * subscription each, because their scoped keys differ, so a subscription which cannot tell
-   * its process apart belongs to a mode which prefixes nothing.
+   * Without a BPMN process, the prefix cannot be removed. But then there is no prefix to
+   * remove either. Under {@code use-prefix}, two processes which share a form reference get
+   * one subscription each, because their prefixed keys differ. So a subscription which
+   * cannot tell its process belongs to a mode which adds no prefix.
    *
    * @param bpmnProcessId The plain BPMN process id, or <code>null</code>
    * @return The plain task definition
@@ -450,9 +452,9 @@ public class PeaUserTaskHandler implements TaskHandler {
   }
 
   /**
-   * The delivery cannot be routed: the engine named no BPMN process and this subscription
-   * serves several. The observers have been told by the time this is thrown - a task a cockpit
-   * shows is not the same question as a task this application can dispatch.
+   * The delivery cannot be routed. The engine named no BPMN process, and this subscription
+   * serves several. The observers have been told before this is thrown. Whether a cockpit
+   * shows a task is a different question from whether this application can dispatch it.
    *
    * @param taskInformation What the engine says about the task
    * @return The failure the notification ends with
@@ -480,17 +482,17 @@ public class PeaUserTaskHandler implements TaskHandler {
   }
 
   /**
-   * Which BPMN process a delivery belongs to, as far as it can be told: the engine's meta
-   * entry names it, and where the engine fills none this subscription's single process is the
-   * answer. Several processes behind one form reference and no meta entry leave it open,
-   * which ends a delivery in {@link #ambiguousRouting} and is a fact of life for a termination
-   * - see {@link #terminated(TaskInformation)}.
+   * The BPMN process a delivery belongs to, as far as it can be told. The meta entry of the
+   * engine names it. If the engine fills none, and this subscription has a single process,
+   * that process is the answer. With several processes behind one form reference and no
+   * meta entry, the question stays open. A delivery then ends in {@link #ambiguousRouting}.
+   * A termination just has to live with it, see {@link #terminated(TaskInformation)}.
    * <p>
-   * The meta entry is what the ENGINE knows the process as, so
-   * {@link PeaTaskMeta#plainBpmnProcessId} translates it back: the core's registries are
-   * keyed by the plain id and so is everything this adapter hands out (decision 2 in the
+   * The meta entry holds the id the ENGINE knows, so
+   * {@link PeaTaskMeta#plainBpmnProcessId} translates it back. The registries of the core
+   * use the plain id, and so does everything this adapter hands out (decision 2 in the
    * repository's DECISIONS.md). The single process of a subscription is plain already,
-   * being the one this adapter subscribed for.
+   * because it is the one this adapter subscribed for.
    *
    * @param taskInformation What the engine says about the task
    * @return The plain BPMN process id, or <code>null</code>
@@ -581,8 +583,8 @@ public class PeaUserTaskHandler implements TaskHandler {
     @Override
     public String getProcessVersion() {
 
-      // the version tag of the deployed process definition, or null - the
-      // Process-Engine-API knows no version number (GAPS.md)
+      // the version tag of the deployed process definition, or null. The
+      // Process-Engine-API has no version number (GAPS.md)
       return PeaTaskMeta.text(taskInformation, PeaTaskMeta.PROCESS_VERSION_TAG);
 
     }
@@ -597,9 +599,9 @@ public class PeaUserTaskHandler implements TaskHandler {
     @Override
     public String getWorkflowId() {
 
-      // the engine's own id of the running instance. An engine which names none leaves
-      // the delivery record without a workflow id, and that is not a defect either: the
-      // API defines no vocabulary for what a delivered task carries
+      // the engine's own id of the running instance. If an engine names none, the delivery
+      // record has no workflow id. That is not a defect, because the API does not say what
+      // a delivered task carries
       return PeaTaskMeta.text(taskInformation, PeaTaskMeta.WORKFLOW_ID);
 
     }
@@ -628,10 +630,10 @@ public class PeaUserTaskHandler implements TaskHandler {
     @Override
     public TaskKind getTaskKind() {
 
-      // this handler serves user-task subscriptions and nothing else, so the id it
-      // reports is a user task's. The engine takes it back through its USER-task
-      // completion API. The service-task API of the same engine finds nothing under that
-      // id, and explaining exactly that is what the record is read for
+      // this handler serves user-task subscriptions and nothing else, so the id it reports
+      // is the id of a user task. The engine takes it back through its USER-task completion
+      // API. The service-task API of the same engine finds nothing under that id. The
+      // record is read to explain exactly that
       return TaskKind.USER_TASK;
 
     }
@@ -646,8 +648,8 @@ public class PeaUserTaskHandler implements TaskHandler {
     @Override
     public String getDeliveryId() {
 
-      // the user task's ID as the engine reports it - the same on a redelivery of the
-      // notification, different for the next user task
+      // the ID of the user task as the engine reports it. It stays the same when the
+      // notification is delivered again, and the next user task has a different one
       return taskId;
 
     }
@@ -655,8 +657,9 @@ public class PeaUserTaskHandler implements TaskHandler {
     @Override
     public String getActivationId() {
 
-      // one user task per activation of its element, redelivered under that id: both
-      // contracts meet in one value here, as they do on the asynchronous-task side
+      // there is one user task per activation of its element, and it is delivered again
+      // under the same id. So one value meets both contracts here, as on the side of the
+      // service tasks
       return taskId;
 
     }

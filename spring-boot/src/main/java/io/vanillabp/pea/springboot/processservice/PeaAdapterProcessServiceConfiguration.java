@@ -14,13 +14,13 @@ import io.vanillabp.pea.springboot.VanillaBpPeaProperties;
 import lombok.extern.slf4j.Slf4j;
 
 /**
- * Provides the Process-Engine-API adapter's {@link MigratableProcessService} bean picked up
- * by the {@link io.vanillabp.spi.process.ProcessService} beans built by the VanillaBP Spring
- * Boot integration.
+ * Provides the {@link MigratableProcessService} beans of the Process-Engine-API adapter. The
+ * {@link io.vanillabp.spi.process.ProcessService} beans of the VanillaBP Spring Boot
+ * integration pick them up.
  * <p>
- * The Process-Engine-API implementation is injected here. By default a mock-backed
- * {@link InMemoryProcessEngine} bean is contributed (guarded by
- * {@link ConditionalOnMissingBean}), so tests and early applications run against the mock.
+ * The Process-Engine-API implementation comes in here. By default this class adds an
+ * {@link InMemoryProcessEngine} bean, guarded by {@link ConditionalOnMissingBean}. So tests
+ * and early applications run against the mock.
  * A real Process-Engine-API implementation can replace it later simply by defining an own
  * bean of the respective API interfaces.
  */
@@ -38,9 +38,8 @@ public class PeaAdapterProcessServiceConfiguration {
   }
 
   /**
-   * The default Process-Engine-API implementation: an in-memory mock. Applications that
-   * bring a real Process-Engine-API implementation override this by defining their own
-   * bean.
+   * The default Process-Engine-API implementation, an in-memory mock. An application with a
+   * real Process-Engine-API implementation replaces it with a bean of its own.
    *
    * @return The mock engine used by default
    */
@@ -48,10 +47,9 @@ public class PeaAdapterProcessServiceConfiguration {
   @ConditionalOnMissingBean
   public InMemoryProcessEngine peaInMemoryProcessEngine() {
 
-    // no property picks the engine, so there is no configuration a startup check could
-    // read. This warning is the only place where the mock says that it is the one
-    // running, and an application which misses it loses its workflows at the next
-    // shutdown
+    // No property picks the engine, so a startup check has nothing to read. This warning
+    // is the only place where the mock says that it runs. An application which misses it
+    // loses its workflows at the next shutdown.
     log.warn(
         """
             The IN-MEMORY MOCK is the active Process-Engine-API implementation: all workflow state is \

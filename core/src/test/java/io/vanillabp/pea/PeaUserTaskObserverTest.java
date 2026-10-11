@@ -25,11 +25,12 @@ import io.vanillabp.pea.observation.PeaUserTaskObservers;
 import io.vanillabp.pea.wiring.PeaUserTaskHandler;
 
 /**
- * The observer seam of the user-task subscription: who is told about a delivery, in which
- * order, what the observation carries where the delivery leaves something open, and what an
- * observer which throws costs the delivery and the other observers.
+ * The observers of the user task subscription. The tests show who is told about a delivery
+ * and in which order. They show what the observation carries when the delivery leaves
+ * something open. And they show what an observer which throws costs the delivery and the
+ * other observers.
  * <p>
- * The end-to-end proof that a bean of the application arrives here runs on both platforms
+ * The end-to-end test that a bean of the application arrives here runs on both platforms
  * ({@code UserTaskObserverIntegrationTest} on Spring Boot,
  * {@code PeaUserTaskObserverTest} on Quarkus).
  */
@@ -37,7 +38,7 @@ import io.vanillabp.pea.wiring.PeaUserTaskHandler;
 public class PeaUserTaskObserverTest {
 
   /**
-   * Writes down what it was told, under the name it was registered with.
+   * Writes down what it is told, under the name it was registered with.
    */
   static class RecordingObserver implements PeaUserTaskObserver {
 
@@ -83,8 +84,8 @@ public class PeaUserTaskObserverTest {
   }
 
   /**
-   * The one which is broken - both directions, the way an extension is broken which nobody
-   * of this application wrote.
+   * The broken one. It throws on delivery and on termination, like a broken extension which
+   * nobody of this application wrote.
    */
   static class ThrowingObserver implements PeaUserTaskObserver {
 
@@ -122,8 +123,8 @@ public class PeaUserTaskObserverTest {
   }
 
   /**
-   * The core's runtime entry point of {@link PeaUserTaskHandlerTest}, plus the one thing
-   * these tests vary: whether the BPMN process has a workflow aggregate at all.
+   * The core's runtime entry point of {@link PeaUserTaskHandlerTest}. It adds the one thing
+   * these tests change: whether the BPMN process has a workflow aggregate at all.
    */
   static class ObserverTestInvoker extends PeaUserTaskHandlerTest.RecordingInvoker {
 
@@ -187,7 +188,7 @@ public class PeaUserTaskObserverTest {
     assertEquals("utask-1", observation.taskId());
     assertEquals(TaskInformation.CREATE, observation.reason());
     assertEquals(Map.of("id", "4711", "amount", 12), observation.payload());
-    // the same observation, not a second one built per observer
+    // The same observation for all, not a new one per observer.
     assertSame(observation, second.delivered.getFirst(), "expected one observation for all");
 
   }
@@ -295,8 +296,8 @@ public class PeaUserTaskObserverTest {
 
     final var handler = handler(List.of("OnlyProcess"), first, new ThrowingObserver(), second);
 
-    // a broken observer between the two makes the termination fail as well, and both of
-    // them heard about the task before it did
+    // A broken observer between the two makes the termination fail as well. Both others
+    // were told about the task before the failure.
     assertThrows(
         PeaUserTaskObserverFailure.class,
         () -> handler
@@ -346,8 +347,8 @@ public class PeaUserTaskObserverTest {
         "test-module", "utask-nobody",
         () -> fail("an application without an observer pays nothing for the seam"));
 
-    // and a handler built without any observer at all behaves like one built with an empty
-    // list - the platform modules hand over what they found, which may be nothing
+    // A handler built without any observer behaves like one built with an empty list. The
+    // platform modules hand over what they found, and that may be nothing.
     PeaUserTaskHandler
         .builder()
         .adapterId("pea")
@@ -368,8 +369,8 @@ public class PeaUserTaskObserverTest {
 
     final var observer = new RecordingObserver("only", callLog);
 
-    // two BPMN processes behind one form reference and no meta entry naming the process:
-    // the application's notification cannot be routed, a task list still shows the task
+    // Two BPMN processes share one form reference, and no meta entry names the process. So
+    // the application's notification cannot be routed, but a task list still shows the task.
     handler(List.of("ProcessA", "ProcessB"), observer)
         .accept(new TaskInformation("utask-10", Map.of()), Map.of("id", "4720"));
 
@@ -400,8 +401,9 @@ public class PeaUserTaskObserverTest {
         "the message has to name the workflow module");
     assertEquals("boom-description", failure.getCause().getMessage());
 
-    // the same failure inside a delivery: the observation is built lazily, so the handler
-    // meets it where the observers are called and reports it like any other observer failure
+    // The same failure inside a delivery. The observation is built only when needed. So
+    // the handler meets the failure where it calls the observers, and reports it like any
+    // other observer failure.
     final var handler = PeaUserTaskHandler
         .builder()
         .adapterId("pea")
@@ -414,7 +416,7 @@ public class PeaUserTaskObserverTest {
           @Override
           public void userTaskDelivered(
               final PeaUserTaskObservation observation) {
-            // the observation was built, so this one is the observer's own failure
+            // The observation was built, so this is the observer's own failure.
             throw new IllegalStateException("boom-observer");
           }
 

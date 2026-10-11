@@ -6,8 +6,8 @@ import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
 
 /**
- * The annotation of an extension which reads what this adapter's subscription delivers, the way
- * a details provider of a cockpit does.
+ * The annotation of an extension which reads what the subscription of this adapter delivers.
+ * A details provider of a cockpit does the same.
  */
 @Retention(RetentionPolicy.RUNTIME)
 @Target(ElementType.METHOD)

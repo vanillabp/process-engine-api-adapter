@@ -26,21 +26,20 @@ import io.vanillabp.integration.test.utils.OneFreePortPerJvm;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
 /**
- * The Process-Engine-API adapter's documented features, run end to end on a BOOTED
- * Quarkus application against the in-memory mock engine.
+ * The documented features of the adapter, run from end to end in a Quarkus application which
+ * really BOOTED, against the mock engine in memory.
  * <p>
- * This duplicates what the Spring Boot suite proves, and the duplication is the
- * point: the adapter's platform-neutral core being correct says nothing about a
- * platform's glue ever calling it. Coverage is measured per platform for exactly
- * that reason, so the core lines Quarkus never reaches name the features Quarkus
- * never runs - deploying at boot, starting a workflow through the two-phase outbox,
- * delivering and completing a task, correlating a message and answering the viewer
- * API.
+ * The Spring Boot tests prove the same, and that is the point. A correct core, which is the
+ * same on every platform, says nothing about whether the code of one platform ever calls
+ * it. That is why coverage is measured per platform. So the lines of the core which Quarkus
+ * never reaches name the features Quarkus never runs: deploying at boot, starting a workflow
+ * through the outbox in two phases, delivering and completing a task, correlating a message,
+ * and answering the viewer API.
  * <p>
- * Everything is observed through the application's own <code>introspect/...</code>
- * endpoints, because a prod-mode test runs the application in a forked JVM. The
- * JaCoCo agent is forwarded into it, otherwise the run would prove the features and
- * count as nothing.
+ * The test sees everything through the <code>introspect/...</code> endpoints of the
+ * application, because a prod-mode test runs the application in a separate JVM. The JaCoCo
+ * agent is passed on into it. Without it the run would prove the features and count for
+ * nothing.
  */
 @ExtendWith(SuppressOutputExtension.class)
 @SuppressOutputExtension.SuppressBackgroundOutput
@@ -48,22 +47,22 @@ public class PeaWorkflowLifecycleTest {
 
   @RegisterExtension
   static final QuarkusProdModeTest prodModeTest = new QuarkusProdModeTest()
-      // the lines below are the deployment, not the directory: classes travel by package,
-      // every resource travels by a line of its own, so a BPMN file added to
-      // src/main/resources reaches this application only once it is listed here
+      // The lines below are the deployment, not the directory. Classes come in by package,
+      // and every resource needs a line of its own. So a BPMN file added to
+      // src/main/resources reaches this application only once it is listed here.
       .withApplicationRoot(jar -> jar
           .addPackage("io.vanillabp.pea.quarkus.test")
           .addAsResource("application.yaml")
           .addAsResource("pea-e2e-module/processes/pea-e2e.bpmn", "pea-e2e-module/processes/pea-e2e.bpmn")
           .addAsResource("workflow-module-descriptor/workflow-module", "META-INF/workflow-module"))
-      // JVM args needed for tracking coverage - check the quarkus parent POM for
-      // the systemPropertyVariables feeding 'jacoco.agent'
+      // The JVM arguments for measuring coverage. The quarkus parent POM sets the
+      // systemPropertyVariables which fill 'jacoco.agent'.
       .setJVMArgs(testCoverageJavaAgent(quarkusProdModeTestDefaults()))
       .setRun(true)
       .setRuntimeProperties(Map.of(
           "quarkus.http.port", Integer.toString(OneFreePortPerJvm.getPort()),
-          // the application runs in a forked JVM, so its own log is the only place a
-          // failure inside it can be read afterwards
+          // The application runs in a separate JVM. So its own log is the only place where a
+          // failure inside it can be read afterwards.
           "quarkus.log.file.enable", "true",
           "quarkus.log.file.path", Path
               .of("target", "pea-e2e-application.log")
@@ -160,8 +159,8 @@ public class PeaWorkflowLifecycleTest {
   }
 
   /**
-   * Two seconds is what the outbox needs to dispatch (poll interval 0.5 s) - long
-   * enough to make "nothing was dispatched" a statement rather than a race.
+   * The outbox needs about two seconds to dispatch, with a poll interval of 0.5 s. That is
+   * long enough to make "nothing was dispatched" a fact and not a race.
    */
   private static void awaitNothingElseHappens() throws InterruptedException {
 
@@ -179,15 +178,15 @@ public class PeaWorkflowLifecycleTest {
   }
 
   /**
-   * What the adapter promises about a task operation names two moments of the caller's
-   * transaction: while it is open nothing may advance the process, and by the time its
-   * commit returned the check which can still abort it has run. The check is registered
-   * with the platform's pre-commit hook and therefore runs during the commit, so neither
-   * moment on its own carries the promise.
+   * What the adapter promises about a task operation names two moments of the transaction of
+   * the caller. While it is open, nothing may move the process on. When its commit returned,
+   * the check which can still stop it has run. The check is registered with the pre-commit
+   * hook of the platform, so it runs during the commit. So neither moment alone holds the
+   * promise.
    * <p>
-   * A probe of the engine before that check is deliberately not asserted: the platform
-   * routes a task operation by the delivery record of that task where it has one, so the
-   * awareness probe this adapter offers may never be called at all.
+   * The test does not assert a probe of the engine before that check, on purpose. If the
+   * platform has a delivery record for the task, it routes the task operation by that
+   * record. So the awareness probe of this adapter may never be called at all.
    */
   private static void assertThePreflightRanBeforeTheCommitReturned(
       final Map<String, Object> reported) {
@@ -232,8 +231,8 @@ public class PeaWorkflowLifecycleTest {
         strings("introspect/subscriptions"),
         "every task definition of the deployed BPMN needs a subscription, user tasks included");
 
-    // The subscription names what a delivery has to carry - here the
-    // aggregate-ID variable alone, since no handler declares a @TaskParam
+    // The subscription names what a delivery has to carry. Here that is only the variable
+    // with the aggregate ID, because no handler declares a @TaskParam.
     assertEquals(
         List.of("id"),
         strings("introspect/subscriptions/e2eHappy/payload"),
@@ -256,8 +255,8 @@ public class PeaWorkflowLifecycleTest {
             .anyMatch(variables -> "q-start-1".equals(variables.get("id"))),
         "the workflow to be started after the commit");
 
-    // the technical aggregate-ID variable plus the attributes shared with the
-    // engine travel, nothing else (see decision 1 in the repository's DECISIONS.md)
+    // The technical variable with the aggregate ID and the attributes shared with the engine
+    // go to the engine, nothing else (see decision 1 in the repository's DECISIONS.md).
     final var variables = startedInstances()
         .stream()
         .filter(candidate -> "q-start-1".equals(candidate.get("id")))
@@ -305,8 +304,8 @@ public class PeaWorkflowLifecycleTest {
     assertTrue(message.contains(PROCESS), "the message has to name the workflow: "
         + message);
 
-    // the transaction rolled back, so neither the aggregate nor an outbox entry
-    // survived - phase two can never follow
+    // The transaction rolled back. So neither the aggregate nor an outbox entry is left, and
+    // phase two can never follow.
     assertEquals(Map.of("exists", false), object("introspect/aggregates/q-start-3"));
     awaitNothingElseHappens();
     assertTrue(
@@ -451,14 +450,14 @@ public class PeaWorkflowLifecycleTest {
     postWithoutResponse("introspect/aggregates/q-task-9");
     postWithoutResponse("introspect/tasks/task-9/deliver/e2eAsync/q-task-9");
 
-    // somebody else finishes the task, which is what a concurrent completion looks like
-    // from here. The delivery record still says this adapter holds it open, so the call is
-    // routed here instead of probed and the pre-commit check is what meets the refusal
+    // Somebody else finishes the task. From here, that looks like a completion at the same
+    // time. The delivery record still says this adapter holds the task open. So the call is
+    // routed here without a probe, and the pre-commit check is what gets the refusal.
     postWithoutResponse("introspect/engine/tasks/task-9/finish/e2eAsync");
 
     final var failed = post("introspect/tasks/task-9/complete/q-task-9");
-    // the check runs during the commit, and JTA wraps what a failed beforeCompletion
-    // threw - so the type an application catches sits at the end of the cause chain
+    // The check runs during the commit, and JTA wraps what a failed beforeCompletion threw.
+    // So the type an application catches sits at the end of the chain of causes.
     assertEquals(
         "TaskNotFoundException",
         failed.get("rootException"),
@@ -638,7 +637,7 @@ public class PeaWorkflowLifecycleTest {
 
     final var definitions = strings("introspect/process-definitions/q-viewer-1");
     assertEquals(1, definitions.size(), "call activities are not reported (GAPS.md)");
-    // the adapter composes a definition id of its own, the API has none
+    // The API has no definition id, so the adapter builds one of its own.
     final var reported = definitions
         .getFirst()
         .split("\\|", -1);
@@ -649,7 +648,7 @@ public class PeaWorkflowLifecycleTest {
         + definitionId);
     assertEquals(PROCESS, reported[1]);
     assertEquals(PROCESS, reported[2]);
-    // the version is the deployment key - the only version information the API offers
+    // The version is the deployment key. It is the only version information the API offers.
     assertNotNull(reported[3]);
     assertFalse(reported[3].isBlank(), "the deployment key is the version");
 
@@ -683,11 +682,12 @@ public class PeaWorkflowLifecycleTest {
     postWithoutResponse("introspect/tasks/task-8/fail-next-completion");
     postWithoutResponse("introspect/tasks/task-8/deliver/e2eHappy/q-task-8");
 
-    // the completion failed AFTER the local commit - the aggregate keeps its state
+    // The completion failed AFTER the local commit, so the aggregate keeps its state.
     assertEquals("happy", object("introspect/aggregates/q-task-8").get("results"));
     assertTrue(strings("introspect/completed-tasks").isEmpty());
 
-    // the engine redelivers eventually and the second delivery converges
+    // Sooner or later the engine delivers again, and the second delivery ends in the same
+    // state.
     postWithoutResponse("introspect/tasks/task-8/deliver/e2eHappy/q-task-8");
     assertEquals("happy", object("introspect/aggregates/q-task-8").get("results"));
     assertEquals(List.of("task-8"), strings("introspect/completed-tasks"));

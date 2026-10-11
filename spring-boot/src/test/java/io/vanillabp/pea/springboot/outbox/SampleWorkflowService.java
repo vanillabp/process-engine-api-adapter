@@ -7,8 +7,8 @@ import io.vanillabp.spi.service.BpmnProcess;
 import io.vanillabp.spi.service.WorkflowService;
 
 /**
- * Workflow service bound to the deployed BPMN process {@code PeaTestProcess}. It exposes the
- * {@link ProcessService} used by the test to start a workflow.
+ * The workflow service of the deployed BPMN process {@code PeaTestProcess}. The test starts
+ * a workflow through its {@link ProcessService}.
  */
 @Service
 @WorkflowService(

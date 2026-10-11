@@ -50,17 +50,18 @@ import io.vanillabp.pea.wiring.PeaUserTaskHandler;
 import lombok.extern.slf4j.Slf4j;
 
 /**
- * The Process-Engine-API adapter's deployment service - one instance per configured
- * adapter id (not per type).
+ * The deployment service of the Process-Engine-API adapter. There is one instance per
+ * configured adapter id, not per type.
  * <p>
- * The Process-Engine-API has no BPMN model type (its {@code DeploymentApi} deploys opaque
- * {@code NamedResource}s), so {@link #readBpmn} parses the BPMN XML itself - just far enough
- * to extract the executable process ids - using the JDK's StAX streaming parser
- * ({@code javax.xml.stream}). See {@code GAPS.md}.
+ * The Process-Engine-API has no BPMN model type. Its {@code DeploymentApi} deploys a
+ * {@code NamedResource}, which is only a name and bytes. So {@link #readBpmn} parses the
+ * BPMN XML itself, with the StAX streaming parser of the JDK ({@code javax.xml.stream}). It
+ * reads only as far as it has to, for example to find the executable process ids. See
+ * {@code GAPS.md}.
  * <p>
- * The {@link DeploymentApi} is injected via the constructor so the platform modules provide
- * the implementation (by default the in-memory mock, later a real Process-Engine-API
- * implementation).
+ * The {@link DeploymentApi} comes in through the constructor, so the platform modules
+ * choose the implementation. By default that is the in-memory mock. A real
+ * Process-Engine-API implementation replaces it.
  */
 @Slf4j
 // see decision 3 in the repository's DECISIONS.md
@@ -72,20 +73,20 @@ public class PeaDeploymentService implements AdapterDeploymentService<PeaBpmnMod
   private final DeploymentApi deploymentApi;
 
   /**
-   * The core's task-processing entry point: wiring validation during
-   * {@link #wireBpmn} and task dispatch at runtime.
+   * Where the core processes tasks. It checks the wiring during {@link #wireBpmn} and
+   * hands out the tasks at runtime.
    */
   private final WorkflowTaskWiring workflowTaskWiring;
 
   /**
-   * The runtime half of the split SPI. This service does not only wire: it opens the task
-   * subscriptions at {@code startWorkflowProcessing}, and their handlers hand every
-   * delivery to the core - so it holds both halves and passes this one on.
+   * The runtime half of the split SPI. This service does more than wire. It opens the task
+   * subscriptions in {@code startWorkflowProcessing}, and their handlers pass every delivery
+   * to the core. So it holds both halves and passes this one on.
    */
   private final WorkflowTaskInvoker workflowTaskInvoker;
 
   /**
-   * The core's entry point for workflows which ended - used ONLY to warn
+   * Where the core hears about workflows which ended. This service uses it ONLY to warn
    * about methods this adapter cannot serve. May be <code>null</code> (tests).
    */
   private final WorkflowEndedInvoker workflowEndedInvoker;
@@ -95,16 +96,15 @@ public class PeaDeploymentService implements AdapterDeploymentService<PeaBpmnMod
   private final ServiceTaskCompletionApi serviceTaskCompletionApi;
 
   /**
-   * What this application version deployed - the ONLY source of process
-   * definitions and BPMN XML for the viewer API (the Process-Engine-API has no
-   * repository API, see {@code GAPS.md}). Shared with the adapter id's
-   * {@code PeaProcessService}.
+   * What this application version deployed. It is the ONLY source of process definitions
+   * and BPMN XML for the viewer API, because the Process-Engine-API has no repository API
+   * (see {@code GAPS.md}). The {@code PeaProcessService} of the same adapter id shares it.
    */
   private final PeaDeployedProcesses deployedProcesses;
 
   /**
-   * Convenience constructor without a shared deployment record (tests) - the
-   * service then records into an instance of its own.
+   * A constructor without a shared record of deployed processes, for tests. The service
+   * then records into an instance of its own.
    *
    * @param adapterId The configured adapter id this service deploys for
    * @param deploymentApi Where the module's resources are handed to the engine
@@ -124,9 +124,9 @@ public class PeaDeploymentService implements AdapterDeploymentService<PeaBpmnMod
   }
 
   /**
-   * The constructor a platform integration uses: the record of deployed processes is
-   * shared with the process service of the same adapter id, because that record is the
-   * only source of process definitions this engine has.
+   * The constructor a platform integration uses. The record of deployed processes is
+   * shared with the process service of the same adapter id. That record is the only source
+   * of process definitions this engine has.
    *
    * @param adapterId The configured adapter id this service deploys for
    * @param deploymentApi Where the module's resources are handed to the engine
@@ -160,23 +160,23 @@ public class PeaDeploymentService implements AdapterDeploymentService<PeaBpmnMod
   }
 
   /**
-   * The core's name-clash-avoidance model. The Process-Engine-API has no
-   * isolation mechanism of its own, so only {@code none} and {@code use-prefix} can
-   * be served - {@code by-adapter} (the default!) is rejected at startup with a
-   * guiding message. May be <code>null</code> (tests).
+   * The name-clash-avoidance model of the core. The Process-Engine-API has no isolation
+   * mechanism of its own, so only {@code none} and {@code use-prefix} work here.
+   * {@code by-adapter} is the default, and it is refused at startup with a message which
+   * says what to do. May be <code>null</code> (tests).
    */
   private final NameClashAvoidanceSupport scoping;
 
   /**
-   * Everything the platform hands over. An adapter which is registered incompletely does
-   * not come into existence (see {@link AdapterCollaborators}).
+   * Everything the platform hands over. An adapter with an incomplete registration is never
+   * created (see {@link AdapterCollaborators}).
    */
   private final AdapterCollaborators collaborators;
 
   /**
-   * Who watches the user tasks this adapter is delivered - hook beans of the application,
-   * collected by the platform modules. Empty unless something registered one, and then this
-   * service behaves exactly as it did before the seam existed.
+   * Who watches the user tasks delivered to this adapter. These are beans of the
+   * application, and the platform modules collect them. The list is empty unless the
+   * application registered one, and then nobody is told about a user task.
    */
   private PeaUserTaskObservers userTaskObservers;
 
@@ -195,20 +195,21 @@ public class PeaDeploymentService implements AdapterDeploymentService<PeaBpmnMod
   }
 
   /**
-   * One BPMN task a subscription serves - what its payload set is derived from.
+   * One BPMN task a subscription serves. The variables the subscription asks for are
+   * derived from these.
    *
    * @param bpmnProcessId The PLAIN BPMN process id
    * @param elementId The id of the BPMN element, as the modeller wrote it. It is the SECOND
    *          key a <code>&#64;WorkflowTask</code> method can be wired by
-   *          (<code>&#64;WorkflowTask(id = ...)</code>), so everything asked with the task
-   *          definition is asked with this one too. <code>null</code> where the task comes
-   *          from no model, which is what {@code declaredWithoutAModel} says
+   *          (<code>&#64;WorkflowTask(id = ...)</code>). So everything asked with the task
+   *          definition is asked with this one too. <code>null</code> if the task comes
+   *          from no model, which {@code declaredWithoutAModel} says
    * @param taskDefinition The PLAIN task definition (the external form reference for a
    *          user task)
-   * @param declaredWithoutAModel Whether the process is one the module DECLARES without
-   *          deploying anything under it - the old id of a renamed process. Such a task
-   *          comes from what the application's methods serve rather than from a model
-   *          (see decision 11 in the repository's DECISIONS.md)
+   * @param declaredWithoutAModel Whether the module DECLARES the process without deploying
+   *          anything under it, as with the old id of a renamed process. Such a task comes
+   *          from what the methods of the application serve, not from a model (see decision
+   *          11 in the repository's DECISIONS.md)
    */
   record ServedTask(String bpmnProcessId,
                     String elementId,
@@ -228,8 +229,8 @@ public class PeaDeploymentService implements AdapterDeploymentService<PeaBpmnMod
         final String bpmnProcessId,
         final String taskDefinition) {
 
-      // no model, so no element: the name is composed from what the application's methods
-      // serve, and a method wired by an element id names no task definition to compose from
+      // no model, so no element. The name is built from what the methods of the application
+      // serve. A method wired by an element id names no task definition to build from
       return new ServedTask(bpmnProcessId, null, taskDefinition, true);
 
     }
@@ -237,14 +238,14 @@ public class PeaDeploymentService implements AdapterDeploymentService<PeaBpmnMod
   }
 
   /**
-   * The processes a subscription may deliver from, told apart by whether this application
+   * The processes a subscription may deliver from, split by whether this application
    * deployed a model for them.
    *
-   * @param deployed The processes of the deployed models, which is what a delivery
-   *          without the {@code bpmnProcessId} meta entry can be routed to
-   * @param declaredWithoutAModel The ids the module only declares, which a delivery
-   *          reaches only where the name carries the process id or the engine names the
-   *          process itself
+   * @param deployed The processes of the deployed models. A delivery without the
+   *          {@code bpmnProcessId} meta entry can be routed to these
+   * @param declaredWithoutAModel The ids the module only declares. A delivery reaches them
+   *          only if the name carries the process id or the engine names the process
+   *          itself
    */
   private record RoutableProcesses(List<String> deployed,
                                    List<String> declaredWithoutAModel) {
@@ -271,8 +272,8 @@ public class PeaDeploymentService implements AdapterDeploymentService<PeaBpmnMod
     }
 
     /**
-     * What a delivery which names no process may belong to: the deployed processes, or
-     * the declared id where this subscription was opened for that id alone.
+     * What a delivery which names no process may belong to. These are the deployed
+     * processes, or the declared id if this subscription was opened for that id alone.
      *
      * @return The plain BPMN process ids, never empty
      */
@@ -285,11 +286,11 @@ public class PeaDeploymentService implements AdapterDeploymentService<PeaBpmnMod
     }
 
     /**
-     * The declared ids a routing failure has to name as a third possibility: they share
-     * this subscription with deployed processes, so a delivery may belong to a workflow
-     * still running under the old id of a renamed process.
+     * The declared ids a routing failure has to name as a third possibility. They share
+     * this subscription with deployed processes. So a delivery may belong to a workflow
+     * which still runs under the old id of a renamed process.
      *
-     * @return The plain BPMN process ids, empty where there is nothing to add
+     * @return The plain BPMN process ids, empty if there is nothing to add
      */
     List<String> declaredSharingTheName() {
 
@@ -302,8 +303,8 @@ public class PeaDeploymentService implements AdapterDeploymentService<PeaBpmnMod
   }
 
   /**
-   * What one subscription asks the engine for: the union of the aggregate-ID
-   * variables and the declared <code>&#64;TaskParam</code> names of everything it serves.
+   * What one subscription asks the engine for. It is the aggregate-ID variables plus the
+   * declared <code>&#64;TaskParam</code> names of everything it serves.
    *
    * @param workflowModuleId The workflow module
    * @param served The tasks this subscription serves
@@ -315,15 +316,15 @@ public class PeaDeploymentService implements AdapterDeploymentService<PeaBpmnMod
 
     final var variables = new TreeSet<String>();
     for (final var task : served) {
-      // a subscription serves the tasks of claimed processes only, and the old id of a renamed
-      // process is declared by a workflow service as well, so the core knows the name
+      // a subscription serves only the tasks of claimed processes. A workflow service also
+      // declares the old id of a renamed process. So the core knows the name in both cases
       variables.add(workflowTaskWiring.resolveWorkflowAggregateIdName(workflowModuleId, task.bpmnProcessId()));
-      // what the handlers of this task read with @TaskParam: the core scanned those
-      // names off the methods while wiring, and this adapter has no model to guess from.
-      // Asked with BOTH keys a method can be wired by: a method naming the element id
-      // serves this task too, and asking with the task definition alone left its variables
-      // unfetched - which fails the delivery here rather than passing null, because a
-      // @TaskParam the subscription never asked for is refused
+      // what the handlers of this task read with @TaskParam. The core read those names off
+      // the methods while wiring, and this adapter has no model to guess from. Ask with
+      // BOTH keys a method can be wired by. A method which names the element id serves this
+      // task too. If only the task definition were asked, its variables would not be
+      // fetched. The delivery would then fail and not pass null, because a @TaskParam the
+      // subscription never asked for is refused
       variables
           .addAll(
               workflowTaskWiring
@@ -334,9 +335,9 @@ public class PeaDeploymentService implements AdapterDeploymentService<PeaBpmnMod
                 workflowTaskWiring
                     .taskParameterNames(workflowModuleId, task.bpmnProcessId(), task.elementId()));
       }
-      // and what the extensions read. The engine hands this task to this subscription
-      // alone, so an extension reads what this delivery carries and has no subscription
-      // to ask for its own variables (see decision 20 in the repository's DECISIONS.md)
+      // and what the extensions read. The engine hands this task to this subscription only.
+      // So an extension reads what this delivery carries, and it has no subscription of its
+      // own to ask for variables (see decision 20 in the repository's DECISIONS.md)
       variables
           .addAll(
               workflowTaskWiring
@@ -347,12 +348,12 @@ public class PeaDeploymentService implements AdapterDeploymentService<PeaBpmnMod
   }
 
   /**
-   * The keys an extension finds its methods for a task by, in the order it tries them: the
-   * element id first, then the task definition. That is the order the Business Cockpit uses,
-   * so the variables fetched here are those of the method which runs there.
+   * The keys an extension uses to find its methods for a task, in the order it tries them.
+   * The element id comes first, then the task definition. The Business Cockpit uses this
+   * order, so the variables fetched here are those of the method which runs there.
    *
    * @param task A task one subscription serves
-   * @return The keys, the element id left out where no model names it
+   * @return The keys, without the element id if no model names it
    */
   static List<String> lookupKeysOf(
       final ServedTask task) {
@@ -364,24 +365,25 @@ public class PeaDeploymentService implements AdapterDeploymentService<PeaBpmnMod
   }
 
   /**
-   * Which BPMN element a delivery of one subscription belongs to, per BPMN process, as far as
-   * the deployed models say it.
+   * Which BPMN element a delivery of one subscription belongs to, per BPMN process, as far
+   * as the deployed models tell.
    * <p>
-   * A subscription asks the engine for a task definition, and the engine is free to say
-   * nothing else about a task it delivers (see {@code GAPS.md}, entry 26). The element id is
-   * the SECOND key a <code>&#64;WorkflowTask</code> method is wired by, so a delivery naming no
-   * element reaches no method wired that way. The models this adapter deployed hold the missing
-   * value: once a delivery is routed to a BPMN process, the element carrying this
-   * subscription's name in that process is the element it belongs to.
+   * A subscription asks the engine for a task definition. The engine does not have to say
+   * anything else about a task it delivers (see {@code GAPS.md}, entry 26). The element id
+   * is the SECOND key a <code>&#64;WorkflowTask</code> method is wired by. So a delivery
+   * which names no element reaches no method wired that way. The models this adapter
+   * deployed hold the missing value. Once a delivery is routed to a BPMN process, it belongs
+   * to the element in that process which carries the name of this subscription.
    * <p>
-   * Unless the name sits on SEVERAL elements of one process. Then the model answers nothing and
-   * only the engine can tell them apart, which is said while starting - telling two elements of
-   * one name apart is the very reason to wire a method by the element id.
+   * This fails if the name sits on SEVERAL elements of one process. Then the model gives no
+   * answer, and only the engine can tell them apart. That is logged while starting. Telling
+   * two elements with one name apart is exactly why someone wires a method by the element
+   * id.
    *
    * @param workflowModuleId The workflow module which is about to process workflows
    * @param served The tasks this subscription serves
-   * @return The plain BPMN process id to the element id, leaving out the processes which
-   *         answer more than one and the ids which have no model at all
+   * @return The element id for each plain BPMN process id. Processes with more than one
+   *         element and ids without a model are left out
    */
   private Map<String, String> theElementEachProcessDeliversFrom(
       final String workflowModuleId,
@@ -416,11 +418,12 @@ public class PeaDeploymentService implements AdapterDeploymentService<PeaBpmnMod
   }
 
   /**
-   * Says that several BPMN elements of one process carry one task definition, so a delivery
-   * belongs to one of them only where the engine names the element itself.
+   * Says that several BPMN elements of one process carry one task definition. A delivery
+   * can then be matched to one of them only if the engine names the element itself.
    * <p>
-   * Said only where a method is wired by one of those element ids. Everything else is served
-   * by the task definition, which every delivery carries, and there is nothing to warn about.
+   * This is said only if a method is wired by one of those element ids. Everything else is
+   * served by the task definition, which every delivery carries, so there is nothing to warn
+   * about.
    *
    * @param workflowModuleId The workflow module which is about to process workflows
    * @param bpmnProcessId The plain BPMN process id
@@ -460,7 +463,8 @@ public class PeaDeploymentService implements AdapterDeploymentService<PeaBpmnMod
   }
 
   /**
-   * A task definition as the engine knows it (prefixed under {@code use-prefix}).
+   * A task definition in the form the engine knows it. Under {@code use-prefix} it has the
+   * prefix.
    */
   private String scopedTaskDefinition(
       final String workflowModuleId,
@@ -474,12 +478,11 @@ public class PeaDeploymentService implements AdapterDeploymentService<PeaBpmnMod
   }
 
   /**
-   * Two <code>process-engine-api</code> adapter ids cannot address different
-   * engines: the Process-Engine-API is provided by the APPLICATION as a
-   * set of CDI/Spring beans - there is no per-adapter-id connection configuration,
-   * so every configured id of this type ends up talking to the very same engine
-   * beans. Configuring two of them is therefore a defect, not a migration setup
-   * (see {@code GAPS.md}, entry 14).
+   * Two <code>process-engine-api</code> adapter ids cannot talk to different engines. The
+   * APPLICATION provides the Process-Engine-API as a set of CDI or Spring beans. There is no
+   * connection configuration per adapter id. So every configured id of this type talks to
+   * the very same engine beans. Two of them are a mistake, not a migration setup (see
+   * {@code GAPS.md}, entry 14).
    */
   @Override
   public void validateDistinctAdapterInstances(
@@ -504,18 +507,18 @@ public class PeaDeploymentService implements AdapterDeploymentService<PeaBpmnMod
   }
 
   /**
-   * Nothing is kept apart here. There is no tenant and no namespace behind this API, so every
-   * workflow module reaches one engine in one scope (see {@code GAPS.md}, entry 15).
+   * Nothing is kept apart here. There is no tenant and no namespace behind this API, so
+   * every workflow module reaches one engine in one scope (see {@code GAPS.md}, entry 15).
    * <p>
-   * The core asks this while it judges whether two BPMN processes reach the BPMS under one
-   * identifier, and it asks only where the mode leaves the identifiers plain and the BPMS is
-   * meant to do the separating. This adapter refuses that mode while deploying, so the
-   * question rarely gets here, and the answer would be the same one if it did.
+   * The core asks this when it checks whether two BPMN processes reach the BPMS under one
+   * identifier. It asks only if the mode leaves the identifiers plain and the BPMS is meant
+   * to keep them apart. This adapter refuses that mode while deploying. So the question
+   * rarely gets here, and if it does, the answer is the same.
    * <p>
    * The inherited default answers <code>false</code> as well, so this override changes no
    * behaviour. It is here to put the answer and its reason into the adapter the gap belongs
-   * to, where a reader of this adapter looks for it. That is its whole job, so do not drop it
-   * as redundant.
+   * to, where a reader looks for it. That is its whole job, so do not remove it as
+   * redundant.
    */
   @Override
   public boolean ownIsolationSeparatesWorkflowModules(
@@ -583,9 +586,9 @@ public class PeaDeploymentService implements AdapterDeploymentService<PeaBpmnMod
   }
 
   /**
-   * One executable process parsed from a BPMN file: its id, the name a modeller wrote
-   * on it and its service-like tasks (activity id +
-   * <code>zeebe:taskDefinition</code> type).
+   * One executable process parsed from a BPMN file. It has its id, the name a modeller
+   * wrote on it and its service-like tasks. Each task has its activity id and the type of
+   * its <code>zeebe:taskDefinition</code>.
    */
   private record ParsedProcess(
                                String bpmnProcessId,
@@ -596,9 +599,9 @@ public class PeaDeploymentService implements AdapterDeploymentService<PeaBpmnMod
   }
 
   /**
-   * Whether the element the reader stands on carries an attribute of the given local
-   * name, whatever namespace it is in - the reference to a decision is spelled
-   * differently per engine, and this parser reads raw XML rather than a model.
+   * Whether the element the reader stands on has an attribute with the given local name,
+   * in any namespace. Each engine spells the reference to a decision in its own way, and
+   * this parser reads raw XML, not a model.
    *
    * @param reader The reader, standing on a start element
    * @param localName The attribute's local name
@@ -619,8 +622,8 @@ public class PeaDeploymentService implements AdapterDeploymentService<PeaBpmnMod
   }
 
   /**
-   * An attribute a modeller left out and one they left empty are the same thing, and
-   * <code>null</code> is what the adapter SPI says for "none".
+   * An attribute a modeller left out and one they left empty mean the same. The adapter SPI
+   * says "none" with <code>null</code>.
    *
    * @param value The attribute value, or <code>null</code>
    * @return The value, or <code>null</code> where there is nothing in it
@@ -635,14 +638,13 @@ public class PeaDeploymentService implements AdapterDeploymentService<PeaBpmnMod
   }
 
   /**
-   * Streams over the BPMN XML with StAX and collects all
-   * {@code <bpmn:process isExecutable="true">} elements together with their
-   * service-like tasks. StAX is used (instead of building a DOM or depending on a
-   * BPMS-specific model API) because the Process-Engine-API has no BPMN model type.
-   * The task definition is read from the <code>zeebe:taskDefinition</code>
-   * extension (Camunda-8-style - the Process-Engine-API does not define how BPMN
-   * names task definitions, see {@code GAPS.md}); a task without one is reported
-   * by the wiring validation.
+   * Reads the BPMN XML with StAX and collects all {@code <bpmn:process isExecutable="true">}
+   * elements with their service-like tasks. The Process-Engine-API has no BPMN model type,
+   * so StAX is used. It needs no DOM and no model API of a particular BPMS.
+   * <p>
+   * The task definition is read from the <code>zeebe:taskDefinition</code> extension, as in
+   * Camunda 8. The Process-Engine-API does not define how BPMN names task definitions (see
+   * {@code GAPS.md}). The wiring validation reports a task without one.
    *
    * @param workflowModuleId The workflow module id (used for error messages)
    * @param filename The BPMN filename (used for error messages)
@@ -656,7 +658,7 @@ public class PeaDeploymentService implements AdapterDeploymentService<PeaBpmnMod
       final byte[] resource) throws BpmnParseException {
 
     final var factory = XMLInputFactory.newFactory();
-    // harden the parser: no external entities, no DTDs (defence against XXE)
+    // no external entities and no DTDs, against XXE attacks
     factory.setProperty(XMLInputFactory.IS_SUPPORTING_EXTERNAL_ENTITIES, Boolean.FALSE);
     factory.setProperty(XMLInputFactory.SUPPORT_DTD, Boolean.FALSE);
 
@@ -694,8 +696,8 @@ public class PeaDeploymentService implements AdapterDeploymentService<PeaBpmnMod
           } else if ((currentProcess != null) && serviceLikeTasks.contains(element)) {
             currentTaskId = reader.getAttributeValue(null, "id");
             currentTaskHasDefinition = false;
-            // a business rule task naming a decision is served by the ENGINE, whichever
-            // way the engine spells that reference - it expects no @WorkflowTask method
+            // the ENGINE serves a business rule task which names a decision, however the
+            // engine spells that reference. Such a task needs no @WorkflowTask method
             currentTaskCallsADecision = hasAttribute(reader, "decisionRef");
           } else if ((currentTaskId != null) && "calledDecision".equals(element)) {
             currentTaskCallsADecision = true;
@@ -706,17 +708,17 @@ public class PeaDeploymentService implements AdapterDeploymentService<PeaBpmnMod
             currentTaskHasDefinition = true;
           } else
             if ((currentProcess != null) && "userTask".equals(element) && BPMN_NS.equals(reader.getNamespaceURI())) {
-              // namespace check: the marker extension <zeebe:userTask/> shares the
-              // local name with the BPMN element
+              // the namespace is checked because the marker extension <zeebe:userTask/>
+              // has the same local name as the BPMN element
               currentUserTaskId = reader.getAttributeValue(null, "id");
-              // what the modeller wrote on the element: the only human-readable name a task
-              // list has for this task, since the engine reports none of its own
+              // what the modeller wrote on the element. It is the only readable name a task
+              // list has for this task, because the engine reports none of its own
               currentUserTaskName = blankToNull(reader.getAttributeValue(null, "name"));
               currentUserTaskHasFormReference = false;
             } else if ((currentUserTaskId != null) && "formDefinition".equals(element)) {
-              // user tasks: the zeebe:formDefinition external reference
-              // IS the task definition (Camunda-8-style convention); the task needs a
-              // method or the property implemented-externally=true, like every task
+              // for a user task, the external reference of zeebe:formDefinition IS the task
+              // definition, as in Camunda 8. Like every task, it needs a method or the
+              // property implemented-externally=true
               final var externalReference = reader.getAttributeValue(null, "externalReference");
               if ((externalReference != null) && !externalReference.isBlank()) {
                 currentProcess
@@ -729,7 +731,7 @@ public class PeaDeploymentService implements AdapterDeploymentService<PeaBpmnMod
           final var element = reader.getLocalName();
           if (serviceLikeTasks.contains(element) && (currentTaskId != null)) {
             if (!currentTaskHasDefinition && !currentTaskCallsADecision && (currentProcess != null)) {
-              // no zeebe:taskDefinition: reported by the wiring validation
+              // no zeebe:taskDefinition. The wiring validation reports it
               currentProcess
                   .tasks()
                   .add(new BpmnTaskSpec(currentTaskId, null));
@@ -739,10 +741,10 @@ public class PeaDeploymentService implements AdapterDeploymentService<PeaBpmnMod
           } else
             if ("userTask".equals(element) && (currentUserTaskId != null) && BPMN_NS.equals(reader.getNamespaceURI())) {
               if (!currentUserTaskHasFormReference && (currentProcess != null)) {
-                // a user task without an external form reference cannot be subscribed for, so it
-                // becomes no spec of the core and no subscription of this adapter. It is carried
-                // along all the same: the boot names it to whoever claims the process, because a
-                // method drawn into such a task is never called and nothing else would say so
+                // nobody can subscribe for a user task without an external form reference. So
+                // it becomes no spec of the core and no subscription of this adapter. It is
+                // still carried along, so the boot can name it to whoever claims the process. A
+                // method meant for such a task is never called, and nothing else would say so
                 currentProcess
                     .userTasksWithoutAFormReference()
                     .add(BpmnTaskSpec.userTask(currentUserTaskId, null, currentUserTaskName));
@@ -763,7 +765,7 @@ public class PeaDeploymentService implements AdapterDeploymentService<PeaBpmnMod
         try {
           reader.close();
         } catch (final XMLStreamException e) {
-          // ignore: closing the reader over an in-memory byte array cannot fail meaningfully
+          // the reader works on bytes in memory, so a failed close loses nothing
         }
       }
     }
@@ -781,17 +783,17 @@ public class PeaDeploymentService implements AdapterDeploymentService<PeaBpmnMod
     final var context = existingContext == null
         ? new PeaProcessingContext(workflowModuleId)
         : existingContext;
-    // read what this model declares while the PLAIN bytes are at hand - the rewrite below
-    // hands the engine prefixed ones, and the core wants the names the application wrote.
-    // Read in EVERY mode: the clash the core looks for needs two modules whose names reach
-    // the engine in one form, which is what the mode 'none' does, so collecting only while
+    // read what this model declares while the PLAIN bytes are still here. The rewrite below
+    // gives the engine prefixed names, but the core wants the names the application wrote.
+    // This is read in EVERY mode. The core looks for two modules whose names reach the
+    // engine in the same form, and that happens under the mode 'none'. Reading only while
     // prefixing would look exactly where there is nothing to find
     context
         .getDeclaredIdentifiers()
         .addAll(PeaDeclaredIdentifiers.of(model));
-    // The deployed BYTES carry the scoped identifiers, while the model's
-    // own bpmnProcessId/tasks stay PLAIN - they key the core's registries
-    // (see decision 2 in the repository's DECISIONS.md)
+    // the deployed BYTES carry the scoped identifiers. The bpmnProcessId and the tasks of
+    // the model stay PLAIN, because the registries of the core use them as keys (see
+    // decision 2 in the repository's DECISIONS.md)
     final var scopedResource = PeaScoping.apply(
         model.resource(), workflowModuleId, model.bpmnProcessId(), adapterId, scoping);
     context
@@ -813,10 +815,10 @@ public class PeaDeploymentService implements AdapterDeploymentService<PeaBpmnMod
       final PeaBpmnModel model,
       final PeaProcessingContext context) {
 
-    // a process nobody claims travels with its file and is left alone: nothing subscribes
-    // to its tasks and no check ends the boot because of it (see decision 18 of DECISIONS.md).
-    // The core ended the start over it already unless the application marked it as
-    // somebody else's
+    // a process nobody claims is deployed with its file and left alone. Nothing subscribes
+    // to its tasks, and no check ends the boot because of it (see decision 18 of
+    // DECISIONS.md). The core has already ended the start because of it, unless the
+    // application marked it as somebody else's
     if (!workflowTaskWiring.isClaimedByAWorkflowService(workflowModuleId, bpmnProcessId)) {
       log.debug(
           "Process-Engine-API adapter '{}': BPMN process '{}' of file '{}' (workflow module '{}') is "
@@ -828,8 +830,8 @@ public class PeaDeploymentService implements AdapterDeploymentService<PeaBpmnMod
       return;
     }
 
-    // validate the BPMN's tasks against the registered @WorkflowTask methods;
-    // throwing here honors the deployment-failure policy
+    // check the tasks of the BPMN against the registered @WorkflowTask methods. An
+    // exception thrown here follows the deployment-failure policy
     final var specs = new ArrayList<BpmnTaskSpec>(model.tasks());
     specs.addAll(model.userTasks());
     specs.addAll(userTasksWithoutAFormReferenceSomebodyElseServes(workflowModuleId, bpmnProcessId, model));
@@ -850,21 +852,21 @@ public class PeaDeploymentService implements AdapterDeploymentService<PeaBpmnMod
   }
 
   /**
-   * Tells the core that this BPMS keeps no catalog of the versions of a process, and
-   * what a delivery carries instead.
+   * Tells the core that this BPMS keeps no catalog of the versions of a process, and what a
+   * delivery carries instead.
    * <p>
-   * The Process-Engine-API has no version notion (see entries 19 and 20 of
-   * <code>GAPS.md</code>): no numeric version, no deployment order, no way to ask which
-   * versions of a process the engine still holds. What a delivered task may carry is the
-   * version tag of its process definition, in the <code>meta</code> map and only where the
-   * engine behind the API fills it, which is why the answer is
+   * The Process-Engine-API knows no versions (see entries 19 and 20 of
+   * <code>GAPS.md</code>). There is no version number, no deployment order and no way to ask
+   * which versions of a process the engine still holds. A delivered task may carry the
+   * version tag of its process definition. It is in the <code>meta</code> map, and only if
+   * the engine behind the API fills it. That is why the answer is
    * {@link ReportedProcessVersion#VERSION_TAG}.
    * <p>
-   * Registering no catalog would say the same thing to a machine and something else to a
-   * person. It is what the core sees before an adapter was asked, so it kept quiet about
-   * the methods of such a process and its messages about a version spoke of a BPMS which
-   * could not be reached. Saying it lets the core name, while the application boots, the
-   * methods whose version a delivery here can never meet.
+   * Not registering a catalog would mean the same to a program, but not to a person. The
+   * core sees exactly that before an adapter was asked. It would then say nothing about the
+   * methods of such a process, and its messages about a version would speak of a BPMS which
+   * cannot be reached. Saying it lets the core name, while the application boots, the methods
+   * whose version a delivery here can never match.
    *
    * @param workflowModuleId The workflow module ID
    * @param bpmnProcessId The BPMN process ID
@@ -883,13 +885,12 @@ public class PeaDeploymentService implements AdapterDeploymentService<PeaBpmnMod
   }
 
   /**
-   * Fails the deployment of a process the ENGINE would start on its own (a timer,
-   * signal or conditional start event). The Process-Engine-API has no way to tell an
-   * application that its engine started a process (see {@code GAPS.md}), so such a
-   * workflow would run without a workflow aggregate: no task could be routed, no
-   * expression resolved. Failing the deployment is the honest answer - and it honors
-   * the deployment-failure policy, so a non-first-priority adapter can degrade it to
-   * a warning.
+   * Fails the deployment of a process the ENGINE would start on its own, with a timer,
+   * signal or conditional start event. The Process-Engine-API cannot tell an application
+   * that its engine started a process (see {@code GAPS.md}). So such a workflow would run
+   * without a workflow aggregate. No task could be routed, and no expression could be
+   * resolved. Failing the deployment is the honest answer. It follows the deployment-failure
+   * policy, so an adapter which is not first in priority can turn it into a warning.
    *
    * @param workflowModuleId The workflow module ID
    * @param filename The BPMN file
@@ -920,14 +921,15 @@ public class PeaDeploymentService implements AdapterDeploymentService<PeaBpmnMod
 
   /**
    * The user tasks of one process which name no external form reference and which the
-   * application marked as served by something else, and the refusal of the rest.
+   * application marked as served by something else. Any other such task ends the boot.
    * <p>
-   * This adapter subscribes for a user task by its external form reference, so a user task
-   * without one never reaches a method. In a process a <code>&#64;WorkflowService</code> class
-   * claims, every task needs a method or the property <code>implemented-externally=true</code>,
-   * and for such a task only the property is possible. So the boot ends over such a task unless
-   * the property says that somebody else serves it. A marked task goes to the core with the
-   * other tasks, which is where a method drawn into it next to the property is refused.
+   * This adapter subscribes for a user task by its external form reference. So a user task
+   * without one never reaches a method. In a process which a <code>&#64;WorkflowService</code>
+   * class claims, every task needs a method or the property
+   * <code>implemented-externally=true</code>. For such a task only the property is possible.
+   * So the boot ends because of such a task, unless the property says that somebody else
+   * serves it. A marked task goes to the core with the other tasks. The core refuses a method
+   * for it which is there next to the property.
    * <p>
    * A process nobody claims never gets here.
    *
@@ -986,15 +988,14 @@ public class PeaDeploymentService implements AdapterDeploymentService<PeaBpmnMod
   }
 
   /**
-   * Warns about a <code>&#64;WorkflowEnded</code> method this adapter cannot serve.
-   * The Process-Engine-API delivers TASKS; it has no event, subscription or callback
-   * saying that a process instance ended (see {@code GAPS.md}), so the notification
-   * never arrives.
+   * Warns about a <code>&#64;WorkflowEnded</code> method this adapter cannot serve. The
+   * Process-Engine-API delivers TASKS. It has no event, subscription or callback which says
+   * that a process instance ended (see {@code GAPS.md}). So the notification never arrives.
    * <p>
-   * Unlike a start event the engine fires on its own, this does NOT fail the
-   * deployment: the workflow itself runs perfectly well, only the notification is
-   * missing - failing the boot over it would be out of proportion. The warning names
-   * what does not happen so nobody waits for it.
+   * A start event the engine fires on its own fails the deployment, but this does NOT. The
+   * workflow itself runs well, only the notification is missing. Failing the boot because
+   * of it would be too much. The warning says what does not happen, so nobody waits for
+   * it.
    *
    * @param workflowModuleId The workflow module ID
    * @param bpmnProcessId The BPMN process ID
@@ -1023,8 +1024,8 @@ public class PeaDeploymentService implements AdapterDeploymentService<PeaBpmnMod
   }
 
   /**
-   * What one BPMN process id the module declares WITHOUT deploying a model under it got
-   * while the subscriptions were composed.
+   * What one BPMN process id got while the subscriptions were built. The module declares
+   * the id WITHOUT deploying a model under it.
    *
    * @param bpmnProcessId The plain BPMN process id nothing was deployed under
    * @param taskDefinitions What the application's methods serve for it, possibly empty
@@ -1039,26 +1040,26 @@ public class PeaDeploymentService implements AdapterDeploymentService<PeaBpmnMod
 
   /**
    * Adds the subscriptions which reach the workflows of a BPMN process id the application
-   * DECLARES without deploying a model under it - the old id of a renamed process.
+   * DECLARES without deploying a model under it. Such an id is the old id of a renamed
+   * process.
    * <p>
-   * A subscription asks for a task definition, and under {@code use-prefix} a task
-   * definition carries the id of the process it was deployed with: the tasks of the
-   * workflows under the old id are named after the OLD id, so no subscription of the
-   * deployed processes asks for them and nobody notices, because an unfetched task is not
-   * a failed one. What those workflows need is one more subscription per name they
-   * produce, and the names are composed the same way the deployed ones were - the task
-   * definitions the application serves for that id, scoped by it. Nothing is read from the
-   * engine, which is what makes this possible at all here (see decision 11 in the
-   * repository's DECISIONS.md).
+   * A subscription asks for a task definition. Under {@code use-prefix} a task definition
+   * carries the id of the process it was deployed with. So the tasks of the workflows under
+   * the old id are named after the OLD id. No subscription of the deployed processes asks
+   * for them, and nobody notices, because a task nobody fetches has not failed. Those
+   * workflows need one more subscription per name they produce. The names are built the
+   * same way as the deployed ones: the task definitions the application serves for that
+   * id, scoped by it. Nothing is read from the engine, and that is why this works here at
+   * all (see decision 11 in the repository's DECISIONS.md).
    * <p>
-   * Where a name is already served nothing is added as a subscription of its own, which is
-   * every mode but {@code use-prefix} and {@code use-prefix} with
+   * If a name is already served, no subscription of its own is added. That is the case in
+   * every mode except {@code use-prefix}, and under {@code use-prefix} with
    * {@code prefix-task-definitions-per-process: false}. The declared id is still added to
-   * that subscription, so its <code>&#64;TaskParam</code> names reach the payload the
-   * subscription asks for and a delivery which cannot be routed says that an old id is a
-   * possibility. It is NOT added as a routing candidate: a delivery over a shared name
-   * would then be ambiguous for every workflow, including the ones which are served
-   * correctly today.
+   * that subscription. So its <code>&#64;TaskParam</code> names reach the variables the
+   * subscription asks for. And a delivery which cannot be routed says that an old id is
+   * possible. It is NOT added as a routing candidate. A delivery under a shared name would
+   * then be ambiguous for every workflow, also for the ones which are served correctly
+   * now.
    *
    * @param workflowModuleId The workflow module which is about to process workflows
    * @param processesByTaskDefinition The service-task subscriptions, added to
@@ -1076,8 +1077,8 @@ public class PeaDeploymentService implements AdapterDeploymentService<PeaBpmnMod
         .forEach((
             bpmnProcessId,
             taskDefinitions) -> {
-          // recorded in every mode, so the viewer API can say why it has nothing to show
-          // for a workflow running under this id instead of answering an empty list
+          // recorded in every mode. So the viewer API can say why it has nothing to show for
+          // a workflow under this id, and does not just answer an empty list
           deployedProcesses.recordDeclaredWithoutDeployment(workflowModuleId, bpmnProcessId);
           final var openedNames = new TreeSet<String>();
           final var sharedNames = new TreeSet<String>();
@@ -1086,22 +1087,22 @@ public class PeaDeploymentService implements AdapterDeploymentService<PeaBpmnMod
                 final var name = scopedTaskDefinition(workflowModuleId, bpmnProcessId, taskDefinition);
                 final var served = ServedTask.ofADeclaredId(bpmnProcessId, taskDefinition);
                 if (processesByTaskDefinition.containsKey(name) || processesByUserTaskReference.containsKey(name)) {
-                  // a deployed process of this module already asks the engine for that name,
-                  // so the tasks of the old id arrive at its subscription. The declared id
-                  // joins that subscription without becoming a routing candidate: it is what
-                  // the payload set has to cover, and what a delivery nobody can place names
-                  // as a further possibility
+                  // a deployed process of this module already asks the engine for that name.
+                  // So the tasks of the old id arrive at its subscription. The declared id
+                  // joins that subscription, but it is no routing candidate. Its variables
+                  // have to be fetched as well. And a delivery nobody can place names it as
+                  // one more possibility
                   sharedNames.add(name);
                   joinIfSubscribed(processesByTaskDefinition, name, served);
                   joinIfSubscribed(processesByUserTaskReference, name, served);
                   return;
                 }
                 openedNames.add(name);
-                // a served task definition is either a service task's or a user task's, and
-                // which of the two cannot be told without the model this application no
-                // longer has. Both subscriptions are opened therefore, and the one whose
-                // kind the task never was stays idle - an idle subscription of this API
-                // costs nothing, not even an activation request
+                // a served task definition belongs to a service task or to a user task.
+                // Which of the two needs the model, and this application no longer has it.
+                // So both subscriptions are opened, and the one of the wrong kind stays idle.
+                // An idle subscription of this API costs nothing, not even an activation
+                // request
                 processesByTaskDefinition
                     .computeIfAbsent(name, key -> new ArrayList<>())
                     .add(served);
@@ -1116,9 +1117,9 @@ public class PeaDeploymentService implements AdapterDeploymentService<PeaBpmnMod
   }
 
   /**
-   * Adds a declared id's task to a subscription which exists, and leaves the map alone
-   * where it does not: the two maps hold the service tasks and the user tasks of the
-   * deployed models, and a name lives in one of them or in the other.
+   * Adds the task of a declared id to a subscription which exists. If there is none, the
+   * map stays as it is. The two maps hold the service tasks and the user tasks of the
+   * deployed models, and a name is in one of them or in the other.
    *
    * @param subscriptions The service-task or the user-task subscriptions
    * @param name The name as the engine knows it
@@ -1138,18 +1139,18 @@ public class PeaDeploymentService implements AdapterDeploymentService<PeaBpmnMod
 
   /**
    * Says what the workflows of a declared BPMN process id are served with, once per start
-   * and per id, and warns about the <code>&#64;WorkflowEnded</code> method which is not
-   * served for it - that one needs no model at all, only the id, so it is warned about the
-   * same way it is for a deployed process.
+   * and per id. It also warns about a <code>&#64;WorkflowEnded</code> method which is not
+   * served for the id. That method needs no model at all, only the id. So the warning is the
+   * same as for a deployed process.
    * <p>
-   * Three things can be true of such an id. Subscriptions were opened for it, which is the
-   * normal case under the default mode. Its names are shared with a deployed process,
-   * which serves the workflows but cannot tell a delivery of the old id apart unless the
-   * engine names the process. Or its methods name no task definition at all, which is the
-   * one case worth a warning: a method wired to a BPMN element id
-   * (<code>&#64;WorkflowTask(id = ...)</code>) is matched through the model, and the model
-   * of that id is what this application does not have, so no name can be composed and
-   * those workflows stand still.
+   * Three things can be true of such an id. First, subscriptions were opened for it. That is
+   * the normal case under the default mode. Second, its names are shared with a deployed
+   * process. That process serves the workflows, but it cannot tell a delivery of the old id
+   * apart unless the engine names the process. Third, its methods name no task definition
+   * at all. Only this case is worth a warning. A method wired to a BPMN element id
+   * (<code>&#64;WorkflowTask(id = ...)</code>) is matched through the model. This
+   * application does not have the model of that id. So no name can be built, and those
+   * workflows stand still.
    *
    * @param workflowModuleId The workflow module which is about to process workflows
    * @param declaredId What the id got while the subscriptions were composed
@@ -1216,10 +1217,10 @@ public class PeaDeploymentService implements AdapterDeploymentService<PeaBpmnMod
       final String filename,
       final java.io.InputStream dmn) {
 
-    // the file travels to the engine as it is. The decision id is NOT scoped, unlike a
-    // process id under prefix scoping: this API knows no binding from a business rule
-    // task to a decision, so there is no reference which could be rewritten to match a
-    // renamed decision - renaming one side only would break every model. See GAPS.md.
+    // the file goes to the engine as it is. The decision id is NOT scoped, unlike a process
+    // id under prefix scoping. This API knows no link from a business rule task to a
+    // decision. So there is no reference which could be rewritten to match a renamed
+    // decision, and renaming one side only would break every model. See GAPS.md.
     existingContext
         .addDecision(filename, io.vanillabp.integration.adapter.spi.DmnDecisionIds.bytesOf(dmn));
     log.debug(
@@ -1237,9 +1238,9 @@ public class PeaDeploymentService implements AdapterDeploymentService<PeaBpmnMod
       final String workflowModuleId,
       final PeaProcessingContext bpmsProcessingContext) throws IllegalStateException {
 
-    // The Process-Engine-API has no isolation mechanism of its own, so the
-    // DEFAULT mode 'by-adapter' cannot be served - fail with a guiding message
-    // instead of silently deploying every workflow module into one scope
+    // the Process-Engine-API has no isolation mechanism of its own, so the DEFAULT mode
+    // 'by-adapter' cannot work. Fail with a message which says what to do, and do not
+    // quietly deploy every workflow module into one scope
     if (scoping != null) {
       scoping.validateNativeIsolationSupported(adapterId, workflowModuleId, "the Process-Engine-API");
     }
@@ -1252,16 +1253,16 @@ public class PeaDeploymentService implements AdapterDeploymentService<PeaBpmnMod
       return;
     }
 
-    // nothing reaches the engine before it is clear that it can tell the processes apart
+    // nothing goes to the engine before it is clear that it can tell the processes apart
     failOnCollidingProcessIds(workflowModuleId, bpmsProcessingContext);
 
-    // A BPMN file may contain several executable processes, so the same resource can show
-    // up multiple times in the context - deploy each file (by name) exactly once.
+    // a BPMN file may hold several executable processes, so the same resource can be in the
+    // context more than once. Deploy each file (by name) exactly once.
     final var resourcesByFilename = new LinkedHashMap<String, byte[]>();
     bpmsProcessingContext
         .getModels()
         .forEach(model -> resourcesByFilename.putIfAbsent(model.filename(), model.resource()));
-    // the module's decision tables are resources of the same bundle: a business rule task
+    // the decision tables of the module go into the same bundle. A business rule task
     // calls a decision of its own module, so both are deployed together
     bpmsProcessingContext
         .getDecisions()
@@ -1272,18 +1273,17 @@ public class PeaDeploymentService implements AdapterDeploymentService<PeaBpmnMod
         .map(entry -> new NamedResource(entry.getKey(), new ByteArrayInputStream(entry.getValue()), Map.of()))
         .toList();
 
-    // The Process-Engine-API's DeployBundleCommand has an optional tenantId, but a PEA
-    // tenant is the underlying BPMS' multi-tenancy - not a VanillaBP workflow-module
-    // namespace. Deploying "for workflow module X" (Camunda-7-style module-as-tenant
-    // isolation) is therefore not expressible; the bundle is deployed to the default
-    // tenant. See GAPS.md.
+    // the DeployBundleCommand of the Process-Engine-API has an optional tenantId. But that
+    // tenant is the multi-tenancy of the BPMS underneath, not a namespace for a VanillaBP
+    // workflow module. So "deploy for workflow module X", with the module as tenant like in
+    // Camunda 7, cannot be said. The bundle goes to the default tenant. See GAPS.md.
     final var command = new DeployBundleCommand(resources, null);
     try {
       final var deploymentInformation = deploymentApi
           .deploy(command)
           .get();
-      // remember what was deployed: the viewer API is served from these models -
-      // the Process-Engine-API cannot be asked for definitions or BPMN XML
+      // remember what was deployed. The viewer API answers from these models, because the
+      // Process-Engine-API cannot be asked for definitions or BPMN XML
       bpmsProcessingContext
           .getModels()
           .forEach(model -> deployedProcesses
@@ -1308,25 +1308,25 @@ public class PeaDeploymentService implements AdapterDeploymentService<PeaBpmnMod
   }
 
   /**
-   * Refuses a deployment whose BPMN process ids the engine could not tell apart, and does
-   * it before anything of that deployment is sent.
+   * Refuses a deployment whose BPMN process ids the engine could not tell apart. It does so
+   * before anything of that deployment is sent.
    * <p>
-   * What goes over is the workflow module being deployed and nothing else. The core keeps
-   * which module reached the BPMS under which identifier, so a clash with a module deployed
-   * earlier in the same boot is found there, and the boot ends while the second of the two
-   * modules deploys. The core also composes the form each id reaches the engine in and
-   * words the message, so the configured mode decides what counts as a collision here.
+   * Only the workflow module being deployed is passed to the core. The core keeps which
+   * module reached the BPMS under which identifier. So the core finds a clash with a module
+   * deployed earlier in the same boot, and the boot ends while the second of the two
+   * modules deploys. The core also builds the form in which each id reaches the engine, and
+   * it writes the message. So the configured mode decides what counts as a collision here.
    * <p>
-   * Under {@code none} two workflow modules using one process id collide, and nothing else
-   * would say so: the engine keeps one of the two models and loses the other. Under
-   * {@code use-prefix} the module id is part of every id, so two modules
-   * collide only where one module id plus one process id compose what another such pair
-   * composes, which a module id carrying the prefix separator can do. The remaining mode
-   * never gets this far, because this adapter refuses it while deploying.
+   * Under {@code none}, two workflow modules with one process id collide, and nothing else
+   * would say so. The engine keeps one of the two models and loses the other. Under
+   * {@code use-prefix}, the module id is part of every id. So two modules collide only if one
+   * module id plus one process id give the same string as another such pair. A module id
+   * which contains the prefix separator can do that. The third mode never gets this far,
+   * because this adapter refuses it while deploying.
    * <p>
-   * This ends the boot, while a name the models declare is only warned about. Two modules
-   * sharing a message name leave both models as they are and only make the name ambiguous,
-   * whereas two processes under one id mean one of the models is not in the engine at all.
+   * This ends the boot, but a name the models declare only gets a warning. If two modules
+   * share a message name, both models stay as they are and only the name is ambiguous. If
+   * two processes share one id, one of the models is not in the engine at all.
    *
    * @param workflowModuleId The workflow module about to be deployed
    * @param bpmsProcessingContext What the pipeline collected for it
@@ -1339,8 +1339,8 @@ public class PeaDeploymentService implements AdapterDeploymentService<PeaBpmnMod
     if (scoping == null) {
       return;
     }
-    // a set, because one BPMN file may hold several processes and a module may declare one
-    // process id in two of its files: the same pair twice is not a collision
+    // a set, because one BPMN file may hold several processes, and a module may declare one
+    // process id in two of its files. The same pair twice is not a collision
     final var processesReachingTheEngine = new LinkedHashSet<NameClashAvoidanceSupport.DeployedProcess>();
     bpmsProcessingContext
         .getModels()
@@ -1353,17 +1353,16 @@ public class PeaDeploymentService implements AdapterDeploymentService<PeaBpmnMod
   }
 
   /**
-   * Hands the core the identifiers the module's models declare, once the module is
-   * deployed. The core composes the form each of them reaches the engine in and warns
-   * where another workflow module of this application ends up under the same one.
+   * Gives the core the identifiers the models of the module declare, once the module is
+   * deployed. The core builds the form in which each of them reaches the engine. It warns if
+   * another workflow module of this application ends up under the same one.
    * <p>
-   * This asks the engine nothing, and that is the whole reason it is here: what the engine
-   * already holds cannot be asked of this API at all, for no kind of identifier (see
-   * {@code GAPS.md}, entry 24), while the names of the models being deployed are in the
-   * adapter's hands anyway. What reaches the core is what the rewrite of the raw BPMN
-   * recognises, no more.
+   * This asks the engine nothing, and that is the whole point. This API cannot say what the
+   * engine already holds, for no kind of identifier (see {@code GAPS.md}, entry 24). But the
+   * adapter has the names of the models being deployed anyway. The core gets what the
+   * rewrite of the raw BPMN knows, and nothing more.
    * <p>
-   * A diagnostic must not end a deployment the engine accepted, so a failure in here is a
+   * A check must not end a deployment the engine accepted. So a failure in here gives a
    * debug line and nothing else.
    *
    * @param workflowModuleId The workflow module which was deployed
@@ -1402,12 +1401,12 @@ public class PeaDeploymentService implements AdapterDeploymentService<PeaBpmnMod
       return;
     }
 
-    // one task subscription per DISTINCT task definition of the module; the task
-    // handler dispatches through the core's WorkflowTaskInvoker. The BPMN process
-    // a delivered task belongs to travels in TaskInformation.meta (adapter
-    // convention key 'bpmnProcessId' - see GAPS.md); if absent, the task
-    // definition has to be unique across the module's processes. Only a claimed process
-    // is subscribed for: a process nobody claims is deployed with its file and left alone
+    // one task subscription per DISTINCT task definition of the module. The task handler
+    // passes the task on through the WorkflowTaskInvoker of the core. The BPMN process of a
+    // delivered task comes in TaskInformation.meta, under the key 'bpmnProcessId' this
+    // adapter agreed on (see GAPS.md). Without it, the task definition has to be unique
+    // across the processes of the module. Only a claimed process gets subscriptions. A
+    // process nobody claims is deployed with its file and left alone
     final var processesByTaskDefinition = new LinkedHashMap<String, List<ServedTask>>();
     bpmsProcessingContext
         .getModels()
@@ -1424,8 +1423,8 @@ public class PeaDeploymentService implements AdapterDeploymentService<PeaBpmnMod
                 .add(ServedTask
                     .ofADeployedModel(model.bpmnProcessId(), task.activityId(), task.taskDefinition()))));
 
-    // user-task notifications: one USER-type subscription per distinct
-    // external form reference; the handler is a notification-only variant
+    // user tasks: one subscription of type USER per distinct external form reference. Its
+    // handler only passes the task on and completes nothing
     final var processesByUserTaskReference = new LinkedHashMap<String, List<ServedTask>>();
     bpmsProcessingContext
         .getModels()
@@ -1441,16 +1440,16 @@ public class PeaDeploymentService implements AdapterDeploymentService<PeaBpmnMod
                     .ofADeployedModel(model.bpmnProcessId(), userTask.activityId(), userTask.taskDefinition()))));
 
     // and what the application still serves for a BPMN process id it declares without
-    // deploying a model under it - the old id of a renamed process. Composed after both
-    // maps are complete, because a name a deployed process already reaches needs no
-    // subscription of its own
+    // deploying a model under it, such as the old id of a renamed process. This is built
+    // after both maps are complete, because a name a deployed process already reaches needs
+    // no subscription of its own
     final var declaredIds = composeTheSubscriptionsOfProcessesNobodyDeployed(
         workflowModuleId, processesByTaskDefinition, processesByUserTaskReference);
 
     if (!userTaskObservers.isEmpty()) {
-      // said while starting rather than at the first delivery: an observer the platform
-      // did not pick up behaves like one which has nothing to say, and starting is the
-      // only moment where the two can still be told apart
+      // said while starting, not at the first delivery. An observer the platform did not
+      // pick up looks like one which has nothing to say. Starting is the only moment where
+      // the two can still be told apart
       log.info(
           "Process-Engine-API adapter '{}': the user tasks of workflow module '{}' are observed by {}",
           adapterId,
@@ -1461,8 +1460,8 @@ public class PeaDeploymentService implements AdapterDeploymentService<PeaBpmnMod
         externalFormReference,
         served) -> {
       final var processes = RoutableProcesses.of(served);
-      // A user-task notification carries a payload too, so it is narrowed the
-      // same way as a service task
+      // a user task carries variables too, so the subscription asks only for the needed
+      // ones, the same way as for a service task
       final var fetchVariables = fetchVariablesOf(workflowModuleId, served);
       final var handler = PeaUserTaskHandler
           .builder()
@@ -1482,10 +1481,10 @@ public class PeaDeploymentService implements AdapterDeploymentService<PeaBpmnMod
             .subscribeForTask(new SubscribeForTaskCmd(
                 Map.of(), TaskType.USER, externalFormReference, fetchVariables
                     .payloadDescription(), handler,
-                // the TaskTerminationHandler overload (Process-Engine-API 1.5 and up): the
-                // older Consumer<String> keeps the task id and drops the reason with the rest
-                // of the engine's meta map, which is what tells a finished task from a
-                // withdrawn one
+                // the overload with a TaskTerminationHandler (Process-Engine-API 1.5 and up).
+                // The older Consumer<String> keeps only the task id. It drops the reason with
+                // the rest of the meta map of the engine, and the reason tells a finished task
+                // from a withdrawn one
                 (TaskTerminationHandler) handler::terminated))
             .get();
         bpmsProcessingContext.getSubscriptions().add(subscription);
@@ -1511,8 +1510,8 @@ public class PeaDeploymentService implements AdapterDeploymentService<PeaBpmnMod
         taskDefinition,
         served) -> {
       final var processes = RoutableProcesses.of(served);
-      // What the delivered payload has to carry - the aggregate's ID and the
-      // variables the handlers read, instead of everything the process instance holds
+      // what the delivery has to carry: the ID of the aggregate and the variables the
+      // handlers read, not everything the process instance holds
       final var fetchVariables = fetchVariablesOf(workflowModuleId, served);
       final var handler = PeaTaskHandler
           .builder()
@@ -1533,8 +1532,8 @@ public class PeaDeploymentService implements AdapterDeploymentService<PeaBpmnMod
                 Map.of(), // no restrictions
                 TaskType.EXTERNAL, taskDefinition, fetchVariables
                     .payloadDescription(), handler,
-                // the same overload as for user tasks: nobody observes an async task, but
-                // the log line saying one is gone is worth the engine's reason
+                // the same overload as for user tasks. Nobody observes an async task, but the
+                // log line which says one is gone should carry the reason of the engine
                 (TaskTerminationHandler) terminated -> log.debug(
                     "Process-Engine-API adapter '{}': task '{}' terminated ({})", adapterId, terminated
                         .getTaskId(),
@@ -1573,7 +1572,7 @@ public class PeaDeploymentService implements AdapterDeploymentService<PeaBpmnMod
     if (bpmsProcessingContext == null) {
       return;
     }
-    // unsubscribe in reverse order (graceful shutdown parity with the pipeline)
+    // unsubscribe in reverse order, so the shutdown mirrors the start
     final var subscriptions = bpmsProcessingContext.getSubscriptions();
     for (var i = subscriptions.size() - 1; i >= 0; --i) {
       try {
@@ -1582,9 +1581,9 @@ public class PeaDeploymentService implements AdapterDeploymentService<PeaBpmnMod
             .get();
       } catch (final InterruptedException e) {
         Thread.currentThread().interrupt();
-        // shutting down is what interrupts this thread, so stop trying - but the
-        // engine keeps every subscription not yet given back and will deliver tasks
-        // to an application which is going away, which nobody sees unless it is said
+        // the shutdown interrupts this thread, so stop trying. But the engine keeps every
+        // subscription which was not given back yet. It will deliver tasks to an
+        // application which is going away, and nobody sees that unless it is logged
         log.warn(
             "Process-Engine-API adapter '{}': interrupted while unsubscribing from the tasks of "
                 + "workflow module '{}' - {} subscription(s) stay open in the engine and their "

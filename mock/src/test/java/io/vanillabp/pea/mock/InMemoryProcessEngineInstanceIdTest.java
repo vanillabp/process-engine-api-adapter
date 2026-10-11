@@ -25,9 +25,9 @@ import dev.bpmcrafters.processengineapi.task.TaskType;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
 /**
- * The API promises that the <code>instanceId</code> a start answers with is the
- * <code>processInstanceId</code> in the meta of every task of that instance. The in-memory
- * engine keeps that promise, so an adapter tested against it may rely on it.
+ * The API promises this: the <code>instanceId</code> in the answer to a start is the
+ * <code>processInstanceId</code> in the meta of every task of that instance. The engine in
+ * memory keeps that promise. So an adapter tested against it may count on it.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class InMemoryProcessEngineInstanceIdTest {
@@ -43,7 +43,8 @@ public class InMemoryProcessEngineInstanceIdTest {
   private final List<TaskInformation> terminated = new CopyOnWriteArrayList<>();
 
   /**
-   * A start command which names its BPMN process the way the adapter's own command does.
+   * A start command which names its BPMN process the same way the command of the adapter
+   * does.
    *
    * @param getBpmnProcessId The process to start
    * @param get The start variables
@@ -121,16 +122,16 @@ public class InMemoryProcessEngineInstanceIdTest {
   public void aTaskOfNoStartedInstanceNamesNone() {
 
     start("4711");
-    // never started
+    // This aggregate was never started.
     engine.deliverTask("task-1", TASK, PROCESS, Map.of("id", "4799"));
-    // another process with the same aggregate: a called process has an instance of its own
+    // Another process with the same aggregate. A called process has an instance of its own.
     engine.deliverTask("task-2", TASK, "Called", Map.of("id", "4711"));
-    // the caller says which instance, like a test of a called process does
+    // The caller names the instance, as a test of a called process does.
     engine
         .deliverTask(
             "task-3", TASK, PROCESS, Map.of("id", "4711"), Map
                 .of(CommonRestrictions.PROCESS_INSTANCE_ID, "the-called-instance"));
-    // a start which only asked creates no instance
+    // A preflight start only checks and creates no instance.
     engine.startProcess(new Start(PROCESS, Map.of("id", "4800"), ExecutionMode.PREFLIGHT_CHECK)).join();
     engine.deliverTask("task-4", TASK, PROCESS, Map.of("id", "4800"));
 

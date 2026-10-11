@@ -8,14 +8,14 @@ import java.util.Objects;
 import dev.bpmcrafters.processengineapi.task.TaskInformation;
 
 /**
- * One user task of one workflow module, as the Process-Engine-API delivered it to this
- * adapter's subscription or withdrew it again.
+ * One user task of one workflow module, as the Process-Engine-API delivered it to the
+ * subscription of this adapter, or took it back.
  * <p>
- * The identifiers in front are what the adapter resolved while routing the delivery: which of
- * its configured engines the task came from, which workflow module and BPMN process the task
- * belongs to, which subscription delivered it and which workflow aggregate the payload named.
- * Everything else is the engine's own word, handed on unchanged, because the meta map is
- * engine-specific and an observer usually reads more of it than the adapter needs.
+ * The adapter worked out the identifiers in front while it routed the delivery: the
+ * configured engine the task came from, the workflow module and BPMN process of the task, the
+ * subscription which delivered it, and the workflow aggregate the payload named. Everything
+ * else is what the engine said, passed on unchanged. The meta map differs from engine to
+ * engine, and an observer usually reads more of it than the adapter needs.
  * <p>
  * The identifiers are PLAIN, never the scoped ones the deployed bytes carry: the subscription
  * is keyed by the scoped task definition and the engine reports the scoped BPMN process id,
@@ -26,15 +26,15 @@ import dev.bpmcrafters.processengineapi.task.TaskInformation;
  *
  * @param adapterId The configured adapter id whose engine delivered this task
  * @param workflowModuleId The workflow module the subscription belongs to
- * @param bpmnProcessId The BPMN process the task belongs to, or <code>null</code> where it
- *          cannot be told: the engine named none in the meta map and the subscription serves
- *          several processes, which a termination is the realistic case for
+ * @param bpmnProcessId The BPMN process the task belongs to, or <code>null</code> if that
+ *          cannot be told. That happens when the engine named none in the meta map and the
+ *          subscription serves several processes, mostly for a termination
  * @param taskDefinition The subscription's task definition - the external form reference of
  *          the user task
- * @param workflowAggregateId The workflow aggregate's id, serialized, or <code>null</code>
- *          where the delivery carried none - the BPMN process has no workflow aggregate in
+ * @param workflowAggregateId The id of the workflow aggregate as a text, or <code>null</code>
+ *          if the delivery carried none. Then the BPMN process has no workflow aggregate in
  *          this application, or the subscription did not ask the engine for the variable
- *          holding it, and a termination carries no payload at all
+ *          which holds it. A termination carries no payload at all
  * @param taskInformation What the engine says about the task: its id and its meta map
  * @param payload The variables the subscription asked the engine for, empty for a termination
  */
@@ -48,19 +48,19 @@ public record PeaUserTaskObservation(
                                      Map<String, Object> payload) {
 
   /**
-   * Checks what an observer cannot do without and makes the payload unmodifiable, so an
-   * observer which keeps the observation cannot change what the next one sees.
+   * Checks the values an observer cannot do without. It makes the payload unmodifiable, so
+   * an observer which keeps the observation cannot change what the next one sees.
    */
   public PeaUserTaskObservation {
-    // what the observation is about: without them it cannot be placed under any workflow
-    // module, and finding that out where a report is built would name neither the task nor
-    // whoever handed it over
+    // what the observation is about. Without these, it belongs to no workflow module. If an
+    // observer found that out later, while building a report, it could name neither the task
+    // nor whoever handed it over
     Objects.requireNonNull(adapterId, "adapterId");
     Objects.requireNonNull(workflowModuleId, "workflowModuleId");
     Objects.requireNonNull(taskDefinition, "taskDefinition");
     Objects.requireNonNull(taskInformation, "taskInformation");
-    // not Map.copyOf: a process variable an engine holds as null is a value like any
-    // other, and an observer passes it on as null
+    // not Map.copyOf, which refuses null: a process variable an engine holds as null is a
+    // value like any other, and an observer passes it on as null
     payload = payload == null
         ? Map.of()
         : Collections.unmodifiableMap(new LinkedHashMap<>(payload));
@@ -78,8 +78,8 @@ public record PeaUserTaskObservation(
   }
 
   /**
-   * What the engine says about the task beside its payload - who it is assigned to, when it
-   * is due, whatever that engine fills. Which keys are there is the engine's business, so an
+   * What the engine says about the task apart from its payload: who it is assigned to, when
+   * it is due, whatever that engine fills in. The engine decides which keys are there. So an
    * observer asks for a key and takes no answer for granted.
    *
    * @return What the engine says about the task, which the Process-Engine-API guarantees to
@@ -92,8 +92,8 @@ public record PeaUserTaskObservation(
   }
 
   /**
-   * Why this observation happened at all, as far as the engine says so. An observer which
-   * builds a report needs it to tell a new task from an assignment of one it already has.
+   * Why the engine reported the task, if the engine says so. An observer which builds a
+   * report needs it to tell a new task from a new assignee of a task it already has.
    *
    * @return Why the engine reported the task - <code>create</code>, <code>assign</code>,
    *         <code>update</code>, <code>complete</code> or <code>delete</code> in the

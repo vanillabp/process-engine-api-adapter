@@ -9,22 +9,23 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * The {@link PeaUserTaskObserver}s of one adapter id and the one place they are called from,
- * so that what an observer costs the task it watches is decided once for both platforms.
+ * The {@link PeaUserTaskObserver}s of one adapter id, and the one place they are called from.
+ * So what a failing observer means for the task it watches is decided once, for both
+ * platforms.
  * <p>
- * An observer which throws makes the delivery fail. Every other observer is told first, so
- * who hears about a task does not depend on the order the list happens to be in, and then the
- * first failure leaves this class, with the failures of the others attached as suppressed
- * exceptions. A failure while DESCRIBING the task is the same case: an observer which gets
- * nothing to see could do nothing either. See decision 12 in the repository's DECISIONS.md
- * for why a swallowed failure was worse than a disturbed delivery.
+ * An observer which throws makes the delivery fail. Every other observer is told first. So
+ * who hears about a task does not depend on the order of the list. Then the first failure
+ * leaves this class, and the failures of the others are attached as suppressed exceptions. A
+ * failure while DESCRIBING the task is the same case: an observer which gets nothing to see
+ * could do nothing either. Decision 12 in the repository's DECISIONS.md says why a swallowed
+ * failure was worse than a disturbed delivery.
  * <p>
- * An application which registered no observer never builds an observation at all: the callers
- * hand over a {@link Supplier}, which stays unread while the list is empty.
+ * If an application registered no observer, no observation is ever built. The callers hand
+ * over a {@link Supplier}, and nobody calls it while the list is empty.
  * <p>
- * The order is the one the platform resolved - on Spring Boot the ordered bean stream, on
- * Quarkus the order ArC lists the beans in. Observers are told about the same task
- * independently of each other, so an observer must not rely on another having run first.
+ * The order is the one the platform worked out: on Spring Boot the ordered bean stream, on
+ * Quarkus the order in which ArC lists the beans. Each observer is told about a task on its
+ * own, so an observer must not rely on another one having run first.
  */
 public final class PeaUserTaskObservers {
 
@@ -44,12 +45,11 @@ public final class PeaUserTaskObservers {
   }
 
   /**
-   * The observers of one adapter id, as a value which can be handed around: a missing
-   * collection and an empty one are the same thing here, an application which does not
-   * watch.
+   * The observers of one adapter id, as a value which can be handed around. A missing
+   * collection means the same as an empty one here: an application which does not watch.
    *
-   * @param adapterId The adapter id whose deliveries these observers are told about - what
-   *          names the culprit's neighbourhood when one of them fails
+   * @param adapterId The adapter id whose deliveries these observers are told about. The
+   *          message of a failure names it, to help find the observer which broke
    * @param observers What the platform module collected, possibly <code>null</code> or empty
    * @return The observers of one adapter id, never <code>null</code>
    */
@@ -65,11 +65,11 @@ public final class PeaUserTaskObservers {
   }
 
   /**
-   * Asked before an observation is built, because building one loads the values the engine
-   * delivered and nobody should pay for that where there is no reader.
+   * Asked before an observation is built. Building one loads the values the engine
+   * delivered, and nobody should pay for that if nobody reads them.
    *
-   * @return Whether nobody watches - the state an application which knows nothing about this
-   *         seam is in
+   * @return Whether nobody watches. That is the case for an application which knows nothing
+   *         about observers
    */
   public boolean isEmpty() {
 
@@ -78,8 +78,8 @@ public final class PeaUserTaskObservers {
   }
 
   /**
-   * Names the observers so the startup line says who watches. A seam nobody can see in a
-   * log is a seam somebody will look for in a debugger.
+   * Names the observers, so the startup line says who watches. If the log does not show
+   * the observers, somebody will look for them in a debugger.
    *
    * @return The observers by class name, for the line said once at startup
    */
@@ -93,8 +93,8 @@ public final class PeaUserTaskObservers {
   }
 
   /**
-   * Tells every observer that a user task was delivered. The observation is built once and
-   * only where somebody watches, which is why it arrives as a supplier.
+   * Tells every observer that a user task was delivered. The observation is built once, and
+   * only if somebody watches. That is why it arrives as a supplier.
    *
    * @param workflowModuleId The workflow module the task belongs to, for the message of a
    *          failure
@@ -114,9 +114,9 @@ public final class PeaUserTaskObservers {
   }
 
   /**
-   * Tells every observer that a user task the engine had delivered is gone. The engine's
-   * own word for why travels with the observation and is passed on uninterpreted, because
-   * what that word means differs per engine behind this API.
+   * Tells every observer that a user task the engine had delivered is gone. The reason, in
+   * the engine's own words, travels with the observation and is passed on as it is. What
+   * the words mean differs from engine to engine behind this API.
    *
    * @param workflowModuleId The workflow module the task belongs to, for the message of a
    *          failure
@@ -197,11 +197,11 @@ public final class PeaUserTaskObservers {
   }
 
   /**
-   * Says the failure here as well as throwing it. What an engine behind this API makes of a
-   * handler which throws is up to that engine, and the API's own reference implementation for
-   * an embedded Camunda 7 logs the message of the failure without its stack trace and without
-   * the observers suppressed behind it. That is too little to find the observer which broke,
-   * so the whole failure is written where it was built.
+   * Logs the failure here, as well as throwing it. What an engine behind this API does with
+   * a handler which throws is up to that engine. The reference implementation of the API for
+   * an embedded Camunda 7 logs only the message of the failure. It leaves out the stack trace
+   * and the suppressed failures of the other observers. That is too little to find the
+   * observer which broke. So the whole failure is logged where it was built.
    *
    * @param failure What the delivery or termination fails with
    * @return The same failure, to be thrown by the caller

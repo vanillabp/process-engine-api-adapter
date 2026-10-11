@@ -7,18 +7,18 @@ import io.vanillabp.integration.processservice.SpringBootMigrationAdapterAutoCon
 import io.vanillabp.pea.PeaAdapter;
 
 /**
- * Announces the Process-Engine-API adapter type to the VanillaBP Spring Boot integration.
+ * Tells the VanillaBP Spring Boot integration that the Process-Engine-API adapter type
+ * exists.
  * <p>
- * This configuration must be constructible very early - before the platform validates the
- * configured adapter types - therefore it declares no other beans (see the dummy adapter
- * template).
+ * Spring has to build this configuration very early, before the platform checks the
+ * configured adapter types. So it declares no other beans.
  */
 @AutoConfiguration(before = SpringBootMigrationAdapterAutoConfiguration.class)
 public class PeaAdapterConfiguration extends AdapterConfigurationBase {
 
   /**
-   * Spring Boot builds the class while it applies the auto-configuration, and that is all
-   * it does: the announcement below is read from the instance.
+   * Spring Boot builds the class while it applies the auto-configuration. Nothing else
+   * happens here. The platform reads the adapter type from the instance.
    */
   public PeaAdapterConfiguration() {
 

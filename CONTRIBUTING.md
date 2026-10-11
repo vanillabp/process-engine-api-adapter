@@ -122,10 +122,10 @@ instead of `consequently`. A technical term stays a technical term, but say what
 time it turns up, and write an abbreviation out once. If a sentence trips you up when you read it
 aloud, rewrite it.
 
-This holds for every English text here, the javadoc, the commit message and the pull request
-included. Nothing a program reads is renamed for the sake of language: type and method names,
-configuration keys and artifact coordinates stay as they are, because code in other repositories
-points at them.
+This holds for every English text here, the javadoc and the comments, in the main code and in the
+tests, the commit message and the pull request included. Nothing a program reads is renamed for the
+sake of language: type and method names, configuration keys and artifact coordinates stay as they
+are, because code in other repositories points at them.
 
 The same rules hold for the [wiki](https://github.com/vanillabp/process-engine-api-adapter/wiki).
 [`AGENTS.md`](./AGENTS.md) has before and after examples from this repository.

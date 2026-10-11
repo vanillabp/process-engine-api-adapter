@@ -14,36 +14,37 @@ import lombok.extern.slf4j.Slf4j;
  * The keys a delivered task carries in {@link TaskInformation#getMeta()}, and how to read
  * them.
  * <p>
- * The Process-Engine-API defines a vocabulary for the keys a subscription may be RESTRICTED
- * by ({@link CommonRestrictions}) and none for the keys a delivered task carries: an engine
- * adapter fills whatever it has, and {@link TaskInformation} itself names only
- * {@code reason} and {@code retries}. The keys below are the ones the API's own reference
- * adapter for an embedded Camunda 7 fills, so they are what a subscriber can expect where it
- * can expect anything. A key an engine leaves out is never an error - it means one detail
- * less about a task worth reporting anyway.
+ * The Process-Engine-API names the keys a subscription may be RESTRICTED by
+ * ({@link CommonRestrictions}). It names no keys for what a delivered task carries. Each
+ * engine adapter fills what it has, and {@link TaskInformation} itself names only
+ * {@code reason} and {@code retries}. The keys below are the ones that the API's own
+ * reference adapter for an embedded Camunda 7 fills. So a subscriber can expect these, if it
+ * can expect anything. A key an engine leaves out is never an error. The task is still worth
+ * reporting, just with one detail less.
  * <p>
- * This adapter reads four of them itself and hands the rest on untouched. They are spelled out
- * here rather than in the handlers so that whoever watches this adapter's user tasks
- * ({@link io.vanillabp.pea.observation.PeaUserTaskObserver}) reads the same names the adapter
- * writes: one value, one spelling, and the spelling which matters is the engine's.
+ * This adapter reads four of the keys itself and passes the rest on as they are. The keys
+ * are written here and not in the handlers. That way, whoever watches the user tasks of this
+ * adapter ({@link io.vanillabp.pea.observation.PeaUserTaskObserver}) reads the same names
+ * the adapter writes. Each value has one spelling, and it is the engine's spelling.
  * <p>
- * What the keys MEAN is the Process-Engine-API's business, not this adapter's - see entry 3
- * of the Business Cockpit adapter's {@code GAPS.md}, where the API could close it cheapest.
+ * What the keys MEAN is up to the Process-Engine-API, not to this adapter. Entry 3 of the
+ * {@code GAPS.md} of the Business Cockpit adapter says where the API could fix that most
+ * cheaply.
  */
 @Slf4j
 public final class PeaTaskMeta {
 
   /**
-   * The BPMN process id of the delivered task. This one is an ADAPTER convention rather
-   * than the engine's: the Process-Engine-API names no such key (see {@code GAPS.md}, entry
-   * 6), and without it a task definition has to be unique across the processes of a
-   * workflow module for a delivery to be routable.
+   * The BPMN process id of the delivered task. This key is a convention of this ADAPTER, not
+   * of the engine. The Process-Engine-API names no such key (see {@code GAPS.md}, entry 6).
+   * Without it, a delivery can only be routed if its task definition is unique across the
+   * processes of the workflow module.
    * <p>
-   * The value is the id the ENGINE knows, so it carries the prefix under
-   * {@code use-prefix}. Read it through
+   * The value is the id the ENGINE knows, so under {@code use-prefix} it carries the prefix.
+   * Read it through
    * {@link #plainBpmnProcessId(TaskInformation, NameClashAvoidanceSupport, String, String)}
-   * rather than from the map, because everything this adapter hands the core is keyed by
-   * the plain id (see decision 2 in the repository's DECISIONS.md).
+   * and not from the map. Everything this adapter hands to the core is keyed by the plain id
+   * (see decision 2 in the repository's DECISIONS.md).
    */
   public static final String BPMN_PROCESS_ID = "bpmnProcessId";
 
@@ -55,21 +56,20 @@ public final class PeaTaskMeta {
   public static final String BPMN_TASK_ID = CommonRestrictions.ACTIVITY_ID;
 
   /**
-   * The engine's own id of the workflow the task belongs to. It travels into the delivery
-   * record like {@link #BPMN_TASK_ID} and is empty there for the same reason where an engine
-   * names none.
+   * The engine's own id of the workflow the task belongs to. It goes into the delivery record
+   * like {@link #BPMN_TASK_ID}. If an engine does not fill it, the record has no workflow id.
    */
   public static final String WORKFLOW_ID = CommonRestrictions.PROCESS_INSTANCE_ID;
 
   /**
-   * The version tag of the deployed process definition, where an engine keeps one. The API
-   * has no numeric version, so this tag is all VanillaBP can match
+   * The version tag of the deployed process definition, if the engine keeps one. The API has
+   * no version number. So this tag is the only thing VanillaBP can match
    * <code>&#64;WorkflowTask(version = ...)</code> against here (see {@code GAPS.md}, entry
    * 19).
    */
   public static final String PROCESS_VERSION_TAG = CommonRestrictions.PROCESS_DEFINITION_VERSION_TAG;
 
-  /** The BPMN name of the task, the fallback title of a task list. */
+  /** The BPMN name of the task. A task list shows it if it has no better title. */
   public static final String TASK_NAME = "taskName";
 
   /** Who the task is assigned to. */
@@ -91,8 +91,8 @@ public final class PeaTaskMeta {
   }
 
   /**
-   * Reads one meta value. Every key is optional: which of them an engine fills is that
-   * engine's business, so a caller handles an empty answer rather than requiring one.
+   * Reads one meta value. Every key is optional. Each engine decides which keys it fills, so
+   * a caller has to cope with an empty answer.
    *
    * @param taskInformation What the engine delivered
    * @param key One of the keys above
@@ -110,19 +110,19 @@ public final class PeaTaskMeta {
   }
 
   /**
-   * Which BPMN process a delivery says it belongs to, in the form the core's registries are
-   * keyed by.
+   * The BPMN process a delivery says it belongs to, in the form the registries of the core
+   * use as their key.
    * <p>
-   * The engine fills {@link #BPMN_PROCESS_ID} with the id IT knows, and under
-   * {@code use-prefix} that id carries the workflow module as a prefix. Everything this
-   * adapter hands over - the registry lookup of a handler, the process id an observer reads,
-   * the id a viewer asks about - uses the plain id the application wrote, so the value is
-   * translated back here.
+   * The engine fills {@link #BPMN_PROCESS_ID} with the id IT knows. Under {@code use-prefix},
+   * that id starts with the workflow module as a prefix. But everything this adapter hands
+   * over uses the plain id the application wrote: the registry lookup of a handler, the
+   * process id an observer reads, the id a viewer asks about. So the value is translated
+   * back here.
    * <p>
-   * Both task handlers read this one entry, and they used to read it differently: the
-   * user-task side translated and the service-task side did not, which broke every
-   * service-task delivery of an engine filling the entry while the module prefixed its
-   * identifiers. The rule lives here now so the two cannot drift apart again.
+   * Both task handlers read this entry. They used to read it differently: the user-task side
+   * translated it, the service-task side did not. That broke every service-task delivery
+   * when the engine filled the entry and the module used prefixes. The rule now lives here,
+   * so the two cannot drift apart again.
    *
    * @param taskInformation What the engine delivered
    * @param scoping The core's name-clash-avoidance support, or <code>null</code>
@@ -145,9 +145,8 @@ public final class PeaTaskMeta {
   }
 
   /**
-   * Reads a meta value which names several things, the candidate groups of a user task for
-   * example. The API carries them as one string, so the comma is the separator and nothing
-   * else can be.
+   * Reads a meta value which names several things, for example the candidate groups of a
+   * user task. The API carries them as one string, and the separator is the comma.
    *
    * @param taskInformation What the engine delivered
    * @param key One of the keys above
@@ -172,8 +171,8 @@ public final class PeaTaskMeta {
   /**
    * A date the engine wrote into its meta map.
    * <p>
-   * A value which is not a date is reported and dropped rather than thrown: the task itself
-   * is worth reporting, and the defect belongs to the engine which wrote the value.
+   * A value which is not a date is logged and dropped, not thrown. The task itself is still
+   * worth reporting, and the defect lies with the engine which wrote the value.
    *
    * @param taskInformation What the engine delivered
    * @param key One of the keys above

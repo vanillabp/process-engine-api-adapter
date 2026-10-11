@@ -7,15 +7,15 @@ import lombok.Getter;
 import lombok.Setter;
 
 /**
- * The workflow aggregate of the Quarkus end-to-end application. It is a JPA entity
- * on H2 for two reasons: the platform reads the persistence technology off the
- * aggregate to attribute the JDBC phase-two outbox, and a rollback has to really
- * discard the aggregate change so the two-phase assertions mean something.
+ * The workflow aggregate of the Quarkus end-to-end application. It is a JPA entity on H2,
+ * for two reasons. The platform reads the persistence technology from the aggregate, and so
+ * picks the JDBC outbox for phase two. And a rollback has to really throw away the change of
+ * the aggregate, or the assertions about the two phases mean nothing.
  * <p>
- * Deliberately a plain entity with a repository rather than an active record: the
- * adapter reads the aggregate's JavaBean properties to build what travels to the
- * engine, and the active-record base class would add persistence methods to that
- * set which only work while a session is open.
+ * It is a plain entity with a repository on purpose, not an active record. The adapter reads
+ * the JavaBean properties of the aggregate to build what goes to the engine. The base class
+ * of an active record would add persistence methods to these properties, and they only work
+ * while a session is open.
  */
 @Entity
 @Getter
@@ -30,8 +30,7 @@ public class PeaE2eAggregate {
   private String taskId;
 
   /**
-   * Never sent to the engine - which also makes the class' sync mode
-   * "share everything else".
+   * Never sent to the engine. Because of it, the class shares everything else.
    */
   @NoSyncWithBPMS
   private String secret;

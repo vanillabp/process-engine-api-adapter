@@ -6,19 +6,18 @@ import dev.bpmcrafters.processengineapi.ExecutionMode;
 import dev.bpmcrafters.processengineapi.task.CompleteTaskByErrorCmd;
 
 /**
- * A {@code CompleteTaskByErrorCmd} carrying {@link ExecutionMode#SYNC} - see
- * {@link PeaCompleteTaskCmd} for the reasoning.
+ * A {@code CompleteTaskByErrorCmd} which carries {@link ExecutionMode#SYNC}. The reason is
+ * the same as for {@link PeaCompleteTaskCmd}.
  * <p>
- * Why a subclass is needed to carry the execution mode is decision 4 in the repository's
- * DECISIONS.md.
+ * Why the execution mode needs a subclass is decision 4 in the repository's DECISIONS.md.
  */
 public class PeaCompleteTaskByErrorCmd extends CompleteTaskByErrorCmd {
 
   private final ExecutionMode executionMode;
 
   /**
-   * The BPMN error without any values: what a task raises where the model branches on the
-   * error code alone.
+   * The BPMN error without any values. A task raises this one where the model branches on
+   * the error code alone.
    *
    * @param taskId The task to cancel
    * @param errorCode The BPMN error code
@@ -34,8 +33,8 @@ public class PeaCompleteTaskByErrorCmd extends CompleteTaskByErrorCmd {
   }
 
   /**
-   * The BPMN error carrying the aggregate state shared with the engine - the error
-   * boundary's outgoing path may branch on it.
+   * The BPMN error which carries the aggregate state shared with the engine. The path out
+   * of the error boundary event may branch on it.
    *
    * @param taskId The task to cancel
    * @param errorCode The BPMN error code
@@ -59,9 +58,9 @@ public class PeaCompleteTaskByErrorCmd extends CompleteTaskByErrorCmd {
    * @param taskId The task to cancel
    * @param errorCode The BPMN error code
    * @param errorMessage The BPMN error message
-   * @param executionMode {@link ExecutionMode#SYNC} for the actual cancellation
-   *        (phase two) or {@link ExecutionMode#PREFLIGHT_CHECK} for the
-   *        non-advancing phase-one existence check
+   * @param executionMode {@link ExecutionMode#SYNC} for the real cancellation in phase
+   *        two, or {@link ExecutionMode#PREFLIGHT_CHECK} for the check in phase one, which
+   *        only asks whether the task exists and moves nothing on
    */
   public PeaCompleteTaskByErrorCmd(
       final String taskId,
@@ -75,10 +74,10 @@ public class PeaCompleteTaskByErrorCmd extends CompleteTaskByErrorCmd {
   }
 
   @Override
-  // javac warns that the overridden method is a bridge: 'executionMode()' is a default
-  // method of the Kotlin interface 'ExecutionModeAware', materialized as a bridge in the
-  // superclass. The warning is unavoidable - @SuppressWarnings does not cover it - and the
-  // API offers no constructor parameter to set the mode instead.
+  // javac warns that this overrides a bridge method. 'executionMode()' is a default method
+  // of the Kotlin interface 'ExecutionModeAware', and the superclass turns it into a bridge.
+  // @SuppressWarnings does not silence this warning. The API has no constructor parameter
+  // for the mode, so overriding is the only way.
   public ExecutionMode executionMode() {
 
     return executionMode;

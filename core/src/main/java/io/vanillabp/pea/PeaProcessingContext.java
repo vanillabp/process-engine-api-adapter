@@ -9,19 +9,18 @@ import dev.bpmcrafters.processengineapi.task.TaskSubscription;
 import io.vanillabp.integration.adapter.spi.NameClashAvoidanceSupport.ModelIdentifier;
 
 /**
- * The adapter's processing context ({@code PC} type parameter of
- * {@link io.vanillabp.integration.adapter.spi.AdapterDeploymentService}).
+ * The processing context of this adapter. It is the {@code PC} type parameter of
+ * {@link io.vanillabp.integration.adapter.spi.AdapterDeploymentService}.
  * <p>
- * One instance is accumulated across all BPMN files of a single workflow module while
- * the deployment pipeline runs
- * ({@code readBpmn -> prepareBpmn -> wireBpmn -> deployResources ->
- * startWorkflowProcessing}). It collects everything the adapter needs to deploy the
- * module's resources to the Process-Engine-API in one go.
+ * There is one instance per workflow module. It grows over all BPMN files of the module
+ * while the deployment pipeline runs ({@code readBpmn -> prepareBpmn -> wireBpmn ->
+ * deployResources -> startWorkflowProcessing}). It collects everything the adapter needs
+ * to deploy the resources of the module to the Process-Engine-API in one call.
  * <p>
- * Everything in here is collected while the module deploys and read once: the models and
- * the decision tables become the bundle handed to the {@code DeploymentApi}, the declared
- * identifiers go to the core so it can warn about a name two modules scope to the same
- * string, and the subscriptions are what {@code stopWorkflowProcessing} closes again.
+ * Everything in here is collected while the module deploys, and it is read once. The
+ * models and the decision tables become the bundle for the {@code DeploymentApi}. The
+ * declared identifiers go to the core, so it can warn when two modules scope a name to the
+ * same string. The subscriptions are what {@code stopWorkflowProcessing} closes again.
  */
 public class PeaProcessingContext {
 
@@ -32,8 +31,8 @@ public class PeaProcessingContext {
   /**
    * Starts an empty context for one workflow module.
    *
-   * @param workflowModuleId The workflow module this context collects, which is the unit
-   *          the adapter deploys in one call
+   * @param workflowModuleId The workflow module this context collects for. The adapter
+   *          deploys one module in one call
    */
   public PeaProcessingContext(
       final String workflowModuleId) {
@@ -69,8 +68,8 @@ public class PeaProcessingContext {
   private final java.util.Map<String, byte[]> decisions = new java.util.LinkedHashMap<>();
 
   /**
-   * The decision tables of the workflow module, keyed by filename - deployed with its
-   * processes in the same bundle. The API takes opaque resources, so nothing here has to
+   * The decision tables of the workflow module, by file name. They are deployed in the same
+   * bundle as the processes. The API takes the files as they are, so nothing here has to
    * understand a decision.
    *
    * @return The files, in the order they were read
@@ -84,8 +83,8 @@ public class PeaProcessingContext {
   /**
    * Remembers a decision table for deployment.
    *
-   * @param filename The DMN file name - it keeps its extension, which is all the engine
-   *          behind the API has to tell a decision from a process
+   * @param filename The DMN file name. It keeps its extension, because that is all the
+   *          engine behind the API has to tell a decision from a process
    * @param dmn The file
    */
   public void addDecision(
@@ -99,16 +98,16 @@ public class PeaProcessingContext {
   private final Set<ModelIdentifier> declaredIdentifiers = new LinkedHashSet<>();
 
   /**
-   * The identifiers the module's models declare, with the plain names the application gave
-   * them - handed to the core after the deployment so it can warn where another workflow
-   * module declares a name which reaches the engine in the same form.
+   * The identifiers the models of the module declare, with the plain names the application
+   * gave them. They go to the core after the deployment. The core then warns when another
+   * workflow module declares a name which reaches the engine in the same form.
    * <p>
-   * Read while the module deploys and never again: no delivery and no
+   * They are read while the module deploys and never again. No delivery and no
    * <code>ProcessService</code> call looks at them.
    * <p>
-   * A set, because the names a workflow module scopes on its own sit in the
-   * <code>definitions</code> element of a file: a file holding two processes declares each
-   * of them once for both, and the core asks for them without duplicates.
+   * This is a set, because the names a workflow module scopes on its own sit in the
+   * <code>definitions</code> element of a file. A file with two processes declares each of
+   * them once for both, and the core wants them without duplicates.
    *
    * @return What the models read so far declare
    */
@@ -118,15 +117,11 @@ public class PeaProcessingContext {
 
   }
 
-  /**
-   * The task subscriptions opened by startWorkflowProcessing, closed by
-   * stopWorkflowProcessing (reverse order).
-   */
   private final List<TaskSubscription> subscriptions = new ArrayList<>();
 
   /**
-   * The subscriptions opened while the module started processing. They are closed in
-   * reverse order when it stops, which is why the order matters here.
+   * The subscriptions opened when the module started processing. They are closed in
+   * reverse order when it stops, so the order matters here.
    *
    * @return The open subscriptions, in the order they were opened
    */

@@ -21,14 +21,14 @@ import jakarta.ws.rs.Path;
 import jakarta.ws.rs.PathParam;
 
 /**
- * What the Quarkus end-to-end tests can see of the running application: a handful of
- * <code>introspect/...</code> endpoints reporting the in-memory engine's recordings
- * and triggering the {@code ProcessService} operations the tests want to observe.
+ * What the Quarkus end-to-end tests can see of the running application. A few
+ * <code>introspect/...</code> endpoints report what the engine in memory recorded. Others
+ * call the {@code ProcessService} operations the tests want to watch.
  * <p>
- * The endpoints doing two-phase work drive the transaction themselves
- * ({@link UserTransaction}) and report what was already visible INSIDE it, because
- * the whole point of those tests is the ordering: phase one runs in the caller's
- * transaction, phase two only after it committed.
+ * The endpoints which do work in two phases run the transaction themselves
+ * ({@link UserTransaction}). They report what could already be seen INSIDE it. Those tests
+ * are about the order: phase one runs in the transaction of the caller, phase two only after
+ * the commit.
  */
 @Path("/introspect")
 @ApplicationScoped
@@ -257,8 +257,8 @@ public class PeaE2eIntrospectionController {
   }
 
   /**
-   * Seeds an aggregate WITHOUT starting a workflow - the shape the task-delivery
-   * tests need, where the engine (not the application) is the one starting things.
+   * Stores an aggregate WITHOUT starting a workflow. The tests of task delivery need this,
+   * because there the engine starts things and not the application.
    *
    * @param id The aggregate ID
    */
@@ -293,8 +293,8 @@ public class PeaE2eIntrospectionController {
   }
 
   /**
-   * Starts a workflow and reports what was visible while the transaction was still
-   * open: phase one has to have run, phase two must not.
+   * Starts a workflow and reports what could be seen while the transaction was still open.
+   * Phase one has to have run by then, and phase two must not.
    *
    * @param id The aggregate ID
    * @return What phase one left behind inside the transaction
@@ -312,8 +312,8 @@ public class PeaE2eIntrospectionController {
       insideTransaction.put("syncStarts", startsWithMode(ExecutionMode.SYNC));
       insideTransaction.put("startedInstances", startedInstancesOf(id));
     } catch (Exception e) {
-      // a failing phase one aborts the caller's transaction - the test wants to read
-      // the message the application would see, so it travels in the response
+      // A failing phase one ends the transaction of the caller. The test wants to read the
+      // message the application would see, so it goes into the response.
       userTransaction.rollback();
       insideTransaction.put("exception", e
           .getClass()
@@ -328,7 +328,7 @@ public class PeaE2eIntrospectionController {
   }
 
   /**
-   * Starts a workflow and rolls the transaction back - no phase two may ever follow.
+   * Starts a workflow and rolls the transaction back. No phase two may ever follow.
    *
    * @param id The aggregate ID
    */
@@ -370,7 +370,7 @@ public class PeaE2eIntrospectionController {
 
   /**
    * Hands a task to the adapter the way an engine does. The adapter opens its own
-   * transaction, so this endpoint deliberately runs without one.
+   * transaction, so this endpoint runs without one on purpose.
    *
    * @param taskId The delivered task's ID
    * @param taskDefinition The task definition
@@ -392,8 +392,8 @@ public class PeaE2eIntrospectionController {
   }
 
   /**
-   * Lets the engine reject the next phase one for a BPMN process - the injection is
-   * cleared by the next {@code introspect/reset}.
+   * Lets the engine refuse the next phase one for a BPMN process. The next
+   * {@code introspect/reset} clears it.
    *
    * @param bpmnProcessId The BPMN process whose preflight fails
    */
@@ -407,8 +407,8 @@ public class PeaE2eIntrospectionController {
   }
 
   /**
-   * Lets the engine reject the next phase two for a BPMN process once, so the outbox
-   * has to retry.
+   * Lets the engine refuse the next phase two for a BPMN process, once. So the outbox has to
+   * try again.
    *
    * @param bpmnProcessId The BPMN process whose next SYNC start fails
    */
@@ -422,9 +422,9 @@ public class PeaE2eIntrospectionController {
   }
 
   /**
-   * Finishes a task the way somebody outside VanillaBP does: the engine withdraws it from
-   * the subscription it was delivered to. The delivery record VanillaBP wrote for that
-   * task stays untouched, which is what makes the next completion of it a stale one.
+   * Finishes a task the way somebody outside VanillaBP does: the engine takes it back from the
+   * subscription which got it. The delivery record VanillaBP wrote for that task stays as it
+   * is. That is what makes the next completion of the task an outdated one.
    *
    * @param taskId The task to finish
    * @param taskDefinition The task definition it was delivered for
@@ -535,7 +535,7 @@ public class PeaE2eIntrospectionController {
   }
 
   /**
-   * Correlates a message and rolls the transaction back - nothing may be correlated.
+   * Correlates a message and rolls the transaction back. Nothing may be correlated.
    *
    * @param messageName The message name
    * @param aggregateId The aggregate ID
@@ -576,9 +576,8 @@ public class PeaE2eIntrospectionController {
   }
 
   /**
-   * The adapter cannot push a changed aggregate to a running instance (GAPS entry
-   * 18) - what the application gets is the guiding message, and it has to get it on
-   * Quarkus as well.
+   * The adapter cannot push a changed aggregate to a running instance (GAPS entry 18). The
+   * application gets a message which tells it what to do. It has to get it on Quarkus too.
    *
    * @param aggregateId The aggregate ID
    * @return The exception the adapter raised
@@ -664,11 +663,11 @@ public class PeaE2eIntrospectionController {
   }
 
   /**
-   * Runs one {@code ProcessService} call inside a transaction of its own and reports the
-   * exception it may have raised plus the execution modes recorded at the two moments the
-   * adapter's promise is about: while the transaction was still open, and the instant its
-   * commit returned. The adapter hands its phase-one check to the platform's pre-commit
-   * hook, so the check happens between those two reads and the first one can never see it.
+   * Runs one {@code ProcessService} call in a transaction of its own. It reports the exception
+   * the call may have thrown. It also reports the execution modes recorded at the two moments
+   * the promise of the adapter is about: while the transaction was still open, and right when
+   * its commit returned. The adapter hands its phase-one check to the pre-commit hook of the
+   * platform. So the check runs between those two reads, and the first read can never see it.
    */
   private Map<String, Object> inTransaction(
       final Consumer<PeaE2eAggregate> operation,
@@ -690,8 +689,8 @@ public class PeaE2eIntrospectionController {
     try {
       userTransaction.commit();
     } catch (Exception e) {
-      // the pre-commit check runs while the commit runs, so a check which fails fails the
-      // commit itself and JTA wraps what it threw - the transaction is already rolled back
+      // The pre-commit check runs during the commit. So a check which fails makes the commit
+      // itself fail, and JTA wraps what it threw. The transaction is already rolled back.
       return failure(report, e);
     }
     report.put("modesWhenTheCommitReturned", namesOf(recordedModes.get()));
@@ -700,10 +699,10 @@ public class PeaE2eIntrospectionController {
   }
 
   /**
-   * Reports a failed operation twice: as the caller of this endpoint saw it, and as the
-   * end of its cause chain. What a phase-one check throws reaches the application
-   * unwrapped where it ran inside the call, and wrapped by JTA where it ran during the
-   * commit, so a test which is about the TYPE has to be able to read both.
+   * Reports a failed operation twice: as the caller of this endpoint saw it, and as the end of
+   * its chain of causes. What a phase-one check throws reaches the application as it is if the
+   * check ran inside the call. It comes wrapped by JTA if the check ran during the commit. So
+   * a test about the TYPE has to be able to read both.
    *
    * @param report What has been collected so far
    * @param e The exception the operation ended with

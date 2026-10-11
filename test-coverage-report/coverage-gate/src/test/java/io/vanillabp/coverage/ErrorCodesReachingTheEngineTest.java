@@ -10,14 +10,13 @@ import io.vanillabp.integration.test.utils.CoverageGate;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
 /**
- * Holds the rule that a BPMN error code is scoped before it reaches the engine, on every path
- * which sends one.
+ * A BPMN error code is scoped before it reaches the engine, on every path which sends one.
  * <p>
- * The rule was broken once and fixed by hand, on two paths, and the second of the two came to
- * light only because somebody asked whether there was one. A test per path would not have found
- * it: the path which forgets the scoping is by definition the path nobody wrote a test for. So
- * this reads the sources instead and asks the question of every call site there is, the ones
- * added after today included.
+ * The rule was broken once, on two paths, and fixed by hand. The second path came to light
+ * only because somebody asked whether there was one. A test for each path would not have
+ * found it. The path which forgets the scoping is the path nobody wrote a test for. So this
+ * test reads the sources and asks the question of every call site, including the ones added
+ * later.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class ErrorCodesReachingTheEngineTest {

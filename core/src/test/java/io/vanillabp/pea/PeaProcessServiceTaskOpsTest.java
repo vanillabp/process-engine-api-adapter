@@ -49,7 +49,7 @@ public class PeaProcessServiceTaskOpsTest {
 
     assertEquals(WorkflowAwareness.ACTIVE, service.awarenessOfTask(SCOPE, "42", "task-1"));
     assertEquals(WorkflowAwareness.UNKNOWN_TO_BPMS, service.awarenessOfTask(SCOPE, "42", "task-2"));
-    // the probes never advanced anything
+    // The probes did not move anything forward.
     assertTrue(engine.getCompletedTasks().isEmpty());
 
   }
@@ -68,21 +68,21 @@ public class PeaProcessServiceTaskOpsTest {
             "Process", null, new Object(), PhaseOperations.args(PhaseTwoCall.ARG_TASK_ID,
                 "task-3", PhaseTwoCall.ARG_BPMN_ERROR_CODE, "ERR")));
 
-    // the type is the one the SPI documents for a task no BPMS knows any more, so an
-    // application catches the same thing here as it does when a probe found out
+    // The SPI documents this type for a task which no BPMS knows any more. So an
+    // application catches the same exception here as when a probe found it out.
     final var failure = assertThrows(
         TaskNotFoundException.class,
         () -> PhaseOperations.phaseOne(service, PhaseOperation.COMPLETE_TASK, "mod",
             "Process", null, new Object(),
             PhaseOperations.args(PhaseTwoCall.ARG_TASK_ID, "task-gone")));
     assertTrue(failure.getMessage().contains("task-gone"));
-    // cancelling asks the same question about the same task, so it answers the same way
+    // Cancelling asks the same question about the same task, so the answer is the same.
     assertThrows(
         TaskNotFoundException.class,
         () -> PhaseOperations.phaseOne(service, PhaseOperation.CANCEL_TASK, "mod",
             "Process", null, new Object(), PhaseOperations.args(PhaseTwoCall.ARG_TASK_ID,
                 "task-gone", PhaseTwoCall.ARG_BPMN_ERROR_CODE, "ERR")));
-    // the preflight checks never completed anything
+    // The preflight checks did not complete anything.
     assertTrue(engine.getCompletedTasks().isEmpty());
     assertTrue(engine.getErroredTasks().isEmpty());
 
@@ -126,8 +126,8 @@ public class PeaProcessServiceTaskOpsTest {
             PhaseTwoCall.ARG_BPMN_ERROR_CODE, "APPROVAL_WITHDRAWN"));
     assertEquals("APPROVAL_WITHDRAWN", engine.getErroredTasks().getFirst().errorCode());
 
-    // repeating both fails now: whether the user task was finished meanwhile or
-    // the engine is unreachable looks the same to this adapter, so the outbox decides
+    // Repeating both fails now. To this adapter, a user task which was finished meanwhile
+    // looks the same as an engine it cannot reach. So the outbox decides.
     assertThrows(
         IllegalStateException.class,
         () -> PhaseOperations.phaseTwo(service, PhaseOperation.COMPLETE_USER_TASK, "mod",
@@ -157,9 +157,9 @@ public class PeaProcessServiceTaskOpsTest {
     assertEquals(1, engine.getErroredTasks().size());
     assertEquals("PAYMENT_FAILED", engine.getErroredTasks().getFirst().errorCode());
 
-    // repeating both operations fails now: the API answers the same way whether the task
-    // was finished meanwhile or the engine is unreachable, and this adapter must not
-    // assume the harmless case - the outbox repeats and finally blocks the entry
+    // Repeating both operations fails now. The API answers the same way whether the task
+    // was finished meanwhile or the engine cannot be reached. This adapter must not assume
+    // the harmless case. The outbox repeats the entry and in the end blocks it.
     final var completion = assertThrows(
         IllegalStateException.class,
         () -> PhaseOperations.phaseTwo(service, PhaseOperation.COMPLETE_TASK, "mod",
@@ -184,10 +184,10 @@ public class PeaProcessServiceTaskOpsTest {
   @DisplayName("Canceling a task or a user task raises the error code the deployed model carries")
   public void bothCancelOperationsScopeTheErrorCode() {
 
-    // the errorCode of a bpmn:error is prefixed like every other identifier of the
-    // module, so both cancel operations have to translate the code the application
-    // named. The engine accepts an unknown code without a word, so a plain one leaves
-    // the workflow walking past the error path it was supposed to take
+    // The errorCode of a bpmn:error gets the prefix like every other identifier of the
+    // module. So both cancel operations have to translate the code the application named.
+    // The engine accepts an unknown code without a word. So with a plain code the workflow
+    // would skip the error path it should take.
     final var scoped = new PeaProcessService<Object>(
         "pea", engine, engine, engine, engine, null, TestCollaborators.of(
             new PeaDeploymentServiceTest.PermissiveInvoker(),
@@ -227,7 +227,7 @@ public class PeaProcessServiceTaskOpsTest {
             PhaseOperations.args(PhaseTwoCall.ARG_TASK_ID, "task-9")));
 
     assertTrue(failure.getMessage().contains("Phase two of completing task"), failure.getMessage());
-    // the task is still open: the completion did not happen, and now somebody knows
+    // The task is still open. The completion did not happen, and now somebody knows it.
     assertTrue(engine.getOpenTaskIds().contains("task-9"));
     assertTrue(engine.getCompletedTasks().isEmpty());
 
@@ -237,13 +237,13 @@ public class PeaProcessServiceTaskOpsTest {
   @DisplayName("The re-dispatch probe is never optimistic - unlike the election's workflow awareness")
   public void redispatchProbeIsNeverOptimistic() {
 
-    // the election answers optimistically because the Process-Engine-API cannot
-    // query workflows at all (GAPS 11) - correlation must keep working
+    // The election answers optimistically, because the Process-Engine-API cannot query
+    // workflows at all (GAPS 11). Correlation has to keep working.
     assertEquals(WorkflowAwareness.ACTIVE, service.awarenessOfWorkflow(SCOPE, null, "42"));
 
-    // the START re-dispatch mitigation must NOT be optimistic: skipping a
-    // recovered start would LOSE the workflow, whereas proceeding only risks the
-    // documented at-least-once duplicate
+    // The re-dispatch of a START must NOT be optimistic. Skipping a recovered start would
+    // LOSE the workflow. Going on only risks the documented duplicate of at-least-once
+    // delivery.
     assertEquals(WorkflowAwareness.UNKNOWN_TO_BPMS, service.awarenessOfWorkflowForRedispatch(SCOPE, null, "42"));
 
   }
@@ -252,9 +252,9 @@ public class PeaProcessServiceTaskOpsTest {
   @DisplayName("This adapter says that it cannot locate workflows, so a migration setup is refused")
   public void workflowsCannotBeLocated() {
 
-    // the optimistic ACTIVE above is right while this is the only configured BPMS and
-    // a guess as soon as it is not. Saying so is what makes the platform refuse the
-    // second case while it boots, instead of routing operations by list order
+    // The optimistic ACTIVE above is right while this is the only configured BPMS. As soon
+    // as there is another one, it is a guess. Because the adapter says so, the platform
+    // refuses the second case at boot, instead of routing operations by list order.
     assertFalse(service.canLocateWorkflows());
 
   }

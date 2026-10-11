@@ -25,18 +25,18 @@ import io.vanillabp.spi.service.WorkflowService;
 import io.vanillabp.spi.service.WorkflowTask;
 
 /**
- * The direction of the wiring check this adapter never called: a {@code @WorkflowTask}
- * method whose task definition appears in no BPMN of the module. Since story 158 the core
- * runs that check itself, once every adapter of the module deployed, so an adapter which
- * only reports what it deployed still gets it.
+ * A {@code @WorkflowTask} method whose task definition is in no BPMN of the module stops
+ * the boot. This adapter never ran that check. The core runs it now, after every adapter of
+ * the module has deployed. So an adapter which only reports what it deployed gets the check
+ * as well.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class OrphanMethodBootTest {
 
   /**
-   * The beans this boot needs and nothing else: no component scan, so the workflow
-   * services of the other tests in this package stay out, and no auto-configured outbox
-   * competes with the double.
+   * The beans this boot needs, and nothing else. There is no component scan, so the
+   * workflow services of the other tests in this package stay out. And no outbox from an
+   * auto-configuration competes with the double.
    */
   private static final Class<?>[] SOURCES = {
       PeaAdapterConfiguration.class, PeaAdapterProcessServiceConfiguration.class, WorkflowModuleAutoConfiguration.class, SpringBootMigrationAdapterAutoConfiguration.class, DeploymentAutoConfiguration.class, TestPersistenceConfiguration.class, TestOutboxConfiguration.class, OrphanMethodConfiguration.class, OrphanMethodWorkflowService.class
@@ -53,8 +53,8 @@ public class OrphanMethodBootTest {
   }
 
   /**
-   * Enough persistence for the aggregate to be claimed: the boot never gets far enough to
-   * load or save anything, it fails while the module is being wired.
+   * Just enough persistence for the aggregate to be claimed. The boot never gets far enough
+   * to load or save anything. It fails while the module is wired.
    */
   @Configuration
   public static class OrphanMethodConfiguration {
@@ -104,8 +104,9 @@ public class OrphanMethodBootTest {
   }
 
   /**
-   * One method serving the task of <code>pea-orphan-test.bpmn</code> and one whose task
-   * definition nobody modelled - a typo, or a method left behind after a model change.
+   * One method serves the task of <code>pea-orphan-test.bpmn</code>. The other has a task
+   * definition nobody modelled. That happens after a typo, or when a method stays behind
+   * after a change of the model.
    */
   @Service
   @WorkflowService(

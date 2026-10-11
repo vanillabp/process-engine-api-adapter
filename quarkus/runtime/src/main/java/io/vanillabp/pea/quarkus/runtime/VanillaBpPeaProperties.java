@@ -12,21 +12,20 @@ import io.smallrye.config.ConfigMapping;
 import io.vanillabp.pea.wiring.PeaFetchVariables;
 
 /**
- * The Process-Engine-API adapter's OVERLAY of the shared <code>vanillabp.*</code>
- * configuration tree. The adapter has no connection settings of its own - the engine is
- * provided by the application as beans. The only key here is the removed
- * <code>fetch-variables</code>, at the canonical per-adapter location
- * <code>vanillabp.adapters.&lt;id&gt;.fetch-variables</code> plus the three scoped levels
- * below it. It is bound only so the start can refuse it, see
+ * The OVERLAY of this adapter on the shared configuration tree <code>vanillabp.*</code>. The
+ * adapter has no connection settings of its own, because the application provides the
+ * engine as beans. The only key here is the removed <code>fetch-variables</code>. It sits at
+ * the usual place for one adapter, <code>vanillabp.adapters.&lt;id&gt;.fetch-variables</code>,
+ * and at the three scoped levels below it. It is bound only so the start can refuse it, see
  * {@link PeaFetchVariables#rejectTheRemovedKey}.
  * <p>
- * Quarkus knows no blanket {@code withMappingIgnore} for the {@code vanillabp} prefix any
- * more, so a key no registered mapping models fails the startup. This overlay is
- * therefore what lets the start answer the removed key with a message of this adapter
- * instead of SmallRye's "does not map to any root".
+ * Quarkus no longer has a {@code withMappingIgnore} for the whole {@code vanillabp} prefix.
+ * So a key which no registered mapping knows makes the startup fail. This overlay lets the
+ * start answer the removed key with a message of this adapter, and not with the "does not
+ * map to any root" of SmallRye.
  * <p>
- * Never {@code @Inject} this mapping: injecting it turns it into a STATIC-INIT mapping and
- * the whole tree is validated before the adapter extensions registered their RUN_TIME
+ * Never {@code @Inject} this mapping. Injecting it makes it a STATIC-INIT mapping. Then the
+ * whole tree is checked before the adapter extensions have registered their RUN_TIME
  * overlays. Read it through
  * {@code ConfigProvider.getConfig().unwrap(SmallRyeConfig.class).getConfigMapping(...)}
  * instead.
@@ -52,8 +51,8 @@ public interface VanillaBpPeaProperties {
   Map<String, ModuleOverlay> workflowModules();
 
   /**
-   * Every key which still sets the removed <code>fetch-variables</code> for one adapter, at
-   * the adapter level and at the three levels below it. The start refuses them all in one
+   * Every key which still sets the removed <code>fetch-variables</code> for one adapter. That
+   * is the adapter level and the three levels below it. The start refuses them all in one
    * message, see {@link PeaFetchVariables#rejectTheRemovedKey}.
    *
    * @param adapterId The adapter ID
@@ -128,7 +127,7 @@ public interface VanillaBpPeaProperties {
   }
 
   /**
-   * The adapter's view of one workflow-module section.
+   * What the adapter reads of one workflow-module section.
    */
   interface ModuleOverlay {
 
@@ -149,7 +148,7 @@ public interface VanillaBpPeaProperties {
   }
 
   /**
-   * The adapter's view of one workflow section.
+   * What the adapter reads of one workflow section.
    */
   interface WorkflowOverlay {
 
@@ -170,7 +169,7 @@ public interface VanillaBpPeaProperties {
   }
 
   /**
-   * The adapter's view of one task section - the MOST specific level.
+   * What the adapter reads of one task section. It is the MOST specific level.
    */
   interface TaskOverlay {
 

@@ -20,17 +20,17 @@ import io.vanillabp.pea.mock.InMemoryProcessEngine;
 import io.vanillabp.pea.processservice.PeaProcessService;
 
 /**
- * Two claims about the payload this adapter sends, both written down in the SPI and in
- * this adapter and held by this test:
+ * Two promises about the payload this adapter sends. The SPI and this adapter both write
+ * them down, and this test holds them:
  * <ol>
- * <li>{@code WorkflowAggregateSync} promises that the workflow-aggregate's ID is never
- * part of the shared values and that the technical variable carrying it is written
- * ALWAYS, no matter what the sync model says. The Process-Engine-API has no
- * business-key slot, so that variable is the only way back to the workflow: an
- * aggregate annotated {@code @NoSyncWithBPMS} must not become unaddressable.</li>
- * <li>{@code AggregateSyncMode} promises that {@link AggregateSyncMode#FULL} is the
- * default of EVERY adapter, so a model may read the same attributes
- * wherever it runs. This adapter therefore has to ask with FULL.</li>
+ * <li>{@code WorkflowAggregateSync} promises that the ID of the workflow aggregate is never
+ * one of the shared values. It also promises that the technical variable with the ID is
+ * ALWAYS written, whatever the sync model says. The Process-Engine-API has no slot for a
+ * business key, so that variable is the only way back to the workflow. An aggregate
+ * annotated {@code @NoSyncWithBPMS} must still be reachable.</li>
+ * <li>{@code AggregateSyncMode} promises that {@link AggregateSyncMode#FULL} is the default
+ * of EVERY adapter, so a model may read the same attributes wherever it runs. So this
+ * adapter has to ask with FULL.</li>
  * </ol>
  */
 @ExtendWith(SuppressOutputExtension.class)
@@ -40,7 +40,7 @@ public class PeaSharedValuesTest {
 
   private final InMemoryProcessEngine engine = new InMemoryProcessEngine();
 
-  /** What the aggregate's persistence answers - the ID and its name, nothing else. */
+  /** What the aggregate's persistence answers: the ID and its name, nothing else. */
   private static AggregatePersistenceAware<Object> persistence() {
 
     return new AggregatePersistenceAware<>() {
@@ -72,7 +72,8 @@ public class PeaSharedValuesTest {
   }
 
   /**
-   * A sync model answering the given values, recording which default it was asked with.
+   * A sync model which answers the given values and records which default it was asked
+   * with.
    */
   private static class RecordingSync implements WorkflowAggregateSync {
 

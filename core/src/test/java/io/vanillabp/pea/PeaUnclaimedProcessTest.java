@@ -17,14 +17,14 @@ import io.vanillabp.pea.deployment.PeaDeploymentService;
 import io.vanillabp.pea.mock.InMemoryProcessEngine;
 
 /**
- * One file with two processes. {@code Loans} is claimed by a <code>&#64;WorkflowService</code>
- * of the application. {@code NightlyReview} is claimed by nobody: the application said that
- * something else serves it, otherwise the core would have ended the start before this adapter
- * saw the file.
+ * One file with two processes. A <code>&#64;WorkflowService</code> of the application claims
+ * {@code Loans}. Nobody claims {@code NightlyReview}: the application said that something
+ * else serves it. Otherwise the core would have ended the start before this adapter saw the
+ * file.
  * <p>
- * The process nobody claims is deployed with its file and left alone. Its timer start event,
- * which this adapter refuses in a claimed process, ends nothing, and nothing subscribes to its
- * task. The claimed process is wired as before.
+ * The process nobody claims is deployed with its file and left alone. It has a timer start
+ * event, which this adapter refuses in a claimed process. Here it ends nothing, and nothing
+ * subscribes to its task. The claimed process is wired as usual.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class PeaUnclaimedProcessTest {
@@ -59,7 +59,7 @@ public class PeaUnclaimedProcessTest {
   private final InMemoryProcessEngine engine = new InMemoryProcessEngine();
 
   /**
-   * The processes the core was asked to validate, which is what a claimed process gets.
+   * The processes the core was asked to validate. Only a claimed process is validated.
    */
   private final List<String> validated = new ArrayList<>();
 

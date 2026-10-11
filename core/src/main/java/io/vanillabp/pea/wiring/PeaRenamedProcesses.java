@@ -3,17 +3,19 @@ package io.vanillabp.pea.wiring;
 import java.util.List;
 
 /**
- * The two sentences a delivery which cannot be routed owes a renamed BPMN process.
+ * Two sentences about a renamed BPMN process, for the message of a delivery which cannot
+ * be routed.
  * <p>
- * A workflow module may declare a BPMN process id it deploys nothing under, which is what a
- * rename leaves behind: the engine still holds the old model with workflows running on it,
- * while the application brings the new one only. Where the task definitions of that module
- * do not carry the process id, the tasks of those workflows are named like any other and
- * arrive at the subscription of a deployed process. Telling them apart needs the
- * {@link PeaTaskMeta#BPMN_PROCESS_ID} meta entry, and a routing failure which lists the
- * deployed processes alone sends the reader looking at processes which are all innocent.
+ * A workflow module may declare a BPMN process id but deploy no model under it. A rename
+ * leaves exactly that behind. The engine still holds the old model, and workflows still run
+ * on it, but the application only brings the new one. If the task definitions of the module
+ * do not carry the process id, the tasks of those old workflows have the same names as any
+ * other. They arrive at the subscription of a deployed process. Only the
+ * {@link PeaTaskMeta#BPMN_PROCESS_ID} meta entry tells them apart. A routing failure which
+ * lists only the deployed processes sends the reader to look at processes which did nothing
+ * wrong.
  * <p>
- * Both task handlers say the same thing about this, so both say it from here.
+ * Both task handlers say the same thing here, so both take the words from this class.
  */
 final class PeaRenamedProcesses {
 
@@ -41,7 +43,7 @@ final class PeaRenamedProcesses {
   }
 
   /**
-   * The way out which asks nothing of the engine and nothing of the models.
+   * The way out which needs no change to the engine and none to the models.
    *
    * @param declaredBpmnProcessIds The ids the module declares without deploying a model
    *          under them, sharing the name of the subscription at hand

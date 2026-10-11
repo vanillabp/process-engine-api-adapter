@@ -55,14 +55,13 @@ import io.vanillabp.spi.service.WorkflowTask;
 import lombok.Getter;
 
 /**
- * Task processing against the extended in-memory mock, asserted at
- * the Process-Engine-API boundary: the adapter subscribes per task definition at
- * startup, delivered tasks dispatch through the core (new local transaction which
- * commits BEFORE the completion command), the three outcomes map to
- * {@code completeTask} / {@code completeTaskByError} / {@code failTask} (all
- * carrying {@code ExecutionMode.SYNC}), duplicate deliveries converge and a
- * failing completion after the local commit is the documented at-least-once
- * residual.
+ * Task processing against the in-memory mock, checked at the edge of the
+ * Process-Engine-API. At startup the adapter subscribes once for each task definition. A
+ * delivered task goes through the core in a new local transaction, which commits before the
+ * completion command is sent. The three outcomes become {@code completeTask},
+ * {@code completeTaskByError} and {@code failTask}, all with {@code ExecutionMode.SYNC}. A
+ * task delivered twice ends in the same state. A completion which fails after the local
+ * commit is the documented rest of at-least-once delivery.
  */
 @SpringBootTest(
     classes = TaskProcessingIntegrationTest.TaskProcessingApplication.class,
@@ -76,9 +75,8 @@ public class TaskProcessingIntegrationTest {
 
   private static final String PROCESS = "PeaTaskProcess";
 
-  // the test's nested classes are excluded from Spring's component scan
-  // (TestTypeExcludeFilter) - configuration and workflow service are imported
-  // explicitly
+  // Spring's component scan leaves out the nested classes of a test (TestTypeExcludeFilter).
+  // So the configuration and the workflow service are imported by name.
   @SpringBootApplication
   @Import({
       TestPersistenceConfiguration.class, TaskProcessingConfiguration.class, PeaTaskWorkflowService.class
@@ -97,15 +95,15 @@ public class TaskProcessingIntegrationTest {
     String taskId;
 
     /**
-     * Never sent to the engine - which also derives the class' mode
-     * "share everything else" (opt-out).
+     * Never sent to the engine. Because of this annotation, the class shares everything
+     * else (opt-out).
      */
     @NoSyncWithBPMS
     @Getter
     String secret;
 
-    // the sync model reads JavaBean properties: only what has a getter can be
-    // shared with the engine at all
+    // The sync model reads JavaBean properties. Only a field with a getter can be shared
+    // with the engine at all.
 
     void appendResult(
         final String result) {
@@ -121,8 +119,8 @@ public class TaskProcessingIntegrationTest {
   }
 
   /**
-   * In-memory persistence copying aggregates on save/load - only saved state
-   * survives, so the rollback assertions are meaningful.
+   * Persistence in memory which stores a copy of each aggregate. Only saved state
+   * survives, so the checks after a rollback mean something.
    */
   @Configuration
   public static class TaskProcessingConfiguration {
@@ -247,7 +245,7 @@ public class TaskProcessingIntegrationTest {
     public void peaHappy(
         final PeaTaskAggregate aggregate) {
 
-      // idempotent: keyed on aggregate state, not on call count
+      // Idempotent: it looks at the state of the aggregate, not at how often it ran
       if ((aggregate.results == null) || !aggregate.results.contains("happy")) {
         aggregate.appendResult("happy");
       }
@@ -338,11 +336,10 @@ public class TaskProcessingIntegrationTest {
     }
 
     /**
-     * Wired by the BPMN element id, so the task definition the engine delivers under
-     * ({@code peaNobodyNamesThis}) is a name this method never mentions. The
-     * <code>&#64;TaskParam</code> is part of it: the subscription has to ask the engine for
-     * that variable, and asking with the task definition alone would not have found this
-     * method to ask.
+     * Wired by the BPMN element id. The engine delivers the task under the task definition
+     * {@code peaNobodyNamesThis}, a name this method never mentions. The
+     * <code>&#64;TaskParam</code> matters too. The subscription has to ask the engine for
+     * that variable. Asking with the task definition alone would not find this method.
      */
     @WorkflowTask(id = "t_wired_by_id")
     public void peaWiredByElementId(
@@ -355,8 +352,8 @@ public class TaskProcessingIntegrationTest {
     }
 
     /**
-     * The same for a user task: the form reference the engine delivers under
-     * ({@code peaFormNobodyNames}) is not what this method names.
+     * The same for a user task. The engine delivers it under the form reference
+     * {@code peaFormNobodyNames}, and this method does not name it.
      */
     @WorkflowTask(id = "t_user_wired_by_id")
     public void peaUserTaskWiredByElementId(
@@ -396,7 +393,8 @@ public class TaskProcessingIntegrationTest {
   public void seedAggregates() {
 
     TaskProcessingConfiguration.AGGREGATES.clear();
-    // keep the startup subscriptions - only the per-test recordings are cleared
+    // Only the recordings of the last test are cleared. The subscriptions of the startup
+    // stay.
     engine.clearTaskRecordings();
 
   }
@@ -427,8 +425,8 @@ public class TaskProcessingIntegrationTest {
     assertEquals(
         List.of(new InMemoryProcessEngine.CompletedTask("task-1")),
         engine.getCompletedTasks());
-    // the completion command carries SYNC - the phase-two shape (advances the
-    // process after the local commit)
+    // The completion command carries SYNC, as in phase two. It moves the process on after
+    // the local commit.
     final var completionMode = engine.invocations
         .stream()
         .filter(invocation -> "completeTask".equals(invocation.method()))
@@ -446,9 +444,9 @@ public class TaskProcessingIntegrationTest {
     seed("4715");
     engine.deliverTask("task-sync", "peaHappy", PROCESS, Map.of("id", "4715"));
 
-    // the @WorkflowTask method changed the aggregate BEFORE the task was completed:
-    // a gateway right behind this task can only branch on it if the completion
-    // carried it
+    // The @WorkflowTask method changed the aggregate before the task was completed. A
+    // gateway right behind this task can only branch on that change if the completion
+    // carried it.
     final var payload = engine.getCompletionPayload("task-sync");
     assertEquals("4715", payload.get("id"), "the technical aggregate-ID variable always travels");
     assertEquals("happy", payload.get("results"), "the shared attributes travel");
@@ -494,7 +492,7 @@ public class TaskProcessingIntegrationTest {
     seed("4713");
     engine.deliverTask("task-3", "peaFails", PROCESS, Map.of("id", "4713"));
 
-    // the handler ran (recorded by the fail) but its mutation was rolled back
+    // The handler ran, which the failed task shows, but its change was rolled back
     assertNull(stored("4713").results);
     assertEquals(1, engine.getFailedTasks().size());
     assertEquals("task-3", engine.getFailedTasks().getFirst().taskId());
@@ -543,16 +541,16 @@ public class TaskProcessingIntegrationTest {
   }
 
   /**
-   * How long the engine double is watched after a rolled-back operation, before what did
-   * not reach it counts as something which never will.
+   * How long the test watches the engine double after a rolled-back operation. After that,
+   * a call which has not arrived counts as one which never will.
    * <p>
-   * One and a half seconds, against the moment a committed operation takes: the dispatch
-   * of an outbox entry begins right after the commit which wrote it, and the engine here
-   * is an object in the same JVM.
+   * One and a half seconds is long compared to what a committed operation takes. The outbox
+   * sends an entry right after the commit which wrote it, and the engine here is an object
+   * in the same JVM.
    * <p>
-   * A guard and not a budget anybody has to be faster than: what is asserted afterwards is
-   * a task which stayed open respectively a list which did not grow, and a machine which
-   * leaves this JVM without a turn only makes the silence longer.
+   * This is a guard, not a time limit anybody has to beat. Afterwards the test checks that a
+   * task stayed open or that a list did not grow. A slow machine only makes the silence
+   * longer.
    */
   private static final long UNTIL_A_COMMITTED_CALL_WOULD_HAVE_ARRIVED = 1500;
 
@@ -583,20 +581,20 @@ public class TaskProcessingIntegrationTest {
       final var aggregate = stored("4721");
       aggregate.appendResult("completing");
       taskWorkflowService.completeAsyncTask(aggregate, "task-c1");
-      // the completion must not have advanced the process yet - the adapter's
-      // PREFLIGHT_CHECK is registered with the pre-commit hook and runs during the commit,
-      // which is why it cannot be read here
+      // The completion must not have moved the process on yet. The PREFLIGHT_CHECK of the
+      // adapter is registered with the pre-commit hook and runs during the commit, so it
+      // cannot be seen here yet.
       assertFalse(
           completionModes("completeTask", "task-c1").contains(ExecutionMode.SYNC),
           "nothing may advance the process while the caller's transaction is open");
     });
 
-    // by now the commit has returned, so the check which could still have aborted it ran
+    // The commit has returned, so the check which could still have stopped it has run
     assertTrue(
         completionModes("completeTask", "task-c1").contains(ExecutionMode.PREFLIGHT_CHECK),
         "the PREFLIGHT_CHECK has to have run by the time the commit returned");
 
-    // the SYNC completion is dispatched through the outbox AFTER the commit
+    // The outbox sends the SYNC completion after the commit
     awaitUntil(
         () -> completionModes("completeTask", "task-c1").contains(ExecutionMode.SYNC),
         "the SYNC completion to be dispatched after the commit");
@@ -668,9 +666,9 @@ public class TaskProcessingIntegrationTest {
     final var elapsed = Duration.ofNanos(System.nanoTime() - startedAt);
 
     assertTrue(exception.getMessage().contains("no-such-task"));
-    // the preflight completion answers exactly, and this runs in the caller's
-    // transaction - so it fails there rather than after any waiting (decision 27 of
-    // the platform's DECISIONS.md)
+    // The preflight completion gives an exact answer, and it runs in the transaction of
+    // the caller. So the call fails there and does not wait for anything (decision 27 of
+    // the platform's DECISIONS.md).
     assertTrue(
         elapsed.toSeconds() < 5,
         "an unknown task must fail without waiting, but took "
@@ -686,14 +684,14 @@ public class TaskProcessingIntegrationTest {
     engine.deliverTask("task-c4", "peaAsync", PROCESS, Map.of("id", "4725"));
     assertEquals("task-c4", stored("4725").taskId, "the handler has to have parked the task");
 
-    // somebody else finishes the task, which is what a concurrent completion looks
-    // like from here
+    // Somebody else finishes the task. This is how a concurrent completion looks from
+    // here.
     engine.terminateTask("task-c4", "peaAsync", PROCESS, TaskInformation.COMPLETE);
 
-    // the delivery record of that task still says this adapter holds it open, so the
-    // call is routed here instead of probed and the pre-commit check is what meets the
-    // engine's rejection. What the caller reads is the type the SPI documents for a
-    // task no BPMS knows any more
+    // The delivery record of that task still says this adapter holds it open. So the call
+    // is routed here without a probe, and the pre-commit check runs into the refusal of
+    // the engine. The caller gets the exception type the SPI documents for a task no BPMS
+    // knows any more.
     final var exception = Assertions.assertThrows(
         TaskNotFoundException.class,
         () -> transactionTemplate.executeWithoutResult(status -> taskWorkflowService
@@ -706,7 +704,7 @@ public class TaskProcessingIntegrationTest {
   @DisplayName("User task: CREATED notification via USER subscription, completeUserTask PREFLIGHT/SYNC ordering")
   public void userTaskNotificationAndCompletion() throws Exception {
 
-    // the adapter subscribed for user tasks by their external form reference
+    // The adapter subscribed for user tasks by their external form reference
     assertTrue(
         engine
             .getSubscriptions()
@@ -718,7 +716,7 @@ public class TaskProcessingIntegrationTest {
     seed("4731");
     engine.deliverTask("utask-1", "peaApprove", PROCESS, Map.of("id", "4731"));
 
-    // the CREATED notification ran (committed) - the task itself stays open
+    // The CREATED notification ran and committed. The task itself stays open.
     assertEquals("usertask-created", stored("4731").results);
     assertEquals("utask-1", stored("4731").taskId);
     assertTrue(engine.getCompletedTasks().isEmpty(), "a notification must not complete the task");
@@ -791,8 +789,8 @@ public class TaskProcessingIntegrationTest {
 
     engine.terminateTask("utask-3", "peaApprove", PROCESS, TaskInformation.COMPLETE);
 
-    // the same route as for a service task: the record sends the call to this adapter
-    // and the user-task check is what finds out the task is gone
+    // The same route as for a service task. The record sends the call to this adapter,
+    // and the user-task check finds out that the task is gone.
     final var exception = Assertions.assertThrows(
         TaskNotFoundException.class,
         () -> transactionTemplate.executeWithoutResult(status -> taskWorkflowService
@@ -809,8 +807,8 @@ public class TaskProcessingIntegrationTest {
 
     transactionTemplate.executeWithoutResult(status -> {
       taskWorkflowService.correlate(stored("4741"), "PeaPaymentReceived");
-      // inside the transaction NOTHING was correlated yet (no preflight is even
-      // possible - the command classes are final, GAPS entry 11)
+      // Inside the transaction nothing was correlated yet. A preflight is not even
+      // possible, because the command classes are final (GAPS entry 11).
       assertTrue(engine.getCorrelatedMessages().isEmpty());
     });
 
@@ -871,17 +869,17 @@ public class TaskProcessingIntegrationTest {
         .filter(candidate -> "4743".equals(candidate.variables().get("id")))
         .findFirst()
         .orElseThrow();
-    // no message CONTENT travels - what travels is the technical aggregate-ID
-    // variable plus the shared aggregate state (see decision 1 in the repository's DECISIONS.md)
-    // ('results' is still null on a freshly started workflow, and the
-    // @NoSyncWithBPMS attribute is absent as always)
+    // No message content travels. What travels is the aggregate-ID variable and the
+    // shared state of the aggregate, see decision 1 in the repository's DECISIONS.md.
+    // 'results' is still null on a workflow which just started, and the @NoSyncWithBPMS
+    // attribute is missing as always.
     final var variables = new HashMap<>(instance.variables());
     assertEquals("4743", variables.remove("id"));
     assertTrue(variables.containsKey("results") && (variables.get("results") == null));
     variables.remove("results");
     assertEquals(Map.of(), variables, "nothing else travels");
 
-    // the start by message reports the instance the engine created, just like the plain start
+    // Like the plain start, the start by message reports the instance the engine created
     final var writtenDown = TaskDeliveryLogReader.of(deliveryLogDataSource);
     awaitUntil(
         () -> !writtenDown.workflowStartsOfAggregate("4743").isEmpty(),
@@ -920,8 +918,8 @@ public class TaskProcessingIntegrationTest {
   public void theRecordNamesWhatTheEngineNamed() {
 
     seed("4741");
-    // an engine which fills its meta map generously, the way the API's own reference
-    // adapter for an embedded Camunda 7 does
+    // An engine which fills its meta map with a lot, as the reference adapter of the API
+    // for an embedded Camunda 7 does
     engine
         .deliverTask(
             "task-meta", "peaHappy", PROCESS, Map.of("id", "4741"), Map
@@ -931,7 +929,7 @@ public class TaskProcessingIntegrationTest {
     assertEquals("PeaHappyTask", record.bpmnElementId(), "the element id the engine named");
     assertEquals("instance-4741", record.workflowId(), "the workflow id the engine named");
 
-    // the user-task side reads the same two keys, and it is a handler of its own
+    // The user-task side reads the same two keys. It is a handler of its own.
     engine
         .deliverTask(
             "utask-meta", "peaApprove", PROCESS, Map.of("id", "4741"), Map
@@ -954,11 +952,11 @@ public class TaskProcessingIntegrationTest {
   public void anEngineWhichNamesNeitherIsAnsweredByTheModel() {
 
     seed("4742");
-    // the Process-Engine-API defines no vocabulary for the keys a delivered task carries,
-    // so an engine filling none is a normal engine and not a defect. Nothing but the engine
-    // knows the workflow, so the record says nothing about it - which is what the default of
-    // the adapter SPI means. The element is a different matter: the models this adapter
-    // deployed say which element carries this task definition
+    // The Process-Engine-API does not define the keys a delivered task carries. So an
+    // engine which fills none is a normal engine, not a broken one. Only the engine knows
+    // the workflow, so the record says nothing about it. That is what the default of the
+    // adapter SPI means. The element is different. The models this adapter deployed say
+    // which element carries this task definition.
     engine.deliverTask("task-no-meta", "peaHappy", PROCESS, Map.of("id", "4742"));
 
     final var record = recordOf("task-no-meta");
@@ -973,10 +971,10 @@ public class TaskProcessingIntegrationTest {
   /**
    * Which kind of task the record says an id belongs to.
    * <p>
-   * Asked through the same method the BPMS election uses, so this reads what a caller
-   * naming that id reads. Only a task still left to the application is answered, and those
-   * are the ids an application ever names: a task this adapter completed itself is
-   * nobody's to address any more.
+   * It asks through the same method the BPMS election uses. So it reads what a caller
+   * naming that id reads. Only a task still left to the application gets an answer. Those
+   * are the only ids an application ever names. Nobody addresses a task any more which
+   * this adapter completed itself.
    *
    * @param aggregateId The workflow aggregate the task was delivered for
    * @param taskId The engine's id of the task
@@ -999,15 +997,15 @@ public class TaskProcessingIntegrationTest {
   public void theRecordSaysWhichKindAnIdIs() {
 
     seed("4744");
-    // a task left open by a @TaskId method. The application completes it through
-    // ProcessService#completeTask, and the engine takes the id back through its
-    // SERVICE-task completion API
+    // A task left open by a @TaskId method. The application completes it through
+    // ProcessService#completeTask. The engine takes the id back through its completion
+    // API for service tasks.
     engine.deliverTask("open-task", "peaAsync", PROCESS, Map.of("id", "4744"));
     assertEquals("TASK", recordedKindOf("4744", "open-task"));
 
-    // a user-task notification. Same shape of id, different namespace. The application
-    // completes it through ProcessService#completeUserTask, and the engine takes it back
-    // through its USER-task completion API
+    // A user-task notification. The id looks the same but lives in another namespace. The
+    // application completes it through ProcessService#completeUserTask. The engine takes it
+    // back through its completion API for user tasks.
     engine.deliverTask("open-user-task", "peaApprove", PROCESS, Map.of("id", "4744"));
     assertEquals("USER_TASK", recordedKindOf("4744", "open-user-task"));
 
@@ -1018,9 +1016,9 @@ public class TaskProcessingIntegrationTest {
   public void aMethodWiredByItsElementIdIsReached() {
 
     seed("4750");
-    // the task definition is a name the serving method never mentions, and this engine names
-    // no element of its own: without the element the model holds, the delivery would find no
-    // method and fail
+    // The serving method never mentions the task definition, and this engine names no
+    // element of its own. Without the element from the model, the delivery would find no
+    // method and fail.
     engine
         .deliverTask("task-by-id", "peaNobodyNamesThis", PROCESS, Map.of("id", "4750", "amount", "42"));
 
@@ -1043,9 +1041,10 @@ public class TaskProcessingIntegrationTest {
         .orElseThrow(() -> new AssertionError("no subscription for 'peaNobodyNamesThis'"))
         .payloadDescription();
 
-    // asked with the element id as well as with the task definition: a method the second
-    // question does not find declares @TaskParam nobody fetches, and an unfetched parameter
-    // fails the delivery here rather than arriving as null
+    // The adapter asks with the element id and with the task definition. Asking with the
+    // task definition alone misses a method wired by its element id, and its @TaskParam
+    // would not be fetched. A parameter which was not fetched fails the delivery here. It
+    // does not arrive as null.
     assertEquals(java.util.Set.of("amount", "id"), payload);
 
   }
@@ -1057,8 +1056,8 @@ public class TaskProcessingIntegrationTest {
     seed("4751");
     engine.deliverTask("utask-by-id", "peaFormNobodyNames", PROCESS, Map.of("id", "4751"));
 
-    // asked with the form reference alone, nobody served this notification and it was
-    // skipped without a word, which is worse than a notification which fails
+    // Asking with the form reference alone, nobody served this notification. It was skipped
+    // without a word, which is worse than a notification which fails.
     assertEquals("usertask-by-id-created", stored("4751").results);
     assertEquals("utask-by-id", stored("4751").taskId);
 
@@ -1072,7 +1071,8 @@ public class TaskProcessingIntegrationTest {
     engine.deliverTask("task-5", "peaHappy", PROCESS, Map.of("id", "4715"));
     engine.deliverTask("task-5", "peaHappy", PROCESS, Map.of("id", "4715"));
 
-    // the handler ran twice but the aggregate converged (idempotent by design)
+    // The handler ran twice, but the aggregate ends in the same state (idempotent by
+    // design)
     assertEquals("happy", stored("4715").results);
     assertEquals(2, engine.getCompletedTasks().size());
 
@@ -1085,14 +1085,14 @@ public class TaskProcessingIntegrationTest {
     seed("4716");
     engine.failNextCompletionFor("task-6");
 
-    // the completion fails AFTER the local commit - the handler must not crash
-    // and the aggregate keeps the committed state
+    // The completion fails after the local commit. The handler must not crash, and the
+    // aggregate keeps the committed state.
     engine.deliverTask("task-6", "peaHappy", PROCESS, Map.of("id", "4716"));
     assertEquals("happy", stored("4716").results);
     assertTrue(engine.getCompletedTasks().isEmpty());
 
-    // the engine redelivers eventually - the second delivery converges and
-    // completes
+    // The engine delivers again at some point. The second delivery reaches the same state
+    // and completes.
     engine.deliverTask("task-6", "peaHappy", PROCESS, Map.of("id", "4716"));
     assertEquals("happy", stored("4716").results);
     assertEquals(1, engine.getCompletedTasks().size());

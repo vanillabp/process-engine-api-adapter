@@ -23,24 +23,24 @@ import io.vanillabp.pea.wiring.PeaTaskHandler;
 import io.vanillabp.pea.wiring.PeaUserTaskHandler;
 
 /**
- * This adapter hands the core no {@link OpenTaskProbe}, and this is where that stays
- * visible. The core can work a cancellation out for a BPMS which reports none, but only
- * from a probe which tells "the engine does not have this task" apart from "the engine did
- * not answer". The Process-Engine-API fails every command with one untyped exception, so
- * the adapter can never say the first of the two - see entry 27 in {@code GAPS.md} and
- * decision 13 in the repository's {@code DECISIONS.md}.
+ * This adapter gives the core no {@link OpenTaskProbe}, and these tests keep that visible.
+ * The core can work out a cancellation for a BPMS which reports none. But it needs a probe
+ * which tells "the engine does not have this task" apart from "the engine did not answer".
+ * The Process-Engine-API fails every command with one untyped exception. So the adapter can
+ * never say the first of the two. See entry 27 in {@code GAPS.md} and decision 13 in the
+ * repository's {@code DECISIONS.md}.
  * <p>
- * A probe which only ever answered "cannot say" would cost a round trip per open task and
- * report nothing, and one which read a failure as "gone" would cancel the open work of a
- * workflow whenever the engine hiccups. So nothing is supplied at all, and the tests below
- * are what a later change has to argue with before it slips one in.
+ * A probe which always answered "cannot say" would cost a round trip per open task and
+ * report nothing. A probe which read a failure as "gone" would cancel the open work of a
+ * workflow whenever the engine has a short outage. So the adapter supplies no probe at all.
+ * A later change which adds one has to get past the tests below first.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class PeaOpenTaskProbeTest {
 
   /**
    * Records what the adapter asks the core to work out. A real core reads its delivery log
-   * here and probes the other open tasks of the same workflow; the point of the double is
+   * here and probes the other open tasks of the same workflow. The double is there to show
    * that the call never arrives.
    */
   static class RecordingInvoker implements WorkflowTaskInvoker {
@@ -78,9 +78,9 @@ public class PeaOpenTaskProbeTest {
 
     }
 
-    // The migration fallback, deprecated for removal and none of this BPMS's business: a
-    // test double implements it as long as the interface declares it, and the mandatory
-    // 'removal' lint needs the suppression
+    // The migration fallback. It is deprecated for removal, and this BPMS does not use it.
+    // A test double has to implement it while the interface declares it. The 'removal'
+    // lint is mandatory, so it needs the suppression.
     @SuppressWarnings("removal")
     @Override
     public boolean workflowAggregateHasProperty(
@@ -201,10 +201,10 @@ public class PeaOpenTaskProbeTest {
   @DisplayName("Even a task the engine withdrew reaches the core through no probe")
   public void aWithdrawnUserTaskReportsNothing() {
 
-    // the one moment this adapter does learn that a task is gone: the engine pushes the
-    // termination of a task it had delivered. It carries no payload and therefore no
-    // workflow aggregate, and there is no SPI call which takes a single gone task, so the
-    // observers are all it reaches. Entry 27 of GAPS.md says what would have to change
+    // This is the one moment this adapter does learn that a task is gone: the engine
+    // pushes the termination of a task it had delivered. It carries no payload, so no
+    // workflow aggregate. And no SPI call takes a single gone task. So it only reaches the
+    // observers. Entry 27 of GAPS.md says what would have to change.
     userTaskHandler()
         .terminated(new TaskInformation("utask-2", Map.of(TaskInformation.REASON, "delete")));
 

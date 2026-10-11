@@ -46,21 +46,21 @@ import lombok.Getter;
 
 /**
  * What a <code>&#64;TaskParam</code> receives on this adapter. The aggregate shares a
- * decimal, a big integer, a float and a long, the start command carries them to the
+ * decimal, a big integer, a float and a long. The start command carries them to the
  * engine, and the engine hands them back as the payload of a task. Nothing between the
- * aggregate and the handler serializes anything here, so what a handler reads is decided
- * by the platform's value conversion alone.
+ * aggregate and the handler serializes anything here. So only the value conversion of the
+ * platform decides what a handler reads.
  * <p>
- * The conversion itself belongs to the platform and is tested there. What these tests add
- * is the round trip through THIS engine: a number which survives arrives, a number which
- * would be cut down fails the task instead, and the reason the engine is told is the
- * message the platform wrote.
+ * The conversion itself belongs to the platform and is tested there. These tests add the
+ * round trip through this engine. A number which survives arrives. A number which would be
+ * cut down fails the task instead. The engine is told the message the platform wrote as
+ * the reason.
  * <p>
- * None of those numbers means the same in every expression language, so the properties
- * below name every one of them, and they name the <code>order</code> parameter of
- * <code>orderAsObject</code> as well, which is declared as an <code>Object</code> and
- * takes whatever the engine holds. This test is about the values, so it lists them one by
- * one instead of allowing the whole aggregate.
+ * None of those numbers means the same in every expression language. So the properties
+ * below name every one of them. They also name the <code>order</code> parameter of
+ * <code>orderAsObject</code>, which is declared as an <code>Object</code> and takes
+ * whatever the engine holds. This test is about the values, so it lists them one by one
+ * instead of allowing the whole aggregate.
  */
 @SpringBootTest(
     classes = TaskParameterTypesIntegrationTest.TaskParameterTypesApplication.class,
@@ -75,9 +75,9 @@ public class TaskParameterTypesIntegrationTest {
   private static final String AGGREGATE_ID = "9001";
 
   /**
-   * The decimal the aggregate shares. Its scale is part of the value here: a
-   * <code>BigDecimal</code> parameter reads it back unchanged, and a
-   * <code>Double</code> parameter reads the same number without it.
+   * The decimal the aggregate shares. Its scale is part of the value here. A
+   * <code>BigDecimal</code> parameter reads it back unchanged. A <code>Double</code>
+   * parameter reads the same number without the scale.
    */
   private static final BigDecimal TOTAL = new BigDecimal("120.50");
 
@@ -86,9 +86,8 @@ public class TaskParameterTypesIntegrationTest {
    */
   private static final BigInteger HUGE = new BigInteger("9007199254740993");
 
-  // the test's nested classes are excluded from Spring's component scan
-  // (TestTypeExcludeFilter) - configuration and workflow service are imported
-  // explicitly
+  // Spring's component scan leaves out the nested classes of a test (TestTypeExcludeFilter).
+  // So the configuration and the workflow service are imported by name.
   @SpringBootApplication
   @Import({
       TestPersistenceConfiguration.class, TaskParameterTypesConfiguration.class, PeaParamWorkflowService.class
@@ -100,7 +99,7 @@ public class TaskParameterTypesIntegrationTest {
    * A task of <code>pea-param-test.bpmn</code> reads each value below, so the aggregate
    * names them one by one. These tests are about which value reaches a handler, and the
    * list of what travels is part of that. A configuration line allowing the whole
-   * aggregate would say less. The ID is not on the list because it travels anyway: it is
+   * aggregate would say less. The ID is not on the list because it travels anyway. It is
    * how VanillaBP finds the workflow again.
    */
   @NoSyncWithBPMS
@@ -132,9 +131,9 @@ public class TaskParameterTypesIntegrationTest {
   }
 
   /**
-   * A value of the application's own, nested in the aggregate. The accessor is spelled
-   * out because the sync model reads JavaBean properties and a record's component
-   * accessor is not one.
+   * A value of the application's own, nested in the aggregate. The getter is written out
+   * by hand. The sync model reads JavaBean properties, and the accessor of a record
+   * component is not one.
    *
    * @param total The same decimal the aggregate shares at the top level
    */
@@ -346,9 +345,9 @@ public class TaskParameterTypesIntegrationTest {
   private TransactionTemplate transactionTemplate;
 
   /**
-   * What the start command carried to the engine, read once and reused by every test:
-   * the values are constant and starting the workflow again would only repeat the wait
-   * for phase two.
+   * What the start command carried to the engine. It is read once and every test reuses
+   * it. The values do not change, and starting the workflow again would only repeat the
+   * wait for phase two.
    */
   private static Map<String, Object> pushedVariables;
 
@@ -356,8 +355,8 @@ public class TaskParameterTypesIntegrationTest {
   public void shareTheAggregateOnce() throws Exception {
 
     RECEIVED.clear();
-    // keep the startup subscriptions and the started instance - only the per-test
-    // recordings are cleared
+    // Only the recordings of the last test are cleared. The subscriptions of the startup
+    // and the started instance stay.
     engine.clearTaskRecordings();
     if (pushedVariables != null) {
       return;
@@ -373,7 +372,7 @@ public class TaskParameterTypesIntegrationTest {
     TaskParameterTypesConfiguration.AGGREGATES.put(AGGREGATE_ID, aggregate);
 
     transactionTemplate.execute(status -> paramWorkflow.start(aggregate));
-    // phase two dispatches the start after the caller's transaction committed
+    // Phase two sends the start once the transaction of the caller has committed
     awaitUntil(
         () -> !engine.getStartedInstances().isEmpty(),
         "the start to be dispatched after the commit");
@@ -397,9 +396,9 @@ public class TaskParameterTypesIntegrationTest {
   }
 
   /**
-   * Delivers the task of one test, carrying what the start command carried. The engine
-   * narrows that to what the subscription asked for, which is how the handler gets its
-   * own variable and the aggregate-id variable and nothing else.
+   * Delivers the task of one test with what the start command carried. The engine cuts
+   * that down to what the subscription asked for. So the handler gets its own variable and
+   * the aggregate-id variable, and nothing else.
    *
    * @param taskDefinition The task definition the test delivers
    * @return What the handler read, or <code>null</code> where it never ran
@@ -431,8 +430,8 @@ public class TaskParameterTypesIntegrationTest {
   @DisplayName("A BigDecimal parameter keeps the scale the aggregate shared, because nothing here serializes it")
   public void aDecimalKeepsItsScale() {
 
-    // the Process-Engine-API type is Map<String, Object> from end to end, so the
-    // BigDecimal the aggregate shared is the very object the handler reads
+    // The Process-Engine-API uses Map<String, Object> from end to end. So the handler reads
+    // the very BigDecimal object the aggregate shared.
     assertEquals(new BigDecimal("120.50"), deliver("totalAsBigDecimal"));
 
   }
@@ -461,7 +460,7 @@ public class TaskParameterTypesIntegrationTest {
   @DisplayName("A Float of 0.1f bound to a Double arrives as 0.1, not as the double it widens to")
   public void aFloatBoundToADoubleKeepsItsNumber() {
 
-    // a Float widened by doubleValue() used to arrive as 0.10000000149011612 here
+    // A Float widened by doubleValue() used to arrive here as 0.10000000149011612
     assertEquals(Double.valueOf(0.1d), deliver("rateAsDouble"));
 
   }
@@ -511,7 +510,8 @@ public class TaskParameterTypesIntegrationTest {
 
     deliver("orderAsBigDecimal");
 
-    // the message of a type which cannot convert at all, unchanged by the number rule
+    // The message for a type which cannot be converted at all. The number rule does not
+    // change it.
     final var reason = reasonTheTaskFailed("orderAsBigDecimal");
     assertTrue(reason.contains("cannot be converted to the parameter's type"), reason);
 

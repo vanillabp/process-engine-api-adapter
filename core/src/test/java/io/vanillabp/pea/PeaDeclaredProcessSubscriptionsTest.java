@@ -25,17 +25,17 @@ import io.vanillabp.pea.deployment.PeaDeploymentService;
 import io.vanillabp.pea.mock.InMemoryProcessEngine;
 
 /**
- * Which subscriptions a workflow module opens for a BPMN process id it DECLARES without
- * deploying a model under it - the old id of a renamed process.
+ * Which subscriptions a workflow module opens for a BPMN process id it DECLARES but deploys
+ * no model for. That is the old id of a renamed process.
  * <p>
- * The whole point of those subscriptions is the name a task carries. Under
+ * These subscriptions exist only because of the name a task carries. Under
  * <code>use-prefix</code> a task definition is deployed as
- * <code>&lt;module&gt;__&lt;process&gt;__&lt;task&gt;</code>, so the tasks of the workflows
- * under the old id are named after the OLD id and no subscription of the deployed processes
- * asks for them; under every other mode the same task is named like any other and there is
- * nothing to open. Both cases are here, and so is the one an application cannot be helped
- * with: a method wired to a BPMN element id names no task definition, and a name cannot be
- * composed from a model this application no longer has.
+ * <code>&lt;module&gt;__&lt;process&gt;__&lt;task&gt;</code>. So the tasks of the workflows
+ * under the old id are named after the OLD id, and no subscription of the deployed processes
+ * asks for them. Under every other mode the task has the same name as any other, and there
+ * is nothing to open. Both cases are tested here. So is the case where nothing helps the
+ * application: a method wired to a BPMN element id names no task definition, and the adapter
+ * cannot build a name from a model this application no longer has.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class PeaDeclaredProcessSubscriptionsTest {
@@ -57,9 +57,9 @@ public class PeaDeclaredProcessSubscriptionsTest {
   private final PeaDeployedProcesses deployedProcesses = new PeaDeployedProcesses();
 
   /**
-   * A core which declares the given task definitions per BPMN process id nothing was
-   * deployed under, answers the payload variables a method reads and records where a
-   * delivery was routed.
+   * A core which declares the given task definitions per BPMN process id without a deployed
+   * model. It answers the payload variables a method reads. And it records where a delivery
+   * was routed.
    */
   static class RecordingCore extends PeaDeploymentServiceTest.PermissiveInvoker {
 
@@ -126,8 +126,8 @@ public class PeaDeclaredProcessSubscriptionsTest {
   }
 
   /**
-   * A processing context holding one deployed model which serves the task definition under
-   * its own (unprefixed) name.
+   * A processing context with one deployed model, which serves the task definition under
+   * its own name without a prefix.
    */
   private static PeaProcessingContext aDeployedModelServing(
       final String taskDefinition) {
@@ -193,8 +193,8 @@ public class PeaDeclaredProcessSubscriptionsTest {
     final var service = serviceScopedBy(NameClashAvoidance.USE_PREFIX);
     service.startWorkflowProcessing(MODULE, new PeaProcessingContext(MODULE));
 
-    // the engine names no BPMN process, which is what every engine behind this API does
-    // today (GAPS.md, entry 6) - the subscription itself says which process it serves
+    // The engine names no BPMN process. Every engine behind this API does so today
+    // (GAPS.md, entry 6). The subscription itself says which process it serves.
     engine.deliverTask("task-1", SCOPED_NAME, TaskType.EXTERNAL, null, Map.of("id", "4711"));
 
     assertEquals(OLD_ID, core.invokedBpmnProcessId);
@@ -260,8 +260,8 @@ public class PeaDeclaredProcessSubscriptionsTest {
     core.declaredWithoutAModel = Map.of(OLD_ID, List.of(TASK_DEFINITION));
     final var service = serviceScopedBy(NameClashAvoidance.NONE);
     final var context = aDeployedModelServing(TASK_DEFINITION);
-    // a second deployed process using the same task definition, which is what makes a
-    // delivery without the meta entry ambiguous in the first place
+    // A second deployed process uses the same task definition. That is what makes a
+    // delivery without the meta entry ambiguous.
     context
         .getModels()
         .add(new PeaBpmnModel(

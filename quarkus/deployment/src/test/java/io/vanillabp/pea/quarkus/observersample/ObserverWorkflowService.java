@@ -12,10 +12,11 @@ import io.vanillabp.spi.service.WorkflowTask;
 import jakarta.inject.Singleton;
 
 /**
- * Workflow service of the Quarkus user-task observer test: one notification handler for the
- * claimed user task plus an inline in-memory persistence copying aggregates on save/load. The
- * second user task of the BPMN has no method here on purpose - an observer sees it anyway, and
- * the configuration marks it with {@code implemented-externally}.
+ * The workflow service of the Quarkus test of the user-task observers. It has one
+ * notification handler for the claimed user task. It also has a small store in memory, which
+ * copies aggregates on save and on load. The second user task of the BPMN has no method here,
+ * on purpose. An observer sees it anyway, and the configuration marks it with
+ * {@code implemented-externally}.
  */
 @Singleton
 @WorkflowService(
@@ -95,8 +96,8 @@ public class ObserverWorkflowService implements AggregatePersistenceAware<Observ
   }
 
   /**
-   * The extension's method for the unclaimed user task. It reads a process variable no
-   * <code>&#64;WorkflowTask</code> method reads.
+   * The method of the extension for the unclaimed user task. It reads a process variable which
+   * no <code>&#64;WorkflowTask</code> method reads.
    *
    * @param shown The process variable only this method reads
    */
