@@ -10,9 +10,9 @@ import lombok.Getter;
 import lombok.Setter;
 
 /**
- * A JPA workflow aggregate with a generated (non-string) id: the outbox serializes the id
- * as a string and the phase-two dispatch converts it back to the original type before the
- * adapter receives it.
+ * A JPA workflow aggregate with a generated id which is not a string. The outbox stores the
+ * id as a string. Phase two converts it back to the original type before the adapter gets
+ * it.
  */
 @Entity
 @Table(name = "PEA_OUTBOX_TEST_AGGREGATE")
@@ -27,8 +27,8 @@ public class Aggregate {
   private String content;
 
   /**
-   * Never part of the payload sent to the engine - which also
-   * derives the class' mode "share everything else" (opt-out).
+   * Never part of the payload sent to the engine. Because of this annotation, the class
+   * shares everything else (opt-out).
    */
   @NoSyncWithBPMS
   private String secret;

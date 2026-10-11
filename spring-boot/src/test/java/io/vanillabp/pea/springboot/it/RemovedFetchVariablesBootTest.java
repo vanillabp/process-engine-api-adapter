@@ -19,8 +19,8 @@ import io.vanillabp.pea.springboot.processservice.PeaAdapterProcessServiceConfig
 
 /**
  * The key <code>fetch-variables</code> was removed in version 2.0. An application which still
- * sets it does not start, and the message names every key which sets it and says what applies
- * instead. The application is the one of {@link OrphanMethodBootTest}, because the start ends
+ * sets it does not start. The message names every key which sets it and says what applies
+ * instead. The test uses the application of {@link OrphanMethodBootTest}. The start ends
  * before its workflow service matters.
  */
 @ExtendWith(SuppressOutputExtension.class)

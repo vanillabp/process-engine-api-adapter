@@ -57,12 +57,12 @@ import io.vanillabp.spi.service.WorkflowService;
 import io.vanillabp.spi.service.WorkflowTask;
 
 /**
- * The user-task observer seam on Spring Boot, end to end against the in-memory engine: beans
- * of the application are collected at startup and every delivery of every user-task
- * subscription reaches them - the ones a {@code @WorkflowTask} method claims and the ones it
- * does not - as does the termination the engine reports, with the reason it gave. An observer
- * which throws is told about first and reaches the engine as a failed delivery, and the
- * observers behind it are told all the same.
+ * User-task observers on Spring Boot, end to end against the in-memory engine. The beans of
+ * the application are collected at startup. Every delivery of every user-task subscription
+ * reaches them, whether a {@code @WorkflowTask} method claims the task or not. The
+ * termination the engine reports reaches them too, with the reason the engine gave. The
+ * first observer throws where a test says so. Its failure reaches the engine as a failed
+ * delivery, and the observers behind it are told all the same.
  */
 @SpringBootTest(
     classes = UserTaskObserverIntegrationTest.UserTaskObserverApplication.class,
@@ -76,8 +76,8 @@ public class UserTaskObserverIntegrationTest {
 
   private static final String PROCESS = "PeaObserverProcess";
 
-  // the test's nested classes are excluded from Spring's component scan
-  // (TestTypeExcludeFilter) - configuration and workflow service are imported explicitly
+  // Spring's component scan leaves out the nested classes of a test (TestTypeExcludeFilter).
+  // So the configuration and the workflow service are imported by name.
   @SpringBootApplication
   @Import({
       TestPersistenceConfiguration.class, UserTaskObserverConfiguration.class, ObserverWorkflowService.class
@@ -86,8 +86,8 @@ public class UserTaskObserverIntegrationTest {
   }
 
   /**
-   * The annotation of an extension which reads what this adapter's subscription delivers,
-   * the way a details provider of a cockpit does.
+   * The annotation of an extension which reads what the subscription of this adapter
+   * delivers. A details provider of a cockpit does the same.
    */
   @Retention(RetentionPolicy.RUNTIME)
   @Target(ElementType.METHOD)
@@ -124,7 +124,8 @@ public class UserTaskObserverIntegrationTest {
   }
 
   /**
-   * A bean of the application watching along - the shape a cockpit extension registers.
+   * A bean of the application which watches along. A cockpit extension registers one like
+   * this.
    */
   public static class RecordingObserver implements PeaUserTaskObserver {
 
@@ -156,10 +157,10 @@ public class UserTaskObserverIntegrationTest {
   }
 
   /**
-   * Registered FIRST, so what the two behind it see proves that a broken observer stops
-   * nobody from being told. It breaks only where a test says so: every other test of this
-   * class is about a delivery which works, and a delivery this one broke would fail there
-   * too.
+   * Registered first. So what the two behind it see shows that a broken observer does not
+   * stop the others from being told. It breaks only where a test says so. Every other test
+   * of this class is about a delivery which works, and this observer would break that
+   * delivery too.
    */
   @Order(1)
   public static class ThrowingObserver implements PeaUserTaskObserver {
@@ -236,8 +237,8 @@ public class UserTaskObserverIntegrationTest {
     }
 
     /**
-     * Registers the extension's contract while the application starts, which is before the
-     * adapter opens its subscriptions.
+     * Registers the contract of the extension while the application starts. That is
+     * before the adapter opens its subscriptions.
      */
     @Bean
     InitializingBean glimpseContract(
@@ -343,7 +344,7 @@ public class UserTaskObserverIntegrationTest {
 
     /**
      * The claimed user task. Its sibling <code>peaUnclaimed</code> has no method here on
-     * purpose: a task list shows it anyway, and the configuration marks it with
+     * purpose. A task list shows it anyway, and the configuration marks it with
      * <code>implemented-externally</code>.
      */
     @WorkflowTask(taskDefinition = "peaObserved")
@@ -417,12 +418,12 @@ public class UserTaskObserverIntegrationTest {
 
     final var deployed = deployedProcesses.forAdapter("pea");
 
-    // the process the observers report tasks of, with the name a modeller wrote on it
+    // The process the observers report tasks of, with the name a modeller gave it
     final var process = deployed.deployedVersionOf(MODULE, PROCESS);
     assertEquals("Observed process", process.processName());
 
-    // the two keys a details provider of a cockpit is matched by, both answered out of
-    // the model this adapter read while deploying it
+    // A details provider of a cockpit is matched by these two keys. Both answers come from
+    // the model this adapter read while deploying it.
     final var byElementId = process.userTaskByElementId("t_observed");
     assertEquals("peaObserved", byElementId.taskDefinition());
     assertEquals("The observed task", byElementId.name());
@@ -478,8 +479,8 @@ public class UserTaskObserverIntegrationTest {
 
     ThrowingObserver.broken = true;
 
-    // the mock engine hands a failing delivery back to whoever delivered, which is what a
-    // real engine behind this API sees as well
+    // The mock engine hands a failing delivery back to the caller who delivered it. A real
+    // engine behind this API sees the same.
     final var failure = assertThrows(
         PeaUserTaskObserverFailure.class,
         () -> engine.deliverTask("obs-5", "peaObserved", PROCESS, Map.of("id", "5001")));
@@ -567,9 +568,9 @@ public class UserTaskObserverIntegrationTest {
         .executeWithoutResult(status -> workflowService
             .completeUserTask(UserTaskObserverConfiguration.AGGREGATES.get("5001"), "obs-4"));
 
-    // the completion is dispatched after the caller's commit, and the engine reports the
-    // task as gone the way the reference adapter does for a task finished through the
-    // completion API
+    // The completion is sent after the commit of the caller. The engine then reports the
+    // task as gone. The reference adapter does the same for a task finished through the
+    // completion API.
     awaitUntil(
         () -> !UserTaskObserverConfiguration.SECOND.terminated.isEmpty(),
         "the termination of the completed user task");

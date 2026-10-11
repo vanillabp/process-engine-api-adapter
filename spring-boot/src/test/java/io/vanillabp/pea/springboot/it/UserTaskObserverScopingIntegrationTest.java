@@ -40,13 +40,14 @@ import io.vanillabp.spi.service.WorkflowService;
 import io.vanillabp.spi.service.WorkflowTask;
 
 /**
- * What an observer is handed under <code>name-clash-avoidance: use-prefix</code>, where the
- * deployed bytes carry scoped identifiers and the engine reports them: the observation names
- * the PLAIN BPMN process and the PLAIN task definition, which are what the application's BPMN
- * and its configuration use (decision 2 in the repository's DECISIONS.md).
+ * What an observer gets under <code>name-clash-avoidance: use-prefix</code>. There the
+ * deployed bytes carry scoped identifiers, and the engine reports those. The observation
+ * names the plain BPMN process and the plain task definition. These are the names the BPMN
+ * and the configuration of the application use (decision 2 in the repository's
+ * DECISIONS.md).
  * <p>
  * The same values reach the core, so the <code>&#64;WorkflowTask</code> notification of the
- * scoped delivery runs - the core's registries are keyed by the plain identifiers.
+ * scoped delivery runs. The core keeps its registries under the plain identifiers.
  */
 @SpringBootTest(
     classes = UserTaskObserverScopingIntegrationTest.ScopedObserverApplication.class,
@@ -63,13 +64,13 @@ public class UserTaskObserverScopingIntegrationTest {
   private static final String TASK_DEFINITION = "peaObserved";
 
   /**
-   * What the engine knows the process as: the workflow module in front, joined by the
-   * platform's separator.
+   * The name the engine knows the process by. The workflow module comes first, joined by
+   * the separator of the platform.
    */
   private static final String SCOPED_PROCESS = MODULE + NameClashAvoidanceSupport.SEPARATOR + PROCESS;
 
   /**
-   * And the task definition, which is scoped per BPMN process by default.
+   * The same for the task definition. By default it is scoped by the BPMN process.
    */
   private static final String SCOPED_TASK_DEFINITION = MODULE + NameClashAvoidanceSupport.SEPARATOR + PROCESS + NameClashAvoidanceSupport.SEPARATOR + TASK_DEFINITION;
 
@@ -260,7 +261,7 @@ public class UserTaskObserverScopingIntegrationTest {
         "the observation names the plain task definition, not the subscription's key");
     assertEquals("6001", observation.workflowAggregateId());
 
-    // the same plain values reach the core, which is what makes the notification run at all
+    // The same plain values reach the core. Only that makes the notification run at all.
     assertEquals("notified:scoped-1", ScopedObserverConfiguration.AGGREGATES.get("6001").results);
 
   }

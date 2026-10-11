@@ -8,17 +8,16 @@ import io.vanillabp.integration.spi.AggregatePersistenceAware;
 import io.vanillabp.integration.utils.SpringDataUtil;
 
 /**
- * Provides a {@link SpringDataUtil} stub so the smoke tests do not need a database, and
- * says who owns a workflow aggregate nobody else claims. Any usage of either fails loudly:
- * the skeleton tests never persist anything.
+ * A {@link SpringDataUtil} stub, so the smoke tests need no database. It also says who
+ * owns a workflow aggregate nobody else claims. Any use of either fails loudly, because
+ * the smoke tests never store anything.
  * <p>
- * The second bean is what the platform asks for. An aggregate without a
- * persistence ends the startup, because the fallback looks for a Spring Data
- * repository and gets the stub's exception instead - and a context of this module reaches
- * that state easily, since scanning picks up the {@code @WorkflowService} classes of the
- * other tests without the persistence beans they declare next to themselves. A double
- * declared for a specific aggregate class still wins over this one, which is what
- * {@code TaskProcessingIntegrationTest} relies on.
+ * The platform asks for the persistence bean. An aggregate without a persistence ends the
+ * startup. In that case the platform looks for a Spring Data repository and gets the
+ * exception of the stub instead. A context of this module gets there easily. Scanning
+ * picks up the {@code @WorkflowService} classes of the other tests, but not the persistence
+ * beans they declare next to them. A double declared for a specific aggregate class still
+ * wins over this one, and {@code TaskProcessingIntegrationTest} relies on that.
  */
 @Configuration
 public class TestPersistenceConfiguration {
@@ -30,8 +29,8 @@ public class TestPersistenceConfiguration {
 
       @Override
       public Class<Object> getAggregateClass() {
-        // every aggregate is an Object, and at the greatest inheritance distance there is,
-        // so a double declared for a specific class always wins over this one
+        // Every aggregate is an Object, and Object is as far up the class tree as it
+        // gets. So a double declared for a specific class always wins over this one.
         return Object.class;
       }
 
@@ -55,8 +54,8 @@ public class TestPersistenceConfiguration {
 
       @Override
       public Class<?> getAggregateIdType() {
-        // the contract's "not determinable": this double owns the serialized form, as far
-        // as it owns anything at all
+        // null means "cannot be told" in the contract. This double owns the stored form
+        // of the id, as far as it owns anything at all.
         return null;
       }
 

@@ -17,10 +17,10 @@ import io.vanillabp.pea.mock.InMemoryProcessEngine;
 import io.vanillabp.pea.springboot.processservice.PeaAdapterProcessServiceConfiguration;
 
 /**
- * Smoke test proving the Process-Engine-API adapter is discovered by the VanillaBP Spring
- * Boot integration: the context boots without any BPMN files, a deployment service is
- * created for the configured adapter id {@code pea}, and the default in-memory mock engine
- * is present with no recorded invocations. No Docker and no network involved.
+ * The VanillaBP Spring Boot integration finds the Process-Engine-API adapter. The context
+ * boots without any BPMN files. A deployment service exists for the configured adapter id
+ * {@code pea}. The default in-memory mock engine is there and has recorded no calls. The
+ * test needs no Docker and no network.
  */
 @SpringBootTest(
     classes = {
@@ -38,13 +38,12 @@ public class PeaAdapterSmokeTest {
   @Test
   public void testAdapterDiscoveredWithMockEngine() {
 
-    // element-bean convention: one AdapterDeploymentService bean per adapter
-    // (never a List bean) so several adapter types can coexist
+    // One AdapterDeploymentService bean per adapter, never a List bean, so that several
+    // adapter types can live side by side
     final var deploymentService = context.getBean(AdapterDeploymentService.class);
     Assertions.assertEquals("pea", deploymentService.getAdapterId());
     Assertions.assertEquals(PeaAdapter.ADAPTER_TYPE, deploymentService.getAdapterType());
 
-    // the mock engine is present and untouched
     Assertions.assertNotNull(inMemoryProcessEngine);
     Assertions.assertTrue(inMemoryProcessEngine.getInvocations().isEmpty(),
         "no Process-Engine-API invocations are expected during a plain boot");

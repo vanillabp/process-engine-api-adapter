@@ -31,18 +31,18 @@ import io.vanillabp.pea.wiring.PeaTaskMeta;
 import io.vanillabp.spi.process.ProcessService;
 
 /**
- * End-to-end proof that VanillaBP's two-phase workflow start maps onto the
- * Process-Engine-API's {@link ExecutionMode}, driven through
- * {@link ProcessService#startWorkflow} inside a JPA transaction with the phase-two outbox:
+ * The two-phase start of VanillaBP maps onto the {@link ExecutionMode} of the
+ * Process-Engine-API, end to end. The test calls {@link ProcessService#startWorkflow} inside
+ * a JPA transaction, with the outbox for phase two:
  * <ul>
- *   <li>phase one ({@code PREFLIGHT_CHECK}) runs inside the local transaction - exactly one
- *       is recorded while the transaction is still open and no instance is created;</li>
- *   <li>phase two ({@code SYNC}) is dispatched after commit and creates the instance
- *       (matching BPMN process id and aggregate id);</li>
- *   <li>on rollback the {@code PREFLIGHT_CHECK} was recorded but a {@code SYNC} is never
- *       dispatched.</li>
+ *   <li>Phase one ({@code PREFLIGHT_CHECK}) runs inside the local transaction. Exactly one
+ *       is recorded while the transaction is still open, and no instance is created.</li>
+ *   <li>Phase two ({@code SYNC}) is sent after the commit and creates the instance, with the
+ *       right BPMN process id and aggregate id.</li>
+ *   <li>After a rollback the {@code PREFLIGHT_CHECK} was recorded, but no {@code SYNC} is
+ *       ever sent.</li>
  * </ul>
- * No Docker and no network involved (H2 + in-memory mock engine).
+ * The test needs no Docker and no network. It runs on H2 and the in-memory mock engine.
  */
 @SpringBootTest(classes = OutboxTestApplication.class)
 @ActiveProfiles("outbox")
@@ -53,8 +53,8 @@ public class PeaTwoPhaseStartOutboxTest {
   private static final String BPMN_PROCESS_ID = "PeaTestProcess";
 
   /**
-   * The name of the payload variable carrying the aggregate's ID: the adapter names it
-   * after the aggregate's ID property ({@link Aggregate#getId()}).
+   * The name of the payload variable which carries the ID of the aggregate. The adapter
+   * names it after the ID property of the aggregate ({@link Aggregate#getId()}).
    */
   private static final String AGGREGATE_ID_VARIABLE = "id";
 
@@ -118,8 +118,8 @@ public class PeaTwoPhaseStartOutboxTest {
       aggregate.setContent("commit-test");
       final var saved = processService.startWorkflow(aggregate);
 
-      // still inside the transaction: phase one ran (exactly one PREFLIGHT_CHECK), phase
-      // two (SYNC) has not been dispatched yet and no instance exists
+      // Still inside the transaction. Phase one ran (exactly one PREFLIGHT_CHECK). Phase
+      // two (SYNC) has not been sent yet, and no instance exists.
       assertEquals(1, startsWithMode(ExecutionMode.PREFLIGHT_CHECK).size());
       assertTrue(startsWithMode(ExecutionMode.SYNC).isEmpty());
       assertTrue(engine.getStartedInstances().isEmpty());
@@ -130,13 +130,13 @@ public class PeaTwoPhaseStartOutboxTest {
     assertNotNull(attached);
     assertNotNull(attached.getId());
 
-    // the PREFLIGHT_CHECK carried the right process id and aggregate id
+    // The PREFLIGHT_CHECK carried the right process id and aggregate id
     final var preflight = startsWithMode(ExecutionMode.PREFLIGHT_CHECK).getFirst();
     final var preflightCommand = assertInstanceOf(PeaStartProcessCommand.class, preflight.command());
     assertEquals(BPMN_PROCESS_ID, preflightCommand.getBpmnProcessId());
     assertEquals(attached.getId(), preflightCommand.get().get(AGGREGATE_ID_VARIABLE));
 
-    // after commit: exactly one SYNC is dispatched, creating the instance
+    // After the commit, exactly one SYNC is sent, and it creates the instance
     final var sync = awaitStartWithMode(ExecutionMode.SYNC, 10000);
     assertNotNull(sync, "phase two (SYNC) must be dispatched after commit");
     final var syncCommand = assertInstanceOf(PeaStartProcessCommand.class, sync.command());
@@ -147,13 +147,13 @@ public class PeaTwoPhaseStartOutboxTest {
     final var instance = engine.getStartedInstances().getFirst();
     assertEquals(attached.getId(), instance.variables().get(AGGREGATE_ID_VARIABLE));
 
-    // phase two reports the instance the engine created, and VanillaBP writes it down
-    // after the handler returned, so the row may come a moment after the instance
+    // Phase two reports the instance the engine created. VanillaBP writes it down after
+    // the handler returned, so the row may come a moment after the instance.
     final var start = awaitTheStartOf(String.valueOf(attached.getId()), 10000);
     assertNotNull(start, "the start of the workflow must be written to the delivery log");
     assertEquals(instance.instanceId(), start.workflowId(), "the instance id the engine answered");
     assertEquals(BPMN_PROCESS_ID, start.bpmnProcessId());
-    // the mock answers like the reference engine adapter, without a version tag
+    // The mock answers like the reference engine adapter, without a version tag
     assertNull(start.processVersion(), "no version where the engine's answer names none");
 
   }
@@ -215,8 +215,7 @@ public class PeaTwoPhaseStartOutboxTest {
     final var sync = awaitStartWithMode(ExecutionMode.SYNC, 10000);
     assertNotNull(sync, "phase two (SYNC) must be dispatched after commit");
 
-    // BOTH phases carry the same payload: the preflight validates what phase two
-    // will send
+    // Both phases carry the same payload. The preflight checks what phase two will send.
     for (final var command : List.of(
         startsWithMode(ExecutionMode.PREFLIGHT_CHECK).getFirst().command(), sync.command())) {
       final var payload = assertInstanceOf(PeaStartProcessCommand.class, command).get();
@@ -246,10 +245,10 @@ public class PeaTwoPhaseStartOutboxTest {
         }));
     assertEquals("test rollback", exception.getMessage());
 
-    // phase one already ran synchronously before the rollback
+    // Phase one ran synchronously before the rollback
     assertEquals(1, startsWithMode(ExecutionMode.PREFLIGHT_CHECK).size());
 
-    // wait well beyond the outbox poll interval: phase two must never be dispatched
+    // Wait well beyond the poll interval of the outbox. Phase two must never be sent.
     Thread.sleep(1500);
     assertTrue(startsWithMode(ExecutionMode.SYNC).isEmpty(), "no SYNC may be dispatched after rollback");
     assertTrue(engine.getStartedInstances().isEmpty());
@@ -262,7 +261,7 @@ public class PeaTwoPhaseStartOutboxTest {
 
     engine.failPreflightFor(BPMN_PROCESS_ID);
 
-    // the joined future's failure surfaces in phase one and aborts the transaction
+    // Phase one joins the future. Its failure comes out there and ends the transaction.
     final var exception = assertThrowsExactly(
         IllegalStateException.class,
         () -> transactionTemplate.execute(status -> {
@@ -273,10 +272,10 @@ public class PeaTwoPhaseStartOutboxTest {
     assertTrue(exception.getMessage().contains("Preflight check"));
     assertTrue(exception.getMessage().contains(BPMN_PROCESS_ID));
 
-    // the transaction rolled back: the aggregate was not persisted
+    // The transaction rolled back, so the aggregate was not stored
     assertEquals(0, repository.count(), "the aggregate must not be persisted after a failed preflight");
 
-    // and phase two is never dispatched (no outbox entry was committed)
+    // Phase two is never sent, because no outbox entry was committed
     Thread.sleep(1500);
     assertTrue(startsWithMode(ExecutionMode.SYNC).isEmpty());
     assertTrue(engine.getStartedInstances().isEmpty());
@@ -296,8 +295,8 @@ public class PeaTwoPhaseStartOutboxTest {
     });
     assertNotNull(attached);
 
-    // the first SYNC fails (joined future -> outbox retries), the second succeeds:
-    // the retry is visible as a second SYNC invocation and the instance exists
+    // The first SYNC fails. The joined future fails, so the outbox tries again. The second
+    // SYNC succeeds. The retry shows as a second SYNC call, and the instance exists.
     final var deadline = System.currentTimeMillis() + 10000;
     while (startsWithMode(ExecutionMode.SYNC).size() < 2) {
       assertTrue(

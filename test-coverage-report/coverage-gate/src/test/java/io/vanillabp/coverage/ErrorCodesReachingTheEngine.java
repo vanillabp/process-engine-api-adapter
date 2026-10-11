@@ -13,33 +13,32 @@ import java.util.stream.Collectors;
 
 /**
  * Reads the main sources of this repository and finds every place where a BPMN error code is
- * handed to the engine, so the build can require each of them to scope it first.
+ * handed to the engine. So the build can require that each of them scopes the code first.
  * <p>
- * Under the name-clash-avoidance mode <code>use-prefix</code> the <code>errorCode</code> of a
+ * Under the name-clash-avoidance mode <code>use-prefix</code>, the <code>errorCode</code> of a
  * <code>bpmn:error</code> is deployed with the workflow module in front of it, like every other
- * identifier of that module. A code sent on unscoped is a code no boundary event of the
- * deployed model catches, and nothing anywhere says so: the engine takes the command and the
- * workflow walks past the error path. That is why this is read out of the source rather than
- * covered by a test per path. An unscoped code compiles perfectly well, and the paths are added
- * one at a time.
+ * identifier of that module. No boundary event of the deployed model catches a code sent
+ * unscoped, and nothing says so. The engine takes the command, and the workflow walks past the
+ * error path. That is why this check reads the source instead of a test for each path. An
+ * unscoped code compiles fine, and the paths are added one at a time.
  * <p>
- * The finding this comes from had two places, and the second one was found only because
- * somebody asked for it by hand.
+ * The finding behind this check had two places. The second one was found only because
+ * somebody looked for it by hand.
  */
 final class ErrorCodesReachingTheEngine {
 
   /**
-   * The constructions which put a BPMN error code into a command for the engine. The plain
-   * name is listed beside the adapter's own subclass, because a command built directly from
-   * the API's class reaches the engine just as well.
+   * The constructor calls which put a BPMN error code into a command for the engine. The
+   * class of the API is listed next to the subclass of the adapter. A command built directly
+   * from the class of the API reaches the engine just as well.
    */
   private static final Pattern ERROR_COMMAND = Pattern
       .compile("new\\s+(?:Pea)?CompleteTaskByErrorCmd\\s*\\(");
 
   /**
-   * What an error code has to be built by: a call to one of the scoping helpers, whichever
-   * class it is read from. Everything the helpers are named starts with <code>scoped</code>,
-   * and that is the part a new call site has to get right.
+   * What an error code has to be built by: a call to one of the scoping helpers, from
+   * whichever class. The names of all helpers start with <code>scoped</code>, and that is
+   * the part a new call site has to get right.
    */
   private static final Pattern SCOPING_HELPER_CALL = Pattern
       .compile("^(?:[A-Za-z_$][\\w$]*\\s*\\.\\s*)*scoped[A-Za-z]*\\s*\\(");
@@ -59,7 +58,7 @@ final class ErrorCodesReachingTheEngine {
 
   /**
    * How many places of this repository hand an error code to the engine, scoped or not. A
-   * check asserts this is not zero, because a scan which finds nothing passes every rule.
+   * check asserts that this is not zero. A scan which finds nothing passes every rule.
    *
    * @param repositoryRoot The repository's root directory
    * @return The number of call sites found
@@ -136,8 +135,8 @@ final class ErrorCodesReachingTheEngine {
     final var arguments = new ArrayList<ErrorCodeArgument>();
     final var command = ERROR_COMMAND.matcher(source);
     while (command.find()) {
-      // the error code is the SECOND argument of every one of these commands, the task id
-      // being the first
+      // The error code is the second argument of each of these commands. The first is the
+      // task id.
       final var errorCode = argumentAt(source, command.end(), 1);
       if (errorCode != null) {
         arguments.add(new ErrorCodeArgument(lineOf(source, command.start()), errorCode));
@@ -148,14 +147,14 @@ final class ErrorCodesReachingTheEngine {
   }
 
   /**
-   * One argument of an argument list, read from the source rather than from a parsed tree.
+   * One argument of an argument list, read from the source and not from a parsed tree.
    * <p>
-   * The list is split at the commas which stand at bracket depth zero and outside a string, a
-   * character literal or a text block, so an argument which is itself a call keeps its own
-   * commas. Everything else about the expression is left as it is, apart from the line breaks
-   * and the indentation a long call is wrapped with, which are folded into single spaces so a
-   * call site reads the same however it happens to be formatted. Comments are gone by the time
-   * this reads anything, see {@link #withoutComments(String)}.
+   * The list is split at the commas outside any brackets and outside a string, a character
+   * literal or a text block. So an argument which is itself a call keeps its own commas. The
+   * expression stays as it is, except for the line breaks and the indentation of a long call.
+   * Those become single spaces, so a call site reads the same however it is formatted.
+   * Comments are already gone when this reads anything, see
+   * {@link #withoutComments(String)}.
    *
    * @param source The whole file
    * @param from The offset right behind the opening bracket
@@ -310,11 +309,11 @@ final class ErrorCodesReachingTheEngine {
   }
 
   /**
-   * The same source with every comment blanked out, character for character, so that what is
-   * left stands where it stood and every line number still holds.
+   * The same source with every comment replaced by spaces, character for character. So the
+   * rest stays where it was, and every line number still holds.
    * <p>
-   * Two things need this. A javadoc block which shows a call in prose is not a call site, and
-   * a comment standing inside an argument list would end up in the expression this reads.
+   * Two things need this. A javadoc block which shows a call in its text is not a call site.
+   * And a comment inside an argument list would end up in the expression this reads.
    *
    * @param source The file as it is written
    * @return The file with its comments turned into spaces

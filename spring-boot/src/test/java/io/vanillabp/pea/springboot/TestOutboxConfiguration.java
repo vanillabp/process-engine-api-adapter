@@ -9,12 +9,11 @@ import io.vanillabp.integration.spi.PhaseTwoOutbox;
 import io.vanillabp.integration.spi.TransactionRunner;
 
 /**
- * Provides a {@link PhaseTwoOutbox} stub for smoke tests booting WITHOUT a database:
- * the PEA adapter sends everything through phase two, and the platform
- * wants the outbox RESOLVABLE at startup, validated eagerly.
- * The smoke tests never start workflows - any usage of the stub fails loudly. Tests
- * with a real database (e.g. the deployment integration test) must NOT import this
- * configuration: they use the platform's default outbox.
+ * A {@link PhaseTwoOutbox} stub for smoke tests which boot without a database. The PEA
+ * adapter sends everything through phase two, and the platform checks at startup that it
+ * finds an outbox. The smoke tests never start a workflow, so any use of the stub fails
+ * loudly. Tests with a real database must not import this configuration. They use the
+ * default outbox of the platform. The deployment integration test is one of them.
  */
 @Configuration
 public class TestOutboxConfiguration {
@@ -29,10 +28,10 @@ public class TestOutboxConfiguration {
   }
 
   /**
-   * The unit of work the application brings: these contexts have no
-   * transactional persistence at all, and a two-phase adapter needs a transaction to write
-   * the aggregate and the outbox entry in. A pass-through runner is enough - nothing is
-   * persisted here, what these tests pin is the wiring.
+   * The transaction runner an application normally brings. These contexts have no
+   * persistence with transactions at all. But a two-phase adapter needs a transaction to
+   * write the aggregate and the outbox entry in. A runner which just calls the work is
+   * enough. Nothing is stored here, and these tests only check the wiring.
    *
    * @return The runner
    */
