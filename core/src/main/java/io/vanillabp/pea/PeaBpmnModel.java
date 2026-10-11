@@ -5,37 +5,37 @@ import java.util.List;
 import io.vanillabp.integration.adapter.spi.workflowtask.BpmnTaskSpec;
 
 /**
- * The adapter's BPMN model type ({@code BPMN} type parameter of
- * {@link io.vanillabp.integration.adapter.spi.AdapterDeploymentService}).
+ * The BPMN model of this adapter. It is the {@code BPMN} type parameter of
+ * {@link io.vanillabp.integration.adapter.spi.AdapterDeploymentService}.
  * <p>
- * The bpm-crafters Process-Engine-API deliberately has no BPMN model abstraction: its
- * {@code DeploymentApi} only accepts opaque {@code NamedResource}s (filename + bytes).
- * Because VanillaBP wires business code per BPMN process id, the adapter needs at least
- * the process id in addition to the raw resource - so this record carries it explicitly.
+ * The bpm-crafters Process-Engine-API has no BPMN model on purpose. Its {@code DeploymentApi}
+ * takes a {@code NamedResource}, which is a file name and the bytes, and nothing more. But
+ * VanillaBP wires the business code by BPMN process id, so the adapter needs at least that
+ * id next to the raw bytes. This record carries it.
  * <p>
- * The {@code bpmnProcessId} is extracted from the BPMN XML by
- * {@code PeaDeploymentService.readBpmn} using a JDK StAX parser. See {@code GAPS.md} (first
- * entry): a BPMS-agnostic API without a model type forces every consumer to parse BPMN
- * itself. The names of the process and of its user tasks are read in the same pass, so
- * whoever needs them does not have to read the same bytes a second time.
+ * {@code PeaDeploymentService.readBpmn} reads the {@code bpmnProcessId} out of the BPMN XML
+ * with the StAX parser of the JDK. An API which is the same for every BPMS and has no model
+ * type makes every user parse BPMN on their own, see the first entry of {@code GAPS.md}. The
+ * same pass also reads the names of the process and of its user tasks. So nobody who needs
+ * them has to read the bytes a second time.
  *
  * @param filename The name of the BPMN resource (used for logging and deployment)
  * @param resource The raw BPMN XML bytes
  * @param bpmnProcessId The id of the executable process contained in the resource
  * @param processName The <code>name</code> attribute of the process element, what a
  *          modeller wrote on it. May be <code>null</code>: a process needs no name
- * @param tasks The service-like tasks of the process to be wired to
- *          {@code @WorkflowTask} methods (activity id + task definition - the
- *          <code>zeebe:taskDefinition</code> type; the Process-Engine-API itself
- *          has no notion of task definitions in BPMN, see {@code GAPS.md})
+ * @param tasks The service-like tasks of the process which are wired to
+ *          {@code @WorkflowTask} methods. Each has its activity id and its task definition,
+ *          which is the type of <code>zeebe:taskDefinition</code>. The Process-Engine-API
+ *          itself knows no task definitions in BPMN, see {@code GAPS.md}
  * @param userTasks The user tasks of the process, each with its element id, its external
  *          form reference and the name the modeller wrote on it
  * @param userTasksWithoutAFormReference The user tasks which name no external form
  *          reference, each with its element id and its name. Their task definition is
- *          always <code>null</code>, because the model names none: such a task cannot be
- *          subscribed for and never becomes a spec of the core, and it is carried so the
- *          boot can name it to whoever drew it. Read in the same pass as the rest, so
- *          nobody walks the same bytes a second time (decision 10 in the repository's
+ *          always <code>null</code>, because the model names none. Such a task cannot be
+ *          subscribed for and never becomes a spec of the core. It is carried so the boot
+ *          can name it to whoever drew it. It is read in the same pass as the rest, so
+ *          nobody reads the same bytes a second time (decision 10 in the repository's
  *          DECISIONS.md)
  */
 public record PeaBpmnModel(
@@ -48,7 +48,7 @@ public record PeaBpmnModel(
                            List<BpmnTaskSpec> userTasksWithoutAFormReference) {
 
   /**
-   * Convenience constructor for a process without a name and without user tasks.
+   * A shorter constructor, for a process without a name and without user tasks.
    *
    * @param filename The name of the BPMN resource
    * @param resource The raw BPMN XML bytes
@@ -66,7 +66,7 @@ public record PeaBpmnModel(
   }
 
   /**
-   * Convenience constructor for a process without a name.
+   * A shorter constructor, for a process without a name.
    *
    * @param filename The name of the BPMN resource
    * @param resource The raw BPMN XML bytes
@@ -86,8 +86,8 @@ public record PeaBpmnModel(
   }
 
   /**
-   * Convenience constructor for a process whose user tasks all name an external form
-   * reference, which is the model VanillaBP asks for.
+   * A shorter constructor, for a process whose user tasks all name an external form
+   * reference. VanillaBP asks for such a model.
    *
    * @param filename The name of the BPMN resource
    * @param resource The raw BPMN XML bytes

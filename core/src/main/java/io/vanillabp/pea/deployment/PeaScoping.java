@@ -18,13 +18,13 @@ import io.vanillabp.integration.adapter.spi.NameClashAvoidanceSupport;
 import lombok.extern.slf4j.Slf4j;
 
 /**
- * Applies {@link NameClashAvoidance#USE_PREFIX} to a Process-Engine-API model. The API
- * has no BPMN model type - only opaque resources - so the adapter
- * rewrites the raw XML itself: the identifiers are read and written by LOCAL NAME,
- * independent of the BPMN dialect the underlying engine uses.
+ * Applies {@link NameClashAvoidance#USE_PREFIX} to a Process-Engine-API model. The API has
+ * no BPMN model type, it only takes the files as they are. So the adapter rewrites the raw
+ * XML itself. It reads and writes the identifiers by LOCAL NAME, so the BPMN dialect of the
+ * engine underneath does not matter.
  * <p>
- * The other two modes need nothing: {@link NameClashAvoidance#NONE} scopes nothing,
- * and {@link NameClashAvoidance#BY_ADAPTER} is rejected at startup because the
+ * The other two modes need nothing here. {@link NameClashAvoidance#NONE} scopes nothing.
+ * {@link NameClashAvoidance#BY_ADAPTER} is refused at startup, because the
  * Process-Engine-API has no isolation mechanism of its own (see
  * {@code GAPS.md}, entry 4).
  */
@@ -35,7 +35,7 @@ public final class PeaScoping {
   }
 
   /**
-   * Whether the given workflow module's identifiers are prefixed for this adapter.
+   * Whether the identifiers of the given workflow module get a prefix for this adapter.
    *
    * @param workflowModuleId The workflow module ID
    * @param adapterId The adapter ID
@@ -53,8 +53,8 @@ public final class PeaScoping {
   }
 
   /**
-   * Rewrites the identifiers of the given BPMN resource. Returns the input unchanged
-   * unless the module's mode is {@link NameClashAvoidance#USE_PREFIX}.
+   * Rewrites the identifiers of the given BPMN resource. The input comes back unchanged
+   * unless the mode of the module is {@link NameClashAvoidance#USE_PREFIX}.
    *
    * @param resource The raw BPMN XML
    * @param workflowModuleId The workflow module ID
@@ -76,8 +76,8 @@ public final class PeaScoping {
     try {
       final var factory = DocumentBuilderFactory.newInstance();
       factory.setNamespaceAware(true);
-      // the resource is the application's own BPMN, but parsing untrusted XML
-      // features is never needed here
+      // the BPMN is the application's own, but no DOCTYPE is ever needed here, so none is
+      // allowed
       factory.setFeature("http://apache.org/xml/features/disallow-doctype-decl", true);
       final var document = factory
           .newDocumentBuilder()
@@ -87,15 +87,15 @@ public final class PeaScoping {
           value -> scoping.scopedProcessId(workflowModuleId, value, adapterId));
       rewriteAttribute(document, "calledElement", "processId",
           value -> scoping.scopedProcessId(workflowModuleId, value, adapterId));
-      // the elements a workflow module scopes on its own, taken from the list
-      // PeaDeclaredIdentifiers reads as well: what is rewritten here and what the core is
-      // told about is then the same set of element names by construction
+      // the elements a workflow module scopes on its own. The list is the one
+      // PeaDeclaredIdentifiers reads too. So what is rewritten here and what the core hears
+      // about are always the same element names
       for (final var element : PeaDeclaredIdentifiers.ELEMENTS_SCOPED_BY_THE_WORKFLOW_MODULE) {
         rewriteAttribute(document, element.localName(), element.attributeName(),
             value -> scoping.scopedIdentifier(workflowModuleId, value, adapterId));
       }
-      // task definitions are scoped per PROCESS - the plain process id is the one
-      // the caller passed, the model's own id may already be rewritten above
+      // task definitions are scoped per PROCESS. The plain process id is the one the caller
+      // passed, because the id in the document may already be rewritten above
       rewriteAttribute(document, "taskDefinition", "type",
           value -> scoping.scopedTaskDefinition(workflowModuleId, bpmnProcessId, value, adapterId));
       rewriteAttribute(document, "formDefinition", "externalReference",
@@ -123,9 +123,6 @@ public final class PeaScoping {
 
   }
 
-  /**
-   * Rewrites one attribute of every element of the given local name.
-   */
   private static void rewriteAttribute(
       final Document document,
       final String localName,

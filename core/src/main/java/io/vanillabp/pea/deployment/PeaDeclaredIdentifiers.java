@@ -18,19 +18,19 @@ import io.vanillabp.pea.PeaBpmnModel;
 import lombok.extern.slf4j.Slf4j;
 
 /**
- * The identifiers a BPMN model of this adapter declares, as the application wrote them.
- * The core compares them against the other workflow modules of the same application, and
- * it needs no engine for it: the names are in the models the adapter reads anyway.
+ * The identifiers a BPMN model of this adapter declares, as the application wrote them. The
+ * core compares them with the other workflow modules of the same application. It needs no
+ * engine for that, because the names are in the models the adapter reads anyway.
  * <p>
- * The element and attribute names live in ONE list, which {@link PeaScoping} rewrites and
- * this class reads. A dialect whose element names are not in that list is invisible to
- * both, so what reaches the core is what the rewrite recognises and no more - the API has
- * no BPMN model type to ask instead (see {@code GAPS.md}, entry 1).
+ * The element and attribute names are kept in ONE list. {@link PeaScoping} rewrites what it
+ * names, and this class reads it. Neither of them sees a dialect whose element names are not
+ * in that list. So the core gets what the rewrite knows and nothing more. The API has no BPMN
+ * model type to ask instead (see {@code GAPS.md}, entry 1).
  * <p>
  * A decision id is not in the list. This adapter never scopes one, because the API has no
- * binding from a business rule task to a decision which could be renamed with it (see
- * {@code GAPS.md}, entry 22), so the scoped form the core would compose is not the form
- * the engine sees and the finding would name a name nobody deploys.
+ * link from a business rule task to a decision which could be renamed along with it (see
+ * {@code GAPS.md}, entry 22). The scoped form the core would compose is then not what the
+ * engine sees, and a warning would name a name nobody deploys.
  */
 @Slf4j
 public final class PeaDeclaredIdentifiers {
@@ -41,8 +41,8 @@ public final class PeaDeclaredIdentifiers {
   /**
    * One attribute of one element, and which kind of identifier it holds.
    *
-   * @param localName The element's local name, so the dialect's namespace prefix does not
-   *          matter
+   * @param localName The local name of the element, so the namespace prefix of the
+   *          dialect does not matter
    * @param attributeName The attribute's local name
    * @param kind What the core scopes this identifier as
    */
@@ -53,8 +53,8 @@ public final class PeaDeclaredIdentifiers {
 
   /**
    * What a workflow module scopes on its own, without a BPMN process taking part. These
-   * elements sit in the <code>definitions</code> element rather than inside a process, so
-   * a file holding two processes declares each of them once for both.
+   * elements sit in the <code>definitions</code> element and not inside a process. So a file
+   * with two processes declares each of them once for both.
    */
   static final List<DeclaringElement> ELEMENTS_SCOPED_BY_THE_WORKFLOW_MODULE = List
       .of(
@@ -65,13 +65,12 @@ public final class PeaDeclaredIdentifiers {
 
   /**
    * Reads the identifiers of one model, with the PLAIN names the application gave them.
-   * Hand in the model as it was read, not the resource on its way to the engine: that one
-   * may carry the prefix already.
+   * Pass the model as it was read, not the resource on its way to the engine, because that
+   * one may already carry the prefix.
    * <p>
-   * This is a diagnostic, so a file which cannot be read is a debug line and an empty
-   * answer rather than a failed deployment - the same file is deployed by
-   * {@code deployResources} either way, and whatever is wrong with it is the engine's
-   * answer to give.
+   * This is only a check. So a file which cannot be read gives a debug line and an empty
+   * answer, and the deployment goes on. {@code deployResources} deploys the same file
+   * anyway, and the engine is the one to say what is wrong with it.
    *
    * @param model The model as it was read from the BPMN file
    * @return What it declares, plain, possibly with duplicates across the models of one
@@ -85,8 +84,8 @@ public final class PeaDeclaredIdentifiers {
     }
     final var declared = new ArrayList<ModelIdentifier>();
     // the task definition of a service-like task and the external form reference of a
-    // user task: both were read per process while the file was parsed, which is what they
-    // are scoped by
+    // user task. Both were read per process when the file was parsed, and they are scoped
+    // per process too
     taskDefinitionsOf(model.tasks(), model.bpmnProcessId(), declared);
     taskDefinitionsOf(model.userTasks(), model.bpmnProcessId(), declared);
     try {
@@ -103,8 +102,8 @@ public final class PeaDeclaredIdentifiers {
   }
 
   /**
-   * A task without a task definition is reported by the wiring validation, and it has no
-   * name to scope.
+   * Skips a task without a task definition. It has no name to scope, and the wiring
+   * validation reports it.
    */
   private static void taskDefinitionsOf(
       final List<BpmnTaskSpec> tasks,
@@ -132,7 +131,7 @@ public final class PeaDeclaredIdentifiers {
       return;
     }
     final var factory = XMLInputFactory.newFactory();
-    // harden the parser: no external entities, no DTDs (defence against XXE)
+    // no external entities and no DTDs, against XXE attacks
     factory.setProperty(XMLInputFactory.IS_SUPPORTING_EXTERNAL_ENTITIES, Boolean.FALSE);
     factory.setProperty(XMLInputFactory.SUPPORT_DTD, Boolean.FALSE);
 
@@ -158,7 +157,7 @@ public final class PeaDeclaredIdentifiers {
         try {
           reader.close();
         } catch (final XMLStreamException e) {
-          // ignore: closing the reader over an in-memory byte array cannot fail meaningfully
+          // the reader works on bytes in memory, so a failed close loses nothing
         }
       }
     }
@@ -166,9 +165,9 @@ public final class PeaDeclaredIdentifiers {
   }
 
   /**
-   * The attribute of the given local name, whatever namespace it is in - an identifier is
-   * spelled the same in every dialect this adapter knows, its namespace prefix is not. An
-   * attribute a modeller left empty is nothing to scope and therefore nothing to report.
+   * The attribute with the given local name, in whatever namespace. An identifier is spelled
+   * the same in every dialect this adapter knows, but its namespace prefix is not. An
+   * attribute a modeller left empty is nothing to scope, so it is nothing to report.
    *
    * @param reader The reader, standing on a start element
    * @param attributeName The attribute's local name

@@ -6,15 +6,15 @@ package io.vanillabp.pea;
 public final class PeaAdapter {
 
   /**
-   * The adapter type of this adapter. Configured per adapter id via
-   * {@code vanillabp.adapters.<id>.type=process-engine-api} and announced to the
-   * VanillaBP platform integrations (Spring Boot auto-configuration / Quarkus
-   * extension capability {@code io.vanillabp.adapter.process-engine-api}).
+   * The type of this adapter. An application sets it per adapter id with
+   * {@code vanillabp.adapters.<id>.type=process-engine-api}. The platform integrations learn
+   * about it through the Spring Boot auto-configuration and through the Quarkus capability
+   * {@code io.vanillabp.adapter.process-engine-api}.
    */
   public static final String ADAPTER_TYPE = "process-engine-api";
 
   private PeaAdapter() {
-    // constants holder
+    // only constants, no instances
   }
 
 }

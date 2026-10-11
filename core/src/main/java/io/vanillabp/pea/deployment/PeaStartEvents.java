@@ -10,10 +10,10 @@ import javax.xml.parsers.DocumentBuilderFactory;
 import org.w3c.dom.Element;
 
 /**
- * Finds the start events a BPMS would fire on its own (timer, signal, conditional) in
- * the raw BPMN. The Process-Engine-API has no BPMN model type, so the adapter reads
- * the XML itself - by LOCAL NAME, since the BPMN namespace prefix is up to whoever
- * modelled the file.
+ * Finds the start events in the raw BPMN which a BPMS fires on its own: timer, signal and
+ * conditional. The Process-Engine-API has no BPMN model type, so the adapter reads the XML
+ * itself. It reads by LOCAL NAME, because whoever modelled the file picks the namespace
+ * prefix.
  */
 public final class PeaStartEvents {
 
@@ -21,16 +21,15 @@ public final class PeaStartEvents {
   }
 
   /**
-   * Reads the start events of one process out of the raw bytes. The result is what the
-   * deployment refuses the module with: this engine reports no start of its own, so a
-   * workflow behind such an event would begin without an aggregate and nobody would
-   * notice (GAPS entry 16).
+   * Reads the start events of one process out of the raw bytes. The deployment refuses the
+   * module because of what this returns. This engine does not report a start it made on its
+   * own. So a workflow behind such an event would begin without an aggregate, and nobody
+   * would notice (GAPS entry 16).
    *
    * @param resource The raw BPMN
    * @param bpmnProcessId The process to look at
-   * @return The start events the engine fires on its own, described as
-   *         "&lt;id&gt; (timer)" - empty if the process is started by the
-   *         application only
+   * @return The start events the engine fires on its own, each described like
+   *         "&lt;id&gt; (timer)". Empty if only the application starts the process
    */
   public static List<String> bpmsInitiatedStartEventsOf(
       final byte[] resource,
@@ -40,8 +39,8 @@ public final class PeaStartEvents {
     try {
       final var factory = DocumentBuilderFactory.newInstance();
       factory.setNamespaceAware(true);
-      // no external entities: the BPMN comes from the classpath, but parsing it
-      // must not reach out anywhere
+      // no DOCTYPE and so no external entities: the BPMN comes from the classpath, but
+      // reading it must not reach out anywhere
       factory.setFeature("http://apache.org/xml/features/disallow-doctype-decl", true);
       final var document = factory
           .newDocumentBuilder()
@@ -61,7 +60,7 @@ public final class PeaStartEvents {
         }
       }
     } catch (final Exception e) {
-      // an unparsable BPMN is reported by the deployment itself - not here
+      // the deployment itself reports a BPMN it cannot read, so nothing is said here
       return List.of();
     }
     return startEvents;
