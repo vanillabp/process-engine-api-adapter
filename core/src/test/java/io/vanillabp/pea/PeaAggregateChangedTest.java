@@ -14,10 +14,10 @@ import io.vanillabp.pea.mock.InMemoryProcessEngine;
 import io.vanillabp.pea.processservice.PeaProcessService;
 
 /**
- * Pushing a changed workflow-aggregate through the Process-Engine-API -
- * which the API cannot do: it modifies the payload of a TASK, never that of a running
- * process instance (GAPS.md entry 18). What this test pins is that the refusal comes
- * in phase ONE, at the application's call, and that it names a way forward.
+ * Pushing a changed workflow aggregate through the Process-Engine-API. The API cannot do
+ * that: it changes the payload of a TASK, never that of a running process instance
+ * (GAPS.md entry 18). This test holds that the refusal comes in phase ONE, at the
+ * application's call, and that it names a way forward.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class PeaAggregateChangedTest {

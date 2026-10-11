@@ -72,8 +72,8 @@ public class PeaPreCommitHookTest {
   }
 
   /**
-   * The service with the hook this test wants to observe: where a check is handed over is
-   * decided while the service is built, like every other collaborator.
+   * The service with the hook this test wants to watch. Where a check is handed over is
+   * decided when the service is built, like every other collaborator.
    */
   private PeaProcessService<Object> serviceHandingChecksTo(
       final PreCommitRegistrar preCommitRegistrar) {
@@ -104,7 +104,7 @@ public class PeaPreCommitHookTest {
         persistence(), new Object(),
         PhaseOperations.args(PhaseTwoCall.ARG_TASK_ID, "task-1"));
 
-    // nothing was asked of the engine yet - the check waits for the commit
+    // The engine was not asked anything yet. The check waits for the commit.
     assertEquals(List.of("handed over for OrderAggregate"), events);
     assertTrue(engine.getInvocations().isEmpty(), engine.getInvocations().toString());
 
@@ -122,7 +122,7 @@ public class PeaPreCommitHookTest {
   @DisplayName("A failing check still reaches the caller, so the transaction can be aborted")
   public void aFailingCheckReachesTheCaller() {
 
-    // a hook which runs the check right away, like the platform runners do at commit time
+    // A hook which runs the check right away, like the platform runners do at commit time.
     final var service = serviceHandingChecksTo((
         aggregateClass,
         check) -> check.run());
@@ -141,8 +141,8 @@ public class PeaPreCommitHookTest {
   @DisplayName("Without an aggregate persistence the check runs immediately")
   public void withoutAPersistenceTheCheckRunsImmediately() {
 
-    // a hook which never runs what it is handed: the check still has to reach the caller,
-    // because there is no aggregate class to hang it on
+    // A hook which never runs what it is handed. The check still has to reach the caller,
+    // because there is no aggregate class to attach it to.
     final var service = serviceHandingChecksTo((
         aggregateClass,
         check) -> {

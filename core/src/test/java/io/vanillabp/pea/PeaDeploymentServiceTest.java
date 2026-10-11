@@ -48,9 +48,10 @@ import io.vanillabp.pea.mock.InMemoryProcessEngine;
 import io.vanillabp.pea.wiring.PeaTaskMeta;
 
 /**
- * Unit tests of {@link PeaDeploymentService}: the StAX-based BPMN parsing of
- * {@code readBpmn} (executable-process id extraction) and {@code deployResources} deploying
- * the module's resources through the (mock) Process-Engine-API {@code DeploymentApi}.
+ * Unit tests of {@link PeaDeploymentService}. They cover how {@code readBpmn} reads the BPMN
+ * with StAX and finds the executable processes. They cover how {@code deployResources} hands
+ * the module's files to the {@code DeploymentApi}, here the in-memory mock. And they cover the
+ * subscriptions, the name clash modes and the start events this adapter refuses.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class PeaDeploymentServiceTest {
@@ -61,8 +62,8 @@ public class PeaDeploymentServiceTest {
       "pea", engine, TestCollaborators.of(new PermissiveInvoker()), engine, engine);
 
   /**
-   * The service under test with a core which avoids name clashes the given way - what it
-   * deploys under which name is decided while it is built, not afterwards.
+   * The service under test, with a core which avoids name clashes the given way. The service
+   * decides under which name it deploys something when it is built, not later.
    */
   private PeaDeploymentService serviceScopedBy(
       final NameClashAvoidanceSupport scoping) {
@@ -160,12 +161,12 @@ public class PeaDeploymentServiceTest {
   public void deployResourcesDeploysEachFileOnceThroughTheDeploymentApi() {
 
     final var context = new PeaProcessingContext("mod");
-    // two executable processes in the same file must be deployed as ONE resource...
+    // Two executable processes in the same file are deployed as ONE resource ...
     context.getModels()
         .add(new PeaBpmnModel("a.bpmn", "a-bytes".getBytes(StandardCharsets.UTF_8), "P1", List.of()));
     context.getModels()
         .add(new PeaBpmnModel("a.bpmn", "a-bytes".getBytes(StandardCharsets.UTF_8), "P2", List.of()));
-    // ...and a second file as another resource
+    // ... and a second file as another resource.
     context.getModels()
         .add(new PeaBpmnModel("b.bpmn", "b-bytes".getBytes(StandardCharsets.UTF_8), "P3", List.of()));
 
@@ -276,8 +277,8 @@ public class PeaDeploymentServiceTest {
     Assertions.assertEquals("doIt", tasks.get(0).taskDefinition());
     Assertions.assertEquals("t1", tasks.get(0).activityId());
     Assertions.assertEquals("sendIt", tasks.get(1).taskDefinition());
-    // a service-like task WITHOUT a task definition yields a null-definition spec
-    // (the wiring validation reports it with a guiding message)
+    // A service-like task WITHOUT a task definition gives a spec whose definition is null.
+    // The wiring validation reports it with a guiding message.
     Assertions.assertEquals("t3", tasks.get(2).activityId());
     Assertions.assertNull(tasks.get(2).taskDefinition());
 
@@ -297,11 +298,11 @@ public class PeaDeploymentServiceTest {
 
     final var models = service.readBpmn("mod", "names.bpmn", bpmn(xml), true);
 
-    // the name is read in the pass which reads the process id anyway, so nobody has to
-    // walk the same bytes a second time for it
+    // The name is read in the same pass as the process id. So nobody has to read the bytes
+    // a second time for it.
     Assertions.assertEquals("Loan approval", models.get(0).getValue().processName());
-    // a process the modeller did not name has none, and so has one named with nothing
-    // but whitespace
+    // A process the modeller did not name has no name. The same holds for a name of only
+    // whitespace.
     Assertions.assertNull(models.get(1).getValue().processName());
     Assertions.assertNull(models.get(2).getValue().processName());
 
@@ -343,12 +344,12 @@ public class PeaDeploymentServiceTest {
         .userTasks();
 
     Assertions.assertEquals(3, userTasks.size());
-    // what a task list shows: this engine reports no name of its own, so the model is
-    // where it comes from
+    // This is what a task list shows. The engine reports no name of its own, so the name
+    // comes from the model.
     Assertions.assertEquals("approve", userTasks.get(0).taskDefinition());
     Assertions.assertEquals("Approve the order", userTasks.get(0).name());
-    // a user task the modeller did not name has none, and neither has one named with
-    // nothing but whitespace - an absent attribute and an empty one are the same thing
+    // A user task the modeller did not name has no name. The same holds for a name of only
+    // whitespace: a missing attribute and an empty one mean the same.
     Assertions.assertEquals("check", userTasks.get(1).taskDefinition());
     Assertions.assertNull(userTasks.get(1).name());
     Assertions.assertNull(userTasks.get(2).name());
@@ -390,7 +391,7 @@ public class PeaDeploymentServiceTest {
 
     service.startWorkflowProcessing("mod", context);
 
-    // 'shared' is used by both processes but subscribed ONCE
+    // Both processes use 'shared', but it is subscribed ONCE.
     Assertions.assertEquals(2, engine.getSubscriptions().size());
     Assertions.assertEquals(
         List.of("shared", "own"),
@@ -410,9 +411,9 @@ public class PeaDeploymentServiceTest {
   public void twoElementsUnderOneNameAreSaidAtTheStart(
       final CapturedOutput output) {
 
-    // one name on two elements is the very reason to wire a method by @WorkflowTask(id = ...),
-    // and it is also the one case the models cannot answer: which of the two a delivery came
-    // from is something only the engine knows, and this API promises no key for it
+    // One name on two elements is the reason to wire a method by @WorkflowTask(id = ...).
+    // It is also the one case the models cannot answer. Only the engine knows which of the
+    // two elements a delivery came from, and this API promises no key for it.
     final var xml = """
         <?xml version="1.0" encoding="UTF-8"?>
         <bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:zeebe="http://camunda.org/schema/zeebe/1.0">
@@ -569,7 +570,7 @@ public class PeaDeploymentServiceTest {
         "expected the failing task definition to be named but got: "
             + failure.getMessage());
 
-    // failing USER-task subscriptions are equally guiding
+    // A failing USER task subscription names what failed as well.
     final var userTaskXml = """
         <?xml version="1.0" encoding="UTF-8"?>
         <bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:zeebe="http://camunda.org/schema/zeebe/1.0">
@@ -596,7 +597,7 @@ public class PeaDeploymentServiceTest {
         "expected the failing form reference to be named but got: "
             + userTaskFailure.getMessage());
 
-    // a failing UNsubscribe on stop is only logged (graceful shutdown)
+    // A failing UNsubscribe on stop is only logged, so the shutdown goes on.
     context
         .getSubscriptions()
         .add(new TaskSubscription() {
@@ -629,9 +630,9 @@ public class PeaDeploymentServiceTest {
   }
 
   /**
-   * Plays both halves of the split task SPI: the deployment service wires through
-   * {@code WorkflowTaskWiring} and opens its task subscriptions with
-   * {@code WorkflowTaskInvoker}, so a double standing in for the core answers both.
+   * A double for the core which plays both halves of the split task SPI. The deployment
+   * service wires through {@code WorkflowTaskWiring} and opens its task subscriptions with
+   * {@code WorkflowTaskInvoker}, so the double answers both.
    */
   static class PermissiveInvoker implements WorkflowTaskWiring, WorkflowTaskInvoker {
 
@@ -655,9 +656,9 @@ public class PeaDeploymentServiceTest {
       throw new UnsupportedOperationException();
     }
 
-    // The migration fallback, deprecated for removal and none of this
-    // BPMS's business: a test double implements it as long as the interface declares
-    // it, and the mandatory 'removal' lint needs the suppression
+    // The migration fallback. It is deprecated for removal, and this BPMS does not use it.
+    // A test double has to implement it while the interface declares it. The 'removal'
+    // lint is mandatory, so it needs the suppression.
     @SuppressWarnings("removal")
     @Override
     public boolean workflowAggregateHasProperty(
@@ -823,8 +824,8 @@ public class PeaDeploymentServiceTest {
   @DisplayName("Two adapter ids of this type cannot address different engines - the boot fails guiding")
   public void twoAdapterIdsOfThisTypeAreRejected() {
 
-    // The Process-Engine-API is provided by the application as beans and
-    // carries no per-adapter-id connection configuration (GAPS.md, entry 14)
+    // The application provides the Process-Engine-API as beans. There is no connection
+    // configuration per adapter id (GAPS.md, entry 14).
     final var exception = Assertions.assertThrows(
         IllegalStateException.class,
         () -> service.validateDistinctAdapterInstances(List.of("pea-old", "pea-new")));
@@ -833,7 +834,7 @@ public class PeaDeploymentServiceTest {
     Assertions.assertTrue(exception.getMessage().contains("pea-new"), exception::getMessage);
     Assertions.assertTrue(exception.getMessage().contains("process-engine-api"), exception::getMessage);
 
-    // a single id is the normal case and never complains
+    // A single id is the normal case and is always accepted.
     Assertions.assertDoesNotThrow(() -> service.validateDistinctAdapterInstances(List.of("pea")));
     Assertions.assertDoesNotThrow(() -> service.validateDistinctAdapterInstances(null));
 
@@ -842,8 +843,8 @@ public class PeaDeploymentServiceTest {
 
   /**
    * A core which avoids name clashes the given way for workflow module
-   * {@code loan-approval} - the real service rather than a double, because the form an
-   * identifier reaches the engine in is what the core composes.
+   * {@code loan-approval}. It is the real service and not a double, because the core builds
+   * the form in which an identifier reaches the engine.
    */
   private static NameClashAvoidanceService scopingWith(
       final NameClashAvoidance mode) {
@@ -853,8 +854,7 @@ public class PeaDeploymentServiceTest {
   }
 
   /**
-   * The same core for the given workflow modules, which is what a clash between two of
-   * them needs.
+   * The same core for the given workflow modules. A clash between two modules needs this.
    *
    * @param mode The mode every one of them resolves
    * @param workflowModuleIds The modules the application configures
@@ -868,9 +868,9 @@ public class PeaDeploymentServiceTest {
   }
 
   /**
-   * This BPMS has no isolation mechanism of its own, so the DEFAULT mode
-   * {@code by-adapter} cannot be served - and {@code use-prefix} rewrites the raw
-   * BPMN (the API has no model type).
+   * This BPMS has no isolation mechanism of its own, so it cannot serve the DEFAULT mode
+   * {@code by-adapter}. {@code use-prefix} rewrites the raw BPMN, because the API has no
+   * model type.
    */
   @Nested
   class NameClashAvoidanceModes {
@@ -940,10 +940,11 @@ public class PeaDeploymentServiceTest {
           "loan-approval", null, "risk.bpmn", "RiskAssessment", new PeaBpmnModel(
               "risk.bpmn", XML.getBytes(StandardCharsets.UTF_8), "RiskAssessment", List.of()));
 
-      // the record keeps the PLAIN identifiers - they key the core's registries ...
+      // The record keeps the PLAIN identifiers, because the core's registries use them as
+      // keys ...
       Assertions.assertEquals("RiskAssessment", context.getModels().getFirst().bpmnProcessId());
       // ... while the deployed BYTES carry the scoped ones
-      // (see decision 2 in the repository's DECISIONS.md)
+      // (see decision 2 in the repository's DECISIONS.md).
       final var deployed = new String(
           context.getModels().getFirst().resource(), StandardCharsets.UTF_8);
       Assertions.assertTrue(deployed.contains("id=\"loan-approval__RiskAssessment\""), deployed);
@@ -952,7 +953,7 @@ public class PeaDeploymentServiceTest {
       Assertions.assertTrue(
           deployed.contains("type=\"loan-approval__RiskAssessment__scoreApplicant\""), deployed);
 
-      // deploying works (no isolation complaint in this mode)
+      // Deploying works, because this mode needs no isolation.
       service.deployResources("loan-approval", context);
       Assertions.assertEquals(1, engine.getDeployments().size());
 
@@ -977,10 +978,10 @@ public class PeaDeploymentServiceTest {
   }
 
   /**
-   * The only name clash this adapter can look for: what the models of a workflow module
-   * declare. The engine behind the API cannot be asked which identifiers it already holds
-   * (see {@code GAPS.md}, entry 24), while the names of the models being deployed are read
-   * anyway - so the core is told about those and about nothing else.
+   * The only name clash this adapter can look for: the identifiers the models of a workflow
+   * module declare. Nobody can ask the engine behind the API which identifiers it already
+   * holds (see {@code GAPS.md}, entry 24). But the adapter reads the models it deploys
+   * anyway. So it tells the core about their identifiers and about nothing else.
    */
   @Nested
   class IdentifiersTheModelsDeclare {
@@ -1008,8 +1009,8 @@ public class PeaDeploymentServiceTest {
         """;
 
     /**
-     * A BPMN written for an engine whose task definition is a Camunda 7 external task
-     * topic - an element name the adapter's rewrite does not know.
+     * A BPMN written for an engine whose task definition is a Camunda 7 external task topic.
+     * The adapter's rewrite does not know this element name.
      */
     private static final String XML_OF_AN_UNKNOWN_DIALECT = """
         <?xml version="1.0" encoding="UTF-8"?>
@@ -1024,8 +1025,8 @@ public class PeaDeploymentServiceTest {
     private final List<ModelIdentifier> reported = new ArrayList<>();
 
     /**
-     * A core which records what it is told instead of wording its warning - what the
-     * warning says is the core's own business, what arrives here is this adapter's.
+     * A core which records what it is told instead of writing its warning. The words of
+     * the warning belong to the core. What arrives here belongs to this adapter.
      */
     private NameClashAvoidanceSupport recordingScoping(
         final NameClashAvoidance mode) {
@@ -1062,8 +1063,7 @@ public class PeaDeploymentServiceTest {
     @DisplayName("Every identifier the rewrite knows reaches the core with the name the application wrote")
     public void identifiersArrivePlainAndByTheirKind() {
 
-      // the mode which lets two workflow modules share a name, and therefore the one the
-      // check exists for
+      // This mode lets two workflow modules share a name, so the check exists for it.
       deploy(serviceScopedBy(recordingScoping(NameClashAvoidance.NONE)), XML);
 
       Assertions
@@ -1084,8 +1084,8 @@ public class PeaDeploymentServiceTest {
     @DisplayName("A task definition names its BPMN process, because that is what it is scoped by")
     public void aTaskDefinitionArrivesWithItsBpmnProcessId() {
 
-      // under 'use-prefix' the deployed bytes carry the prefix, so this also shows that
-      // what the core is told are the plain names
+      // Under 'use-prefix' the deployed bytes carry the prefix. So this also shows that the
+      // core is told the plain names.
       deploy(serviceScopedBy(recordingScoping(NameClashAvoidance.USE_PREFIX)), XML);
 
       Assertions
@@ -1111,9 +1111,9 @@ public class PeaDeploymentServiceTest {
 
       deploy(serviceScopedBy(recordingScoping(NameClashAvoidance.NONE)), XML_OF_AN_UNKNOWN_DIALECT);
 
-      // the message name is BPMN itself and is found; the external task topic is not a
-      // task definition this adapter scopes, so reporting it would name a name the engine
-      // never sees under that kind
+      // The message name is plain BPMN, so it is found. The external task topic is not a
+      // task definition this adapter scopes. If it were reported, the report would name
+      // something the engine never sees as a task definition.
       Assertions
           .assertEquals(
               List.of(new ModelIdentifier(ScopedIdentifierKind.MESSAGE_NAME, "PaymentReceived", null)),
@@ -1178,14 +1178,14 @@ public class PeaDeploymentServiceTest {
 
   /**
    * Two BPMN processes which reach the one engine behind this API under the same id. The
-   * engine keeps no workflow module apart from another (see {@code GAPS.md}, entry 15), so a
-   * process id an earlier workflow module took is taken for the next one as well, and the
-   * boot ends rather than letting the engine keep one of the two models and lose the other.
+   * engine does not keep workflow modules apart (see {@code GAPS.md}, entry 15). So a
+   * process id which an earlier workflow module took is taken for the next one as well. The
+   * boot ends, so the engine does not keep one of the two models and lose the other.
    * <p>
-   * This adapter hands over the module it is deploying and nothing more. What spans the
-   * modules is the core, which keeps which module reached the BPMS under which identifier,
-   * so every test below deploys two workflow modules for real instead of handing one call a
-   * wider collection.
+   * This adapter hands over the module it deploys and nothing more. The core looks across
+   * the modules: it keeps which module reached the BPMS under which identifier. So every
+   * test below really deploys two workflow modules, instead of handing one call a bigger
+   * collection.
    */
   @Nested
   class CollidingProcessIds {
@@ -1198,8 +1198,8 @@ public class PeaDeploymentServiceTest {
         """;
 
     /**
-     * Runs the deployment pipeline for the given workflow module, one BPMN file per process
-     * id. All of them travel in one deployment, and each file gets a name of its own, so a
+     * Runs the deployment pipeline for the given workflow module, with one BPMN file per
+     * process id. All files go in one deployment. Each file gets a name of its own, so a
      * module may declare the same process id twice.
      *
      * @param service The service under test
@@ -1228,8 +1228,8 @@ public class PeaDeploymentServiceTest {
     }
 
     /**
-     * Deploys one BPMN process id as two workflow modules, in the order given, and reads the
-     * refusal of the second one.
+     * Deploys one BPMN process id in two workflow modules, in the order given. Then it
+     * checks the refusal of the second one.
      *
      * @param firstWorkflowModuleId The workflow module which deploys first
      * @param secondWorkflowModuleId The one which meets the taken id
@@ -1246,12 +1246,12 @@ public class PeaDeploymentServiceTest {
           IllegalStateException.class,
           () -> deploy(service, secondWorkflowModuleId, "RiskAssessment"));
 
-      // the wording is the core's, so only what a developer has to read is asserted here
+      // The core writes the words, so this only checks what a developer has to read.
       Assertions.assertTrue(exception.getMessage().contains("SAME identifier"), exception::getMessage);
       Assertions.assertTrue(exception.getMessage().contains("RiskAssessment"), exception::getMessage);
       Assertions.assertTrue(exception.getMessage().contains(firstWorkflowModuleId), exception::getMessage);
       Assertions.assertTrue(exception.getMessage().contains(secondWorkflowModuleId), exception::getMessage);
-      // and the second module's model never reached the engine
+      // And the model of the second module never reached the engine.
       Assertions.assertEquals(1, engine.getDeployments().size());
 
     }
@@ -1268,8 +1268,8 @@ public class PeaDeploymentServiceTest {
     @DisplayName("The same two workflow modules in the other order end the boot as well")
     public void theOtherDeploymentOrderEndsTheBootToo() {
 
-      // which module deploys first is none of the application's doing, so a finding which
-      // only shows up in one of the two orders is no finding
+      // The application does not choose which module deploys first. So a check which only
+      // works in one of the two orders does not help.
       refusesTheSecondOfTwoModules("loan-payout", "loan-approval");
 
     }
@@ -1278,7 +1278,7 @@ public class PeaDeploymentServiceTest {
     @DisplayName("This engine separates no pair of workflow modules")
     public void nothingIsSeparatedByThisEngine() {
 
-      // what the core asks before it calls two plain ids a collision (see GAPS.md, entry 15)
+      // The core asks this before it calls two plain ids a collision (see GAPS.md, entry 15).
       Assertions.assertFalse(service.ownIsolationSeparatesWorkflowModules("loan-approval", "loan-payout"));
       Assertions.assertFalse(service.ownIsolationSeparatesWorkflowModules("loan-payout", "loan-approval"));
       Assertions.assertFalse(service.ownIsolationSeparatesWorkflowModules("loan-approval", "loan-approval"));
@@ -1307,8 +1307,8 @@ public class PeaDeploymentServiceTest {
           scopingWith(NameClashAvoidance.USE_PREFIX, "loan-approval", "loan-payout"));
 
       deploy(service, "loan-approval", "RiskAssessment");
-      // what the engine sees are two ids, each carrying its module - the same pair of
-      // modules which cannot both deploy 'RiskAssessment' under 'none'
+      // The engine sees two ids, each with its module in it. Under 'none', the same two
+      // modules cannot both deploy 'RiskAssessment'.
       Assertions.assertDoesNotThrow(() -> deploy(service, "loan-payout", "RiskAssessment"));
 
       Assertions.assertEquals(2, engine.getDeployments().size());
@@ -1340,8 +1340,8 @@ public class PeaDeploymentServiceTest {
 
       final var service = serviceScopedBy(scopingWith(NameClashAvoidance.NONE));
 
-      // the check is about two modules meeting under one id, and here there is one module:
-      // two files declaring one process id reach the engine and it keeps the last of them
+      // The check is about two modules which meet under one id. Here there is only one
+      // module, so both files with the same process id reach the engine.
       Assertions.assertDoesNotThrow(() -> deploy(service, "loan-approval", "RiskAssessment", "RiskAssessment"));
 
       Assertions.assertEquals(1, engine.getDeployments().size());
@@ -1364,8 +1364,8 @@ public class PeaDeploymentServiceTest {
     @DisplayName("Without a core to ask nothing is compared")
     public void withoutScopingNothingIsChecked() {
 
-      // a component built without a platform around it holds no support, and the plain
-      // identifier is then the only answer there is
+      // A service built without a platform around it has no support for name clashes. Then
+      // the plain identifier is the only answer.
       deploy(service, "loan-approval", "RiskAssessment");
       Assertions.assertDoesNotThrow(() -> deploy(service, "loan-payout", "RiskAssessment"));
 
@@ -1375,11 +1375,11 @@ public class PeaDeploymentServiceTest {
 
 
   /**
-   * A start event the engine fires on its own ends the deployment. The Process-Engine-API
-   * reports no start of its own, so a workflow which began that way would run without a
-   * workflow aggregate: no task could be routed and no expression resolved. The message is
-   * the only thing a developer ever sees of this limit, which is why it is read here word
-   * for word.
+   * A start event which the engine fires on its own ends the deployment. The
+   * Process-Engine-API does not report a start the engine made itself. So a workflow started
+   * that way would run without a workflow aggregate: no task could be routed and no
+   * expression resolved. The message is all a developer ever sees of this limit, so the test
+   * checks it word for word.
    */
   @Nested
   class BpmsInitiatedStartEvents {
@@ -1396,8 +1396,8 @@ public class PeaDeploymentServiceTest {
         """;
 
     /**
-     * Runs the deployment pipeline over one model, up to and including the wiring, which
-     * is where a model is looked at for what this adapter cannot serve.
+     * Runs the deployment pipeline over one model, up to and including the wiring. The
+     * wiring is where the adapter looks for what it cannot serve.
      */
     private void wire(
         final String filename,
@@ -1472,10 +1472,10 @@ public class PeaDeploymentServiceTest {
   class WhatTheAdapterHandsOverUntouched {
 
     /**
-     * A model carrying the three constructs this adapter says nothing about: a compensation
+     * A model with the three constructs this adapter has nothing to do with: a compensation
      * with its boundary event, handler and association, a multi-instance loop, and a data
-     * object with the reference which reads it. None of them is an element the adapter's pass
-     * over the BPMN reacts to, so all of them belong to the engine behind the API.
+     * object with the reference which reads it. The adapter's pass over the BPMN does not
+     * react to any of them, so they all belong to the engine behind the API.
      */
     private static final String XML = """
         <?xml version="1.0" encoding="UTF-8"?>
@@ -1512,7 +1512,7 @@ public class PeaDeploymentServiceTest {
         """;
 
     /**
-     * What the engine was given, for the one file this nested class deploys.
+     * What the engine was given for the one file this nested class deploys.
      */
     private byte[] deployedBytes() {
 
@@ -1547,10 +1547,10 @@ public class PeaDeploymentServiceTest {
     @DisplayName("Outside 'use-prefix' the engine is given the file byte for byte")
     public void theEngineIsGivenTheFileByteForByte() {
 
-      // the wiki says that everything this adapter does not read reaches the engine as it was
-      // modelled. Nothing in the code says it: the pass over the BPMN skips an element by not
-      // naming it, so a new element name added to that pass would quietly start rewriting
-      // models nobody is watching
+      // The wiki says that everything this adapter does not read reaches the engine as it
+      // was modelled. No line of code says so. The pass over the BPMN skips an element by not
+      // naming it. So a new element name in that pass would quietly start to rewrite models,
+      // and nobody would notice.
       deploy(serviceScopedBy(scopingWith(NameClashAvoidance.NONE)));
 
       Assertions.assertArrayEquals(
@@ -1564,9 +1564,9 @@ public class PeaDeploymentServiceTest {
     @DisplayName("Under 'use-prefix' the identifiers change and the three constructs do not")
     public void underUsePrefixOnlyTheIdentifiersChange() {
 
-      // here the comparison of the whole file says nothing, because the rewrite is the point.
-      // What still has to hold is that the rewrite touches identifiers and leaves the shapes
-      // it does not know alone
+      // Here a comparison of the whole file says nothing, because the rewrite is the point.
+      // What has to hold is that the rewrite changes identifiers and leaves alone what it
+      // does not know.
       deploy(serviceScopedBy(scopingWith(NameClashAvoidance.USE_PREFIX)));
 
       final var deployed = new String(deployedBytes(), StandardCharsets.UTF_8);

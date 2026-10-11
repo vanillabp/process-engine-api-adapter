@@ -15,15 +15,14 @@ import io.vanillabp.integration.adapter.spi.workflowtask.WorkflowTaskInvoker;
 import io.vanillabp.integration.adapter.spi.workflowtask.WorkflowTaskWiring;
 
 /**
- * What the platform hands the adapter, for tests which need the adapter and not the
- * registration. The core standing in for both halves of the task SPI is given per test,
- * and so is the scoping where a test is about what this adapter deploys under which
- * name; the rest are mocks nobody calls unless the test says so.
+ * What the platform hands the adapter, for tests which need the adapter but not its
+ * registration. Each test gives the core which stands in for both halves of the task SPI.
+ * A test about the names this adapter deploys under also gives the scoping. The rest are
+ * mocks, and nobody calls them unless the test says so.
  */
 public final class TestCollaborators {
 
   private TestCollaborators() {
-    // static helper
   }
 
   public static <T extends WorkflowTaskWiring & WorkflowTaskInvoker> AdapterCollaborators of(
@@ -35,8 +34,7 @@ public final class TestCollaborators {
 
   /**
    * The default of this adapter: identifiers are deployed as modelled. A bare mock would
-   * answer null to every one of them, and null is not a value the platform ever gives an
-   * adapter.
+   * answer null for each of them, and the platform never gives an adapter null.
    */
   private static NameClashAvoidanceSupport scopingWithoutNameClashAvoidance() {
 
@@ -46,8 +44,8 @@ public final class TestCollaborators {
         return NameClashAvoidance.NONE;
       }
       if (method.getReturnType() == String.class) {
-        // every one of them ends with the adapter id and carries the identifier right
-        // before it
+        // Each of these methods ends with the adapter id, and the identifier comes right
+        // before it.
         return invocation.getArgument(invocation.getArguments().length - 2);
       }
       return Answers.RETURNS_DEFAULTS.answer(invocation);

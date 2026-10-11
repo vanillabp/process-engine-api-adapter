@@ -17,11 +17,11 @@ import io.vanillabp.pea.mock.InMemoryProcessEngine;
 import io.vanillabp.pea.processservice.PeaProcessService;
 
 /**
- * Broadcasting a BPMN signal through the Process-Engine-API. The API has
- * a {@code SignalApi}, so unlike the other gaps of this adapter this one needed no
- * workaround - what the test pins is that the broadcast waits for phase two (the
- * engine is treated as REMOTE) and that an engine implementation without that API
- * says so instead of swallowing the signal.
+ * Broadcasting a BPMN signal through the Process-Engine-API. The API has a
+ * {@code SignalApi}, so unlike the other gaps of this adapter this one needed no
+ * workaround. The test holds that the broadcast waits for phase two, because the engine
+ * counts as REMOTE. And it holds that an engine without that API says so, instead of
+ * losing the signal.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class PeaSendSignalTest {

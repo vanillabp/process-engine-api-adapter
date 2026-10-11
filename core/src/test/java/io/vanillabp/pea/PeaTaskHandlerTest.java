@@ -34,10 +34,10 @@ import io.vanillabp.pea.wiring.PeaTaskHandler;
 import io.vanillabp.pea.wiring.PeaTaskMeta;
 
 /**
- * Routing and failure edge cases of the {@link PeaTaskHandler} which
- * the end-to-end tests do not reach: the mock engine always supplies the
- * {@code bpmnProcessId} meta entry, so the unique-definition fallback and the
- * ambiguous-definition guiding failure are exercised here directly.
+ * Cases of the {@link PeaTaskHandler} which the end-to-end tests do not reach. The mock
+ * engine always fills the {@code bpmnProcessId} meta entry. So the fallback to the one
+ * process of a task definition, and the guiding failure when there are several, are tested
+ * here directly. The same goes for routing, error codes and failures.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class PeaTaskHandlerTest {
@@ -55,20 +55,20 @@ public class PeaTaskHandlerTest {
     String invokedActivationId;
 
     /**
-     * A <code>&#64;TaskParam</code> the handler method would read, or
-     * <code>null</code> for a method reading nothing but its aggregate.
+     * A <code>&#64;TaskParam</code> the handler method would read, or <code>null</code> for a
+     * method which reads only its aggregate.
      */
     String readParameter;
 
     Object readParameterValue;
 
     /**
-     * What the business method did: completing it, unless a test says otherwise.
+     * What the business method did. It completes the task, unless a test says otherwise.
      */
     WorkflowTaskOutcome outcome = WorkflowTaskOutcome.completed();
 
     /**
-     * What the core throws instead of answering, or <code>null</code> for a delivery which
+     * What the core throws instead of an answer, or <code>null</code> for a delivery which
      * reaches a business method.
      */
     RuntimeException refusal;
@@ -94,9 +94,9 @@ public class PeaTaskHandlerTest {
 
     }
 
-    // The migration fallback, deprecated for removal and none of this
-    // BPMS's business: a test double implements it as long as the interface declares
-    // it, and the mandatory 'removal' lint needs the suppression
+    // The migration fallback. It is deprecated for removal, and this BPMS does not use it.
+    // A test double has to implement it while the interface declares it. The 'removal'
+    // lint is mandatory, so it needs the suppression.
     @SuppressWarnings("removal")
     @Override
     public boolean workflowAggregateHasProperty(
@@ -128,7 +128,7 @@ public class PeaTaskHandlerTest {
 
 
     /**
-     * What the completion payload carries beside the ID variable.
+     * What the completion payload carries next to the ID variable.
      */
     Map<String, Object> syncedValues = Map.of();
 
@@ -174,8 +174,8 @@ public class PeaTaskHandlerTest {
   }
 
   /**
-   * The handler of a subscription whose module avoids name clashes the given way - which
-   * decides what the engine's meta entry looks like and what has to be stripped off it.
+   * The handler of a subscription whose module avoids name clashes the given way. The mode
+   * decides what the engine's meta entry looks like and what the handler has to strip off.
    */
   private PeaTaskHandler handler(
       final List<String> bpmnProcessIds,
@@ -214,7 +214,7 @@ public class PeaTaskHandlerTest {
   @Test
   public void missingMetaEntryFallsBackToTheUniqueProcess() {
 
-    // the mock only completes OPEN tasks (honest preflight/completion since 22)
+    // The mock only completes OPEN tasks.
     engine.getOpenTaskIds().add("task-1");
     handler(List.of("OnlyProcess"))
         .accept(
@@ -249,9 +249,9 @@ public class PeaTaskHandlerTest {
   @DisplayName("A scoped meta entry is routed to the plain process the core is keyed by")
   public void aScopedMetaEntryIsRoutedToThePlainProcess() {
 
-    // an engine which fills the meta entry fills it with the id IT knows, and under
-    // use-prefix that id carries the workflow module. The core's registries are keyed
-    // by the plain id, so a value handed on unstripped matches nothing at all
+    // An engine fills the meta entry with the id IT knows. Under use-prefix that id
+    // carries the workflow module. The core's registries use the plain id as key, so a
+    // value passed on with the prefix matches nothing.
     engine.getOpenTaskIds().add("task-scoped");
     handler(List.of("OnlyProcess"), NameClashAvoidance.USE_PREFIX)
         .accept(
@@ -288,8 +288,8 @@ public class PeaTaskHandlerTest {
   @DisplayName("Without a meta entry the single process of the subscription still answers, prefixes or not")
   public void withoutAMetaEntryTheSingleProcessStillAnswersUnderPrefixes() {
 
-    // the fallback reads the subscription rather than the delivery, and what a
-    // subscription was opened for is plain already
+    // The fallback reads the subscription, not the delivery. A subscription already
+    // holds the plain id.
     engine.getOpenTaskIds().add("task-fallback");
     handler(List.of("OnlyProcess"), NameClashAvoidance.USE_PREFIX)
         .accept(
@@ -301,8 +301,8 @@ public class PeaTaskHandlerTest {
   }
 
   /**
-   * The handler of a subscription which knows what element each of its processes delivers
-   * from - what {@code PeaDeploymentService} reads off the deployed models.
+   * The handler of a subscription which knows which element each of its processes delivers
+   * from. {@code PeaDeploymentService} reads this from the deployed models.
    */
   private PeaTaskHandler handler(
       final List<String> bpmnProcessIds,
@@ -325,9 +325,9 @@ public class PeaTaskHandlerTest {
   @DisplayName("The element of a delivery is the one its process carries the task definition on")
   public void theElementComesFromTheProcessTheDeliveryWasRoutedTo() {
 
-    // one subscription, two processes, and the same task definition on a different element
-    // in each of them: which element a delivery belongs to is answered after it was routed,
-    // by the model of the process it was routed to
+    // One subscription, two processes, and the same task definition on a different element
+    // in each. The handler first routes the delivery to a process. Then the model of that
+    // process says which element the delivery belongs to.
     engine.getOpenTaskIds().add("task-element");
     handler(List.of("ProcessA", "ProcessB"), Map.of("ProcessA", "ApproveInA", "ProcessB", "ApproveInB"))
         .accept(
@@ -343,8 +343,8 @@ public class PeaTaskHandlerTest {
   @DisplayName("An element the engine names itself is reported instead of the one the model holds")
   public void theElementTheEngineNamesWins() {
 
-    // the model says which element carries a name, the engine says which element THIS
-    // delivery came from - and the engine is the one running the model it is running
+    // The model says which element carries a name. The engine says which element THIS
+    // delivery came from, and the engine runs the model, so it knows better.
     engine.getOpenTaskIds().add("task-element-meta");
     handler(List.of("OnlyProcess"), Map.of("OnlyProcess", "ApproveFromTheModel"))
         .accept(
@@ -372,9 +372,9 @@ public class PeaTaskHandlerTest {
   @Test
   public void theVersionTagOfTheTaskMetaIsReported() {
 
-    // The Process-Engine-API knows no version NUMBER (GAPS.md, entry 19), so the
-    // version tag from the task's meta map is all a version specification can be
-    // matched against - and only where the engine behind the API supplies it
+    // The Process-Engine-API knows no version NUMBER (GAPS.md, entry 19). So a version
+    // specification can only be matched against the version tag in the task's meta map.
+    // And only if the engine behind the API fills it.
     engine.getOpenTaskIds().add("task-4");
     handler(List.of("OnlyProcess"))
         .accept(
@@ -383,7 +383,7 @@ public class PeaTaskHandlerTest {
 
     assertEquals("release-2024", invoker.invokedProcessVersion);
 
-    // without the meta entry no version is reported, which matches every method
+    // Without the meta entry no version is reported, and that matches every method.
     engine.getOpenTaskIds().add("task-5");
     handler(List.of("OnlyProcess"))
         .accept(
@@ -398,10 +398,10 @@ public class PeaTaskHandlerTest {
   public void everyTaskIsItsOwnActivation() {
 
     // Two elements of a multi-instance activity are two tasks of this engine, so their
-    // activations differ - which is what keeps the correlations they plan from sharing
-    // an idempotency key. Here the delivery id and the activation id are the same
-    // value on purpose: this engine creates one task per activation and redelivers it
-    // under that id, so one value answers both contracts
+    // activations differ. That keeps the correlations they plan from sharing an
+    // idempotency key. Here the delivery id and the activation id are the same value on
+    // purpose. This engine creates one task per activation and redelivers it under that
+    // id, so one value serves both contracts.
     engine.getOpenTaskIds().add("task-mi-0");
     final var testee = handler(List.of("OnlyProcess"));
     testee.accept(new TaskInformation("task-mi-0", Map.of()), Map.of("id", "4711"));
@@ -438,8 +438,8 @@ public class PeaTaskHandlerTest {
   @Test
   public void aTaskParameterTheSubscriptionAskedForIsAnswered() {
 
-    // The subscription named 'region', so the delivery carries it and the
-    // core reads it through the invocation context
+    // The subscription named 'region', so the delivery carries it. The core reads it
+    // through the invocation context.
     engine.getOpenTaskIds().add("task-6");
     invoker.readParameter = "region";
     handler(
@@ -456,8 +456,8 @@ public class PeaTaskHandlerTest {
   @Test
   public void aTaskParameterOutsideTheSubscriptionFailsGuiding() {
 
-    // a name no @TaskParam declares cannot have reached the subscription, and handing
-    // the method a null would look exactly like a variable which is genuinely absent
+    // A name which no @TaskParam declares cannot have reached the subscription. A null
+    // for the method would look just like a variable which is really missing.
     invoker.readParameter = "bigPayload";
     handler(List.of("OnlyProcess"), PeaFetchVariables.Selection.of(List.of("id")))
         .accept(
@@ -477,10 +477,10 @@ public class PeaTaskHandlerTest {
   @DisplayName("A TaskException raises the error code the deployed model carries, prefix included")
   public void aTaskExceptionRaisesTheCodeTheModelCarries() {
 
-    // under use-prefix the errorCode of a bpmn:error is deployed with the module's
-    // prefix, just like every other identifier. A code handed on plain is a code no
-    // boundary event of that model catches, and nothing says so: the engine accepts the
-    // command and the workflow walks past the error path
+    // Under use-prefix the errorCode of a bpmn:error is deployed with the module's prefix,
+    // like every other identifier. No boundary event of that model catches a plain code,
+    // and nothing says so. The engine accepts the command, and the workflow skips the
+    // error path.
     engine.getOpenTaskIds().add("task-error");
     invoker.outcome = WorkflowTaskOutcome.bpmnError("PAYMENT_FAILED", "Payment failed");
     handler(List.of("OnlyProcess"), NameClashAvoidance.USE_PREFIX)
@@ -516,9 +516,9 @@ public class PeaTaskHandlerTest {
   @Test
   public void anInterruptedCompletionIsReportedInsteadOfSwallowed() {
 
-    // the local transaction is committed when the completion is sent, so an interrupt -
-    // what a shutdown does to a subscription thread - used to leave a task the engine
-    // still owns, with nothing in the log explaining the redelivery which follows
+    // The local transaction is committed when the completion is sent. A shutdown
+    // interrupts the subscription thread. Such an interrupt used to leave a task the
+    // engine still owns, and nothing in the log explained the redelivery which followed.
     final var engineWhichNeverAnswers = Mockito.mock(
         ServiceTaskCompletionApi.class,
         Mockito.withSettings().defaultAnswer(invocation -> new CompletableFuture<>()));
@@ -551,10 +551,11 @@ public class PeaTaskHandlerTest {
   @DisplayName("A task of a workflow this application does not own is failed with no further attempt")
   public void aTaskOfAWorkflowWeDoNotOwnIsRefusedOnce() {
 
-    // a task subscription of this API matches a task type globally and there is no tenant,
-    // so a second application deploying the same BPMN process is served this application's
-    // tasks and the other way round. Failing such a task with the engine's default retries
-    // buys the same refusal once per attempt and, on an engine which never runs out, for ever
+    // A task subscription of this API matches a task type across the whole engine, and
+    // there is no tenant. So a second application which deploys the same BPMN process gets
+    // this application's tasks, and the other way round. If such a task fails with the
+    // engine's default retries, the same refusal comes once per attempt. On an engine which
+    // never runs out of retries, it comes for ever.
     invoker.refusal = new DeliveryOfAnUnknownWorkflowException(
         "pea", "test-module", "OnlyProcess", "someTask", "io.example.Aggregate", "4711", "wf-99");
 
@@ -584,8 +585,8 @@ public class PeaTaskHandlerTest {
   @DisplayName("Any other failure keeps the retries the engine would apply anyway")
   public void anOrdinaryFailureLeavesTheRetriesToTheEngine() {
 
-    // the counterpart of the test above: a handler which threw once may well work the next
-    // time, so the count stays empty and the engine decides
+    // The counterpart of the test above. A handler which threw once may work the next
+    // time. So the count stays empty, and the engine decides.
     invoker.refusal = new IllegalStateException("the database was down");
 
     handler(List.of("OnlyProcess"))

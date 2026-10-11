@@ -20,10 +20,10 @@ import io.vanillabp.pea.mock.InMemoryProcessEngine;
 import io.vanillabp.pea.wiring.PeaFetchVariables;
 
 /**
- * What a task subscription of this adapter asks the engine for, asserted where
- * it becomes visible: the {@code SubscribeForTaskCmd} the adapter hands the
- * Process-Engine-API. A subscription naming the empty set asks for the complete payload
- * of the process instance, which is what the named set avoids.
+ * What a task subscription of this adapter asks the engine for. The tests check it where it
+ * shows: in the {@code SubscribeForTaskCmd} the adapter hands to the Process-Engine-API. A
+ * subscription with an empty set asks for the whole payload of the process instance. A set
+ * with names avoids that.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class PeaFetchVariablesTest {
@@ -31,7 +31,7 @@ public class PeaFetchVariablesTest {
   private static final String MODULE = "mod";
 
   /**
-   * Two processes whose tasks share the task definition <code>approve</code> - so ONE
+   * Two processes whose tasks share the task definition <code>approve</code>. So ONE
    * subscription serves both.
    */
   private static final String TWO_PROCESSES = """
@@ -71,9 +71,9 @@ public class PeaFetchVariablesTest {
   private final InMemoryProcessEngine engine = new InMemoryProcessEngine();
 
   /**
-   * The service under test, with the given core standing in for both halves of the task
-   * SPI: this service derives its subscriptions while wiring and hands the deliveries of
-   * those subscriptions back at runtime.
+   * The service under test. The given core stands in for both halves of the task SPI. This
+   * service works out its subscriptions while wiring, and at runtime it hands their
+   * deliveries back.
    */
   private PeaDeploymentService deploymentService(
       final PeaDeploymentServiceTest.PermissiveInvoker core) {
@@ -83,9 +83,9 @@ public class PeaFetchVariablesTest {
   }
 
   /**
-   * A core answering the given aggregate-ID variable per BPMN process and the given
-   * <code>&#64;TaskParam</code> names per task definition - the two questions the
-   * derivation asks it.
+   * A core which answers the given aggregate ID variable per BPMN process and the given
+   * <code>&#64;TaskParam</code> names per task definition. These are the two questions the
+   * adapter asks it to work out a subscription.
    */
   private static PeaDeploymentServiceTest.PermissiveInvoker invoker(
       final Function<String, String> aggregateIdNames,
@@ -204,10 +204,10 @@ public class PeaFetchVariablesTest {
   @DisplayName("A @TaskParam of a method wired by the element id travels too")
   public void aParameterOfAnIdWiredMethodIsAskedFor() {
 
-    // this core answers names for the ELEMENT id and nothing for the task definition, which
-    // is what a method carrying @WorkflowTask(id = ...) looks like: it never mentions the
-    // name the engine delivers under. Asked with the task definition alone, its variables
-    // stayed unfetched and the delivery failed on the parameter it declares
+    // This core answers names for the ELEMENT id and nothing for the task definition. A
+    // method with @WorkflowTask(id = ...) looks like that: it never names what the engine
+    // delivers under. When the adapter asked only with the task definition, the variables
+    // were not fetched, and the delivery failed on the parameter the method declares.
     final var service = deploymentService(invoker(
         bpmnProcessId -> "id",
         taskDefinitionOrElementId -> "ApproveLoan".equals(taskDefinitionOrElementId)
@@ -246,7 +246,7 @@ public class PeaFetchVariablesTest {
 
   /**
    * A core where an extension reads <code>cockpitOnly</code> for the user task
-   * <code>ut1</code> and no workflow method reads anything, noting the keys it was asked
+   * <code>ut1</code> and no workflow method reads anything. It notes the keys it was asked
    * with.
    */
   private static PeaDeploymentServiceTest.PermissiveInvoker extensionReading(

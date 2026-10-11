@@ -27,19 +27,19 @@ import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 import io.vanillabp.pea.processservice.PeaProcessService;
 
 /**
- * The Process-Engine-API answers with futures, so every operation of this adapter waits.
- * A waiting thread can be interrupted - which is what an application shutting down does
- * to the thread dispatching the outbox - and two things have to hold then, neither of
- * which shows in a green system: the interrupt has to survive the call, because a thread
- * whose interrupt was swallowed cannot be stopped any more, and the operation must not
- * look like it happened.
+ * The Process-Engine-API answers with futures, so every operation of this adapter waits. A
+ * waiting thread can be interrupted. An application which shuts down does that to the
+ * thread which dispatches the outbox. Then two things have to hold, and neither shows in a
+ * healthy system. First, the interrupt has to survive the call, because a thread whose
+ * interrupt was swallowed cannot be stopped any more. Second, the operation must not look
+ * like it happened.
  * <p>
- * The awareness probes are the sharper half. An interrupted probe answering
+ * The awareness probes matter most. An interrupted probe which answered
  * <code>UNKNOWN_TO_BPMS</code> would tell the election that this BPMS does not know the
- * workflow, and the next adapter would start or complete it a second time.
+ * workflow. Then the next adapter would start or complete it a second time.
  * <p>
- * The engine here never answers: its futures stay open, so the wait is a real one and an
- * already interrupted thread ends it immediately.
+ * The engine here never answers. Its futures stay open, so the wait is real, and a thread
+ * which is already interrupted ends it at once.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class PeaInterruptedOperationsTest {
@@ -65,7 +65,7 @@ public class PeaInterruptedOperationsTest {
   @BeforeEach
   public void anEngineWhichNeverAnswers() {
 
-    // every call answers with a future which never completes, so the wait is a real one
+    // Every call answers with a future which never completes, so the wait is real.
     final var neverAnswers = Mockito.withSettings().defaultAnswer(invocation -> new CompletableFuture<>());
     serviceTasks = Mockito.mock(ServiceTaskCompletionApi.class, neverAnswers);
     userTasks = Mockito.mock(UserTaskCompletionApi.class, neverAnswers);
@@ -110,7 +110,7 @@ public class PeaInterruptedOperationsTest {
         () -> PhaseOperations.phaseTwo(service, PhaseOperation.CANCEL_TASK, "mod",
             "Process", null, "42", PhaseOperations.args(PhaseTwoCall.ARG_TASK_ID, "task-1",
                 PhaseTwoCall.ARG_BPMN_ERROR_CODE, "ERR")));
-    // phase one only asks whether the task is still there, and it waits as well
+    // Phase one only asks whether the task is still there, and it waits as well.
     assertFailsNaming(
         "task-1",
         () -> PhaseOperations.phaseOne(service, PhaseOperation.COMPLETE_TASK, "mod",
@@ -159,8 +159,8 @@ public class PeaInterruptedOperationsTest {
   @DisplayName("An interrupted broadcast fails instead of consuming the outbox entry silently")
   public void anInterruptedBroadcastFails() {
 
-    // returning normally would mark the entry done although nothing was broadcast, and
-    // a signal nobody receives is a workflow waiting forever
+    // Returning normally would mark the entry as done, although nothing was sent. And a
+    // signal nobody receives leaves a workflow waiting for ever.
     assertFailsNaming("OrderCancelled",
         () -> PhaseOperations.phaseTwo(service, PhaseOperation.SEND_SIGNAL, "mod",
             "Process", null, null,
@@ -172,9 +172,9 @@ public class PeaInterruptedOperationsTest {
   @DisplayName("An interrupted start by message fails instead of consuming the outbox entry")
   public void anInterruptedStartByMessageFails() {
 
-    // this one used to return normally: the outbox entry was marked done, the router
-    // reported success, and the application kept an aggregate whose workflow was never
-    // started - the most expensive of the interrupts, because nothing is left to notice it
+    // This one used to return normally. The outbox entry was marked as done, the router
+    // reported success, and the application kept an aggregate whose workflow never
+    // started. This is the worst of the interrupts, because nothing is left to notice it.
     assertFailsNaming(
         "OrderPlaced",
         () -> PhaseOperations.phaseTwo(service, PhaseOperation.START_WORKFLOW_BY_MESSAGE,

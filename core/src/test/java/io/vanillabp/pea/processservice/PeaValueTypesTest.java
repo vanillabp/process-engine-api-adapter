@@ -15,7 +15,7 @@ import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
 /**
  * What this adapter tells the startup check about a value type. It knows less than the
- * other two and says so, and the README says the same thing in prose.
+ * other two adapters and says so. The README says the same in prose.
  */
 @ExtendWith(SuppressOutputExtension.class)
 @DisplayName("What the engine behind the Process-Engine-API does with a value type")

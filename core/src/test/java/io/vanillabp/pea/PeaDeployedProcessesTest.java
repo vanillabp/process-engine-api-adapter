@@ -16,13 +16,14 @@ import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 import io.vanillabp.pea.deployment.PeaDeployedProcesses;
 
 /**
- * What an extension may ask the adapter about the models it deployed: a process by its
- * workflow module and BPMN process id, and its user tasks by the BPMN element id a modeller
- * wrote and by the external form reference the adapter subscribes them under.
+ * What an extension may ask the adapter about the models it deployed. It may ask for a
+ * process by its workflow module and BPMN process id. It may ask for its user tasks by the
+ * BPMN element id a modeller wrote, and by the external form reference the adapter subscribes
+ * them under.
  * <p>
- * The two indexes are built from the recorded models rather than being filled on the side, so
- * the cases which matter are the ones where the models change: a second process bringing the
- * same form reference, and a redeployment which drops a user task.
+ * The two indexes are built from the recorded models, not filled separately. So the cases
+ * which matter are the ones where the models change: a second process with the same form
+ * reference, and a redeployment which drops a user task.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class PeaDeployedProcessesTest {

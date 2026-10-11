@@ -10,12 +10,12 @@ import io.vanillabp.integration.spi.AggregatePersistenceAware;
 import io.vanillabp.integration.spi.PhaseOperation;
 
 /**
- * Runs one phase of one operation against the adapter, the way VanillaBP's core does:
- * through the handler the adapter contributes for that operation.
+ * Runs one phase of one operation against the adapter, the way VanillaBP's core does. It
+ * goes through the handler which the adapter gives for that operation.
  * <p>
- * A unit test has no outbox to dispatch through, so it asks the adapter directly - and
- * this is what asking directly looks like now that an adapter answers a map of handlers
- * instead of a method per operation and phase.
+ * A unit test has no outbox to dispatch through, so it asks the adapter directly. An
+ * adapter answers with a map of handlers, not with a method per operation and phase. This
+ * class shows how to ask it directly.
  */
 public final class PhaseOperations {
 
@@ -79,9 +79,9 @@ public final class PhaseOperations {
   }
 
   /**
-   * Builds an argument map from key/value pairs, leaving out the pairs whose value is
-   * <code>null</code> - which is how an optional argument such as a correlation id
-   * reaches an operation: absent rather than null.
+   * Builds an argument map from key/value pairs. It leaves out the pairs whose value is
+   * <code>null</code>. That is how an optional argument such as a correlation id reaches
+   * an operation: it is missing, not null.
    *
    * @param keysAndValues Key, value, key, value, ...
    * @return The arguments

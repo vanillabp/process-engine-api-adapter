@@ -12,14 +12,12 @@ import io.vanillabp.integration.adapter.migration.scoping.NameClashAvoidanceServ
 /**
  * The core's name-clash avoidance, configured the way an application configures it.
  * <p>
- * The real service rather than a double, because the form an identifier reaches the engine
- * in is what the core composes: a test which mocks that composition proves only that it
- * mocked it.
+ * It is the real service and not a double, because the core builds the form in which an
+ * identifier reaches the engine. A test which mocks that only proves that it mocked it.
  */
 public final class TestScoping {
 
   private TestScoping() {
-    // static helper
   }
 
   /**
