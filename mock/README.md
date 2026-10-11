@@ -1,39 +1,38 @@
 # mock — in-memory Process-Engine-API fake
 
-Contributor documentation. The `mock` module provides
-`io.vanillabp.pea.mock.InMemoryProcessEngine`, a **hand-written** in-memory fake of the
-bpm-crafters Process-Engine-API. It lets the adapter run in tests and early applications
-without a real BPMS and without a network.
+This page is for contributors. The `mock` module has
+`io.vanillabp.pea.mock.InMemoryProcessEngine`, an in-memory fake of the bpm-crafters
+Process-Engine-API, **written by hand**. With it, the adapter runs in tests and early
+applications without a real BPMS and without a network.
 
-It is deliberately **not a Mockito mock**: later feature stories need it to carry real
-state (deployed definitions, started instances, subscribed tasks), which a generated mock
-cannot do. This fake therefore grows with every feature story; its whole reason to exist
-is to make it obvious where VanillaBP or the Process-Engine-API needs an extension (see
-[`../GAPS.md`](../GAPS.md)).
+It is **not a Mockito mock**, on purpose. Later feature stories need it to hold real state:
+deployed definitions, started instances, subscribed tasks. A generated mock cannot do that. So
+this fake grows with every feature story. It exists only to make it obvious where VanillaBP or
+the Process-Engine-API needs an extension (see [`../GAPS.md`](../GAPS.md)).
 
 The module depends only on `dev.bpm-crafters.process-engine-api:process-engine-api`. The
-adapter's `core` module does **not** depend on it.
+`core` module of the adapter does **not** depend on it.
 
 ## Current behavior
 
-Every API method records its invocation into the public, inspectable list
-`InMemoryProcessEngine.invocations` (also via `getInvocations()`). A record entry is
-`Invocation(String api, String method, Object command, ExecutionMode executionMode)`, where
-`executionMode` is taken from the command when it is `ExecutionModeAware` and `null`
-otherwise (e.g. task subscription commands). Beyond recording, two APIs carry real state:
+Every API method records its call in the public list `InMemoryProcessEngine.invocations`,
+which a test can read (also through `getInvocations()`). An entry is
+`Invocation(String api, String method, Object command, ExecutionMode executionMode)`. The
+`executionMode` comes from the command when the command is `ExecutionModeAware`, and is `null`
+otherwise (for example for task subscription commands). Besides recording, two APIs hold real
+state:
 
-- **`deploy(DeployBundleCommand)`** stores a `Deployment(deploymentKey, resources, tenantId)`
-  per invocation (inspectable via `getDeployments()`) and returns a `DeploymentInformation`.
-- **`startProcess(StartProcessCommand)`** records the command and its `ExecutionMode`.
-  Only for `ExecutionMode.SYNC` (phase two of VanillaBP's two-phase start) it creates a
-  `StartedInstance(instanceId, variables)`, inspectable via `getStartedInstances()`. The
-  aggregate id is one of the `variables` - which one is the adapter's decision (the
-  variable is named after the aggregate's ID property), so the engine fake does not
-  single it out. `ExecutionMode.PREFLIGHT_CHECK` (phase one) and any other mode create
-  no instance.
+- **`deploy(DeployBundleCommand)`** stores one `Deployment(deploymentKey, resources, tenantId)`
+  per call, which `getDeployments()` returns. It answers with a `DeploymentInformation`.
+- **`startProcess(StartProcessCommand)`** records the command and its `ExecutionMode`. Only for
+  `ExecutionMode.SYNC`, phase two of VanillaBP's two-phase start, it creates a
+  `StartedInstance(instanceId, variables)`, which `getStartedInstances()` returns. The aggregate
+  id is one of the `variables`. The adapter decides which one: the variable is named after the ID
+  property of the aggregate. So the fake engine does not pick it out. `ExecutionMode.PREFLIGHT_CHECK`
+  (phase one) and every other mode create no instance.
 
-All other methods still return a completed future / empty result of the declared type.
-`reset()` clears the recordings and all fake state (deployments, started instances).
+All other methods still return a completed future, or an empty result of the declared type.
+`reset()` clears the recordings and all state of the fake (deployments, started instances).
 
 ## Interfaces implemented
 
@@ -51,39 +50,39 @@ All other methods still return a completed future / empty result of the declared
 | `task.ServiceTaskCompletionApi` | `completeTask(CompleteTaskCmd)`, `completeTaskByError(CompleteTaskByErrorCmd)`, `failTask(FailTaskCmd)` | `CompletableFuture<Empty>`                                         |
 | `task.UserTaskCompletionApi`    | `completeTask(CompleteTaskCmd)`, `completeTaskByError(CompleteTaskByErrorCmd)`                          | `CompletableFuture<Empty>`                                         |
 
-Because `ServiceTaskCompletionApi` and `UserTaskCompletionApi` declare identical
-`completeTask` / `completeTaskByError` signatures, one Java method implements both; the
-recorded `api` for those is `"TaskCompletionApi"`.
+`ServiceTaskCompletionApi` and `UserTaskCompletionApi` declare the same signatures for
+`completeTask` and `completeTaskByError`. So one Java method implements both, and the recorded
+`api` for them is `"TaskCompletionApi"`.
 
-Cross-cutting interface methods also implemented: `MetaInfoAware.meta(MetaInfoAware)`
-(returns an empty `MetaInfo`) and `RestrictionAware.getSupportedRestrictions()` (returns
-an empty set). `ExecutionModeAware.executionMode()`, `RestrictionAware.areSupported(...)`
-and `RestrictionAware.ensureSupported(...)` are Java `default` methods on the
-Process-Engine-API interfaces and need no implementation.
+Two methods which several interfaces share are implemented as well:
+`MetaInfoAware.meta(MetaInfoAware)` returns an empty `MetaInfo`, and
+`RestrictionAware.getSupportedRestrictions()` returns an empty set.
+`ExecutionModeAware.executionMode()`, `RestrictionAware.areSupported(...)` and
+`RestrictionAware.ensureSupported(...)` are Java `default` methods of the Process-Engine-API
+interfaces and need no implementation.
 
-Deliberately not implemented, because VanillaBP does not call them:
-`task.UserTaskModificationApi` and `decision.EvaluateDecisionApi` — add them here as soon as
-an adapter feature needs them.
+Not implemented on purpose, because VanillaBP does not call them:
+`task.UserTaskModificationApi` and `decision.EvaluateDecisionApi`. Add them here as soon as a
+feature of the adapter needs them.
 
 ## Failure injection
 
-For testing VanillaBP's two-phase start the fake can inject failures per BPMN
-process id:
+To test VanillaBP's two-phase start, the fake can make calls fail for a given BPMN process id:
 
-- `failPreflightFor(bpmnProcessId)` — every `ExecutionMode.PREFLIGHT_CHECK` for
-  that process fails (until `reset()`): asserts that a failed phase one rolls the
-  caller's transaction back.
-- `failNextSyncFor(bpmnProcessId)` — the NEXT `ExecutionMode.SYNC` start fails
-  once, subsequent starts succeed: asserts that a failed phase two makes the
-  outbox retry the dispatch.
+- `failPreflightFor(bpmnProcessId)`: every `ExecutionMode.PREFLIGHT_CHECK` for that process
+  fails, until `reset()`. A test uses it to check that a failed phase one rolls back the
+  caller's transaction.
+- `failNextSyncFor(bpmnProcessId)`: the NEXT `ExecutionMode.SYNC` start fails once, and the
+  starts after it succeed. A test uses it to check that a failed phase two makes the outbox
+  dispatch again.
 
-`getStartedInstances()` returns a LIST in creation order (not a map keyed by
-aggregate id) so duplicate starts for the same aggregate are observable - a map
-would silently overwrite and hide exactly the bug the fake is meant to surface.
-Note the fake cannot validate a `PREFLIGHT_CHECK` against deployed processes
-(opaque resources, see `GAPS.md` entry 5) - inject failures instead.
+`getStartedInstances()` returns a LIST in the order the instances were created, not a map by
+aggregate id. So two starts for the same aggregate can be seen. A map would silently overwrite
+the first one and hide exactly the bug the fake is there to show.
+The fake cannot check a `PREFLIGHT_CHECK` against deployed processes, because it does not look
+into the resources (see `GAPS.md` entry 5). Make the call fail instead.
 
-What the fake records and what it refuses to record is held by the tests using it, above all
-`PeaTwoPhaseStartOutboxTest` (one `PREFLIGHT_CHECK` inside the transaction, one `SYNC` after
-the commit, none after a rollback) and
-`PeaFetchVariablesTest#theEngineNarrowsThePayload` for the narrowing.
+The tests which use the fake hold what it records and what it does not record. Above all these
+are `PeaTwoPhaseStartOutboxTest` (one `PREFLIGHT_CHECK` inside the transaction, one `SYNC` after
+the commit, none after a rollback) and `PeaFetchVariablesTest#theEngineNarrowsThePayload` for the
+narrowing of the payload.

@@ -3,16 +3,17 @@
 This repository is the VanillaBP adapter for the
 [Process-Engine-API](https://github.com/bpm-crafters/process-engine-api) of bpm-crafters. It
 implements the adapter SPI of the
-[platform integration](https://github.com/vanillabp/adapter-platform-integration) against an API
-rather than against one engine, so what it can do depends on the engine behind that API. Business
-code never sees it: an application writes against
-[`spi-for-java`](https://github.com/vanillabp/spi-for-java), and what this adapter does for its users
-is described in the [wiki](https://github.com/vanillabp/process-engine-api-adapter/wiki).
+[platform integration](https://github.com/vanillabp/adapter-platform-integration). It talks to an
+API and not to one engine, so what it can do depends on the engine behind that API. Business code
+never sees it, because an application is written against
+[`spi-for-java`](https://github.com/vanillabp/spi-for-java). The
+[wiki](https://github.com/vanillabp/process-engine-api-adapter/wiki) says what this adapter does for
+its users.
 
-Where the rules are: [`README.md`](./README.md) explains how the adapter works and where its limits
-are, and it is the first thing to read. [`AGENTS.md`](./AGENTS.md) says how work is done here, in the
-form an agent reads. [`DECISIONS.md`](./DECISIONS.md) holds the decisions several places rely on, and
-it is the only thing the code is allowed to cite.
+Where the rules are: read [`README.md`](./README.md) first. It explains how the adapter works and
+where its limits are. [`AGENTS.md`](./AGENTS.md) says how work is done here, in the form an agent
+reads. [`DECISIONS.md`](./DECISIONS.md) holds the decisions several places rely on. It is the only
+thing the code may cite.
 
 ## Getting started
 
@@ -39,42 +40,42 @@ mvn spotless:apply
 mvn install
 ```
 
-`install` and not `install verify`: `install` already runs every phase `verify` has, so naming both
-walks two lifecycles per module and reports every compiler warning twice.
+Use `install`, not `install verify`. `install` already runs every phase of `verify`. Naming both
+runs two lifecycles per module, and every compiler warning shows up twice.
 
 Two tools read the javadoc, and each one sees a part the other misses. The compiler checks every
-class for a broken reference or broken HTML, the package private ones included. The javadoc plugin
-checks what the published documentation shows, so it starts at protected and stops there. One thing
-below protected is shown as well: the fields a serializable class carries into its serialized form,
-which is why a private field of an exception is asked for a comment too.
+class for a broken reference or broken HTML, including the package private ones. The javadoc plugin
+checks what the published documentation shows, so it looks at protected and public only. One thing
+below protected is shown as well: the fields a serializable class writes into its serialized form.
+That is why a private field of an exception needs a comment too.
 
-A comment which is missing breaks the build. Everything this repository publishes has one now, and
-the plugin fails on a warning so that it stays that way. Write the sentence rather than switching
-the check off, and write the one a reader needs: what this repository publishes is read by somebody
-wiring it into an application, and `@return the value` is the same gap in a longer form. A module
-which publishes nothing sets `maven.javadoc.skip`, so a test module is never asked for comments.
+A missing comment breaks the build. Everything this repository publishes has one now, and the
+plugin fails on a warning so that it stays that way. Write the sentence instead of switching the
+check off. And write the one a reader needs. Somebody who wires this adapter into an application
+reads what it publishes, and `@return the value` is the same gap in a longer form. A module which
+publishes nothing sets `maven.javadoc.skip`, so a test module never needs comments.
 
-One thing the javadoc plugin cannot see is an accessor Lombok generates, because it reads the source
-and Lombok writes bytecode. So a published comment names a property in words rather than linking a
-getter which is not in the file. A published class which takes its constructor from Lombok writes
-that constructor out, because the documentation otherwise shows a parameterless one which does not
+The javadoc plugin cannot see an accessor which Lombok generates. The plugin reads the source, and
+Lombok writes bytecode. So a published comment names a property in words instead of linking a getter
+which is not in the file. A published class whose constructor comes from Lombok writes that
+constructor out. Otherwise the documentation shows a constructor without parameters, which does not
 exist.
 
-Two javadoc blocks in a row are the gap neither tool sees. Javadoc keeps the last block before an
-element and drops the earlier ones without a word, so a comment somebody wrote and kept up to date
-appears nowhere. `bin/check-orphaned-javadoc.sh` finds that shape. A block it reports describes
+Neither tool sees two javadoc blocks in a row. Javadoc keeps the last block before an element and
+drops the earlier ones without a word. So a comment somebody wrote and kept up to date appears
+nowhere. `bin/check-orphaned-javadoc.sh` finds that shape. A block it reports describes
 something, usually the element next door, so hang it back there rather than delete it.
 
-The tests are pure JVM smoke tests. They need neither Docker nor a network, which makes a full run
-the cheapest in the workspace and is also the reason other repositories boot this adapter as their
-test double. `test-coverage-report/coverage-gate` is the last module of the reactor and fails below
-85 percent of covered instructions per platform, while the rule is 90.
+The tests are pure JVM smoke tests. They need neither Docker nor a network. So a full run is the
+cheapest in the workspace, and that is also why other repositories boot this adapter as their test
+double. `test-coverage-report/coverage-gate` is the last module of the reactor. It fails below 85
+percent of covered instructions per platform. The rule is 90.
 
 That last module also holds the checks which read the sources of the whole repository instead of
-running anything: that every test class suppresses its output, that no guiding message fell apart
-in its text block, and that every BPMN error code goes through the scoping helper before it reaches
-the engine. They live there because one run of them covers every module. A build of a single module
-never sees them, so run the whole reactor before you push.
+running anything. They check that every test class suppresses its output, that no guiding message
+fell apart in its text block, and that every BPMN error code goes through the scoping helper before
+it reaches the engine. They live there so that one run covers every module. A build of a single
+module never runs them, so build the whole reactor before you push.
 
 ## Snapshots on Maven Central
 
@@ -87,14 +88,14 @@ Every push to `main` of this repository publishes its own snapshot to the same p
 
 ## What a POM hands an application
 
-A tool which only translates our source belongs in scope `provided`, and the scope stands at the
-declaration in the module which uses the tool. Lombok is such a tool, an annotation processor is
-another. An application asked for a workflow engine, and every jar it did not ask for is one more
-thing to ship and to answer a CVE report about.
+A tool which only translates our source belongs in scope `provided`. The scope is written where the
+module which uses the tool declares it. Lombok is such a tool, and so is an annotation processor. An
+application asked for a workflow engine. Every jar it did not ask for is one more thing to ship, and
+one more thing to answer a CVE report about.
 
-Writing `<optional>true</optional>` in a `dependencyManagement` does not do it. Maven copies a
-managed version, scope and exclusions into a dependency and leaves the optional flag behind, so the
-POM we publish says nothing at all about that dependency. Lombok reached the runtime classpath of
+Writing `<optional>true</optional>` in a `dependencyManagement` does not help. Maven copies the
+managed version, scope and exclusions into a dependency, but not the optional flag. So the POM we
+publish says nothing at all about that dependency. Lombok reached the runtime classpath of
 every application that way, here and in the platform.
 
 ## A POM comment says what this POM does
@@ -105,9 +106,9 @@ so a copy of its settings in a child here goes stale without anything noticing. 
 comments of three POMs in this organisation did exactly that: they said the parent switched the
 javadoc check off, after a release of it had switched the check on.
 
-Where a module really does rely on something its parent does or does not do, say so as an
-assumption and name the version it was checked against. Then the next reader can check it again in
-one command, `mvn help:effective-pom`, instead of believing a sentence.
+Sometimes a module really relies on something its parent does or does not do. Then say so as an
+assumption, and name the version it was checked against. The next reader can check it again with one
+command, `mvn help:effective-pom`, instead of believing a sentence.
 
 ## How we write
 
@@ -126,25 +127,28 @@ included. Nothing a program reads is renamed for the sake of language: type and 
 configuration keys and artifact coordinates stay as they are, because code in other repositories
 points at them.
 
+The same rules hold for the [wiki](https://github.com/vanillabp/process-engine-api-adapter/wiki).
+[`AGENTS.md`](./AGENTS.md) has before and after examples from this repository.
+
 ## What is asked before the code is written
 
 Where a change would make an entry of [`DECISIONS.md`](./DECISIONS.md) untrue, ask before you write
 it and wait for the answer. An entry is never edited away: it stays, marked as superseded and naming
 its successor, and the new decision takes the next free number.
 
-The second question is the SPI. What this adapter implements is published by the platform
-integration and served by three other adapters as well, so a change to the SPI is discussed there and
-not worked around here. Refusing what the Process-Engine-API cannot do, with a message naming the
-adapter and the reason, is a different thing and belongs here.
+The second question is the SPI. The platform integration publishes what this adapter implements,
+and three other adapters implement it as well. So a change to the SPI is discussed there and not
+worked around here. Refusing what the Process-Engine-API cannot do is a different thing, and it
+belongs here. The message names the adapter and the reason.
 
 ## Opening a pull request
 
-Work on a branch of your own and keep one subject per pull request. The description says what moved
-and why it had to. It may cite an issue or a conversation, because it is a record of a moment itself,
-which the code is not.
+Work on a branch of your own and keep one subject per pull request. The description says what
+changed and why. It may cite an issue or a conversation. A pull request records one moment in time,
+and the code does not.
 
-Check the numbers your branch hands out before you open it. Another branch may have taken the
-decision number you used while you were writing, and once a pull request is merged a
+Check the numbers your branch hands out before you open the pull request. Another branch may have
+taken your decision number while you were writing. And once a pull request is merged, a
 `see decision 3` in a Java file can no longer be corrected on GitHub:
 
 ```bash
@@ -155,20 +159,20 @@ After you corrected a number, `bin/check-decision-citations.sh` says whether eve
 decision still points at an entry of `DECISIONS.md`. The *Checks* workflow runs it on every pull
 request.
 
-The *Build and publish snapshots* workflow builds and tests every pull request and publishes nothing
-from a branch. A red check is a finding about your change. Read the log and fix what it says rather
-than pushing again to see whether it goes away.
+The *Build and publish snapshots* workflow builds and tests every pull request. It publishes
+nothing from a branch. A red check is a finding about your change. Read the log and fix what it
+says. Do not push again just to see whether it goes away.
 
-A maintainer approves the first run of the workflows for somebody whose first pull request this is
-in the repository. A pull request from a fork builds and tests like any other, because the
-snapshots it needs can be read without a login. It cannot publish anything, because GitHub gives it
-no secrets of this repository. [What the build of a pull request can
+For your first pull request in this repository, a maintainer approves the first run of the
+workflows. A pull request from a fork builds and tests like any other, because the snapshots it
+needs can be read without a login. It cannot publish anything, because GitHub gives it no secrets of
+this repository. [What the build of a pull request can
 do](https://github.com/vanillabp/development-workspace#what-the-build-of-a-pull-request-can-do) says
 more.
 
-`main` carries a ruleset, and it requires two green checks before a merge: `publish`, which is the
-build of that workflow, and `orphaned-javadoc-check`, which is the *Checks* workflow running the
-script named above. While one of them is red, GitHub does not offer the merge.
+`main` has a ruleset which requires two green checks before a merge. One is `publish`, the build
+of that workflow. The other is `orphaned-javadoc-check`, the *Checks* workflow running the script
+named above. While one of them is red, GitHub does not offer the merge.
 
 ## License
 
