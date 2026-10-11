@@ -6,23 +6,23 @@ import dev.bpmcrafters.processengineapi.ExecutionMode;
 import dev.bpmcrafters.processengineapi.process.StartProcessCommand;
 
 /**
- * The adapter's own {@link StartProcessCommand} implementation.
+ * The adapter's own {@link StartProcessCommand}.
  * <p>
- * The Process-Engine-API's built-in start commands (e.g. {@code StartProcessByDefinitionCmd})
- * are Kotlin {@code data class}es that do <b>not</b> override
- * {@code ExecutionModeAware.executionMode()} - so their execution mode is always the default
- * ({@link ExecutionMode#DEFAULT}) and cannot be set to
- * {@link ExecutionMode#PREFLIGHT_CHECK} or {@link ExecutionMode#SYNC}. Because
- * VanillaBP's two-phase start needs exactly these two modes, the adapter has to supply its
- * own {@link StartProcessCommand} carrying the mode. See {@code GAPS.md}.
+ * The built-in start commands of the Process-Engine-API, for example
+ * {@code StartProcessByDefinitionCmd}, are Kotlin {@code data class}es. They do <b>not</b>
+ * override {@code ExecutionModeAware.executionMode()}. So their execution mode is always the
+ * default ({@link ExecutionMode#DEFAULT}). It cannot be set to
+ * {@link ExecutionMode#PREFLIGHT_CHECK} or {@link ExecutionMode#SYNC}. The two-phase start of
+ * VanillaBP needs exactly these two modes, so the adapter brings its own
+ * {@link StartProcessCommand} which carries the mode. See {@code GAPS.md}.
  * <p>
- * The command also carries the BPMN process id (the Process-Engine-API's
- * {@code definitionKey}) and the process variables. The workflow-aggregate id is passed as
- * an ordinary payload variable (there is no dedicated business-key/correlation slot on the
- * start command - see {@code GAPS.md}).
+ * The command also carries the BPMN process id (the {@code definitionKey} of the
+ * Process-Engine-API) and the process variables. The id of the workflow aggregate is an
+ * ordinary payload variable. The start command has no slot for a business key or a
+ * correlation (see {@code GAPS.md}).
  * <p>
- * Why this adapter sends subclasses of the built-in commands at all is decision 4 in the
- * repository's DECISIONS.md: only a subclass can carry a non-default execution mode.
+ * Decision 4 in the repository's DECISIONS.md says why this adapter sends commands of its
+ * own at all: the built-in command classes cannot carry a mode other than the default.
  */
 public final class PeaStartProcessCommand implements StartProcessCommand {
 
@@ -53,7 +53,7 @@ public final class PeaStartProcessCommand implements StartProcessCommand {
   }
 
   /**
-   * What the engine is asked to start. The API calls it a {@code definitionKey} and this
+   * What the engine is asked to start. The API calls it a {@code definitionKey}. This
    * adapter puts the scoped BPMN process id there (see decision 2 in the repository's
    * DECISIONS.md).
    *

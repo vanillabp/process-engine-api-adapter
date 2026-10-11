@@ -45,38 +45,35 @@ import io.vanillabp.spi.process.WorkflowHistory;
 import lombok.extern.slf4j.Slf4j;
 
 /**
- * The Process-Engine-API adapter's per-adapter runtime the migration adapter delegates
- * to - one instance per configured adapter id.
+ * What the migration adapter calls to talk to the engine behind the Process-Engine-API. There
+ * is one instance per configured adapter id.
  * <p>
- * The Process-Engine-API is treated as a remote BPMS: it cannot join the application's
- * local transaction, so workflow starts are routed through the generic outbox path like
- * every other operation which reaches the engine.
- * Phase one maps to the Process-Engine-API's {@code ExecutionMode.PREFLIGHT_CHECK} (validate
- * only, inside the caller's transaction) and phase two to {@code ExecutionMode.SYNC} (create
- * the instance, after commit, dispatched via the outbox). The workflow-aggregate id travels
- * as a payload variable named after the aggregate's ID property (see
- * {@link AggregatePersistenceAware#getAggregateIdName()}) - how the aggregate's ID is
- * stored in the BPMS is the adapter's decision, and the Process-Engine-API (like Camunda 8)
- * stores it as a payload variable.
+ * This adapter treats the Process-Engine-API as a remote BPMS. It cannot join the local
+ * transaction of the application, so a start goes through the outbox, like every other
+ * operation which reaches the engine. Phase one is the API's
+ * {@code ExecutionMode.PREFLIGHT_CHECK}: it only checks, inside the caller's transaction.
+ * Phase two is {@code ExecutionMode.SYNC}: it creates the instance after the commit, sent by
+ * the outbox. The id of the workflow aggregate travels as a payload variable. The variable is
+ * named after the id property of the aggregate (see
+ * {@link AggregatePersistenceAware#getAggregateIdName()}). Where the id is kept in the BPMS
+ * is up to the adapter, and here it is a payload variable, as in Camunda 8.
  * <p>
- * The {@link CompletableFuture}s returned by the Process-Engine-API are joined: a failed
- * {@code PREFLIGHT_CHECK} has to fail the caller's transaction (phase one) and a failed
- * {@code SYNC} has to throw so the outbox retries the dispatch (phase two) - discarding
- * the future would consume the outbox entry and the workflow would silently never start.
+ * The {@link CompletableFuture}s the Process-Engine-API returns are joined. A failed
+ * {@code PREFLIGHT_CHECK} has to fail the caller's transaction. A failed {@code SYNC} has to
+ * throw, so the outbox tries again. If the future were dropped, the outbox entry would count
+ * as done and the workflow would never start, and nobody would notice.
  * <p>
- * The Process-Engine-APIs this class calls are constructor parameters, one per interface
- * the API splits its commands into. The signal API is the exception and arrives through
- * {@link #setSignalApi(SignalApi)}, because an engine may be built without it and signals
- * are then the one operation this adapter refuses. The platform modules inject the
- * implementations: the in-memory mock of this repository, or a real one the application
- * contributes.
- *
+ * The APIs this class calls come in through the constructor, one for each interface the API
+ * splits its commands into. The signal API comes through {@link #setSignalApi(SignalApi)}
+ * instead. An engine may be built without it, and then signals are the one operation this
+ * adapter refuses. The platform modules inject the implementations: the in-memory mock of
+ * this repository, or a real one the application brings.
  * <p>
- * Three rules of this class are written down because several places rely on them: a preflight asks
- * inside the caller's transaction while the SYNC command runs after the commit (decision 4 in the
- * repository's DECISIONS.md), a failure of phase two is propagated rather than consumed (decision
- * 5 in the repository's DECISIONS.md), and only a capability the API lacks entirely counts as
- * permanent (decision 6 in the repository's DECISIONS.md).
+ * Three rules hold here, and several places rely on them. A preflight asks inside the
+ * caller's transaction, and the SYNC command runs after the commit (decision 4 in the
+ * repository's DECISIONS.md). A failure of phase two is passed on, not swallowed (decision 5
+ * in the repository's DECISIONS.md). Only a feature the API lacks completely counts as a
+ * permanent failure (decision 6 in the repository's DECISIONS.md).
  *
  * @param <A> The workflow aggregate type
  */
@@ -96,14 +93,13 @@ public class PeaProcessService<A> implements MigratableProcessService<A> {
   private final CorrelationApi correlationApi;
 
   /**
-   * The engine's signal API. Optional: an engine implementation without
-   * it leaves signals unsupported, which {@link #signalNotSupported(String, String)}
-   * says.
+   * The signal API of the engine. It is optional. Without it, signals are not supported,
+   * and {@link #signalNotSupported(String, String)} says so.
    */
   private SignalApi signalApi;
 
   /**
-   * Hands over the engine's signal API.
+   * Sets the signal API of the engine.
    *
    * @param signalApi The signal API or <code>null</code>
    */
@@ -129,8 +125,9 @@ public class PeaProcessService<A> implements MigratableProcessService<A> {
   private final AdapterCollaborators collaborators;
 
   /**
-   * Convenience constructor for a test: no shared record of deployed processes and no
-   * collaborators, so the viewer API answers nothing and no aggregate values travel.
+   * A shorter constructor for tests. There is no shared record of deployed processes and
+   * there are no collaborators. So the viewer API answers nothing, and no aggregate values
+   * travel.
    *
    * @param adapterId The configured adapter id this service serves
    * @param startProcessApi Where a workflow is started
@@ -150,8 +147,8 @@ public class PeaProcessService<A> implements MigratableProcessService<A> {
   }
 
   /**
-   * Convenience constructor for a test which needs the viewer API: it reads the record the
-   * deployment service filled, and still no aggregate values travel.
+   * A shorter constructor for tests which need the viewer API. It reads the record the
+   * deployment service filled. No aggregate values travel.
    *
    * @param adapterId The configured adapter id this service serves
    * @param startProcessApi Where a workflow is started
@@ -174,23 +171,23 @@ public class PeaProcessService<A> implements MigratableProcessService<A> {
   }
 
   /**
-   * The core's sync model. The Process-Engine-API is treated as a
-   * REMOTE BPMS - it can only evaluate what VanillaBP puts into the payload - so
-   * the adapter's default is {@link AggregateSyncMode#FULL}. May be <code>null</code>
-   * (tests): only the technical aggregate-ID variable travels then.
+   * The sync model of the core. This adapter treats the Process-Engine-API as a REMOTE BPMS.
+   * It can only evaluate what VanillaBP puts into the payload, so the default here is
+   * {@link AggregateSyncMode#FULL}. It may be <code>null</code> in tests. Then only the
+   * technical aggregate-ID variable travels.
    */
   private final WorkflowAggregateSync aggregateSync;
 
   /**
-   * The default of this adapter: everything is shared unless the application
-   * excludes it ({@code @NoSyncWithBPMS}).
+   * The default of this adapter. Everything is shared, unless the application excludes it
+   * with {@code @NoSyncWithBPMS}.
    */
   public static final AggregateSyncMode SYNC_MODE = AggregateSyncMode.FULL;
 
   /**
-   * The core's name-clash-avoidance model: translates process ids, message
-   * names and error codes into what the engine knows. May be <code>null</code>
-   * (tests): identifiers are passed through then.
+   * The name-clash-avoidance model of the core. It turns process ids, message names and error
+   * codes into the names the engine knows. It may be <code>null</code> in tests. Then the
+   * identifiers pass through as they are.
    */
   private final NameClashAvoidanceSupport scoping;
 
@@ -208,7 +205,7 @@ public class PeaProcessService<A> implements MigratableProcessService<A> {
   }
 
   /**
-   * A message name / error code as the engine knows it.
+   * A message name or an error code as the engine knows it.
    */
   private String scopedIdentifier(
       final String workflowModuleId,
@@ -221,13 +218,12 @@ public class PeaProcessService<A> implements MigratableProcessService<A> {
   }
 
   /**
-   * The payload sent whenever this adapter talks to the engine on behalf of a
-   * workflow: the aggregate's shared attributes PLUS - always, no matter what the
-   * sync model says - the variable carrying the aggregate's ID (named after the
-   * aggregate's ID property). The Process-Engine-API has no business-key slot:
-   * that variable is how VanillaBP finds the workflow again, so an aggregate
-   * annotated {@code @NoSyncWithBPMS} must not lose it. See
-   * {@code PeaSharedValuesTest}.
+   * The payload sent whenever this adapter talks to the engine for a workflow. It holds the
+   * shared attributes of the aggregate. It ALWAYS holds the variable with the id of the
+   * aggregate as well, whatever the sync model says. The variable is named after the id
+   * property of the aggregate. The Process-Engine-API has no slot for a business key, so this
+   * variable is how VanillaBP finds the workflow again. That is why an aggregate annotated
+   * {@code @NoSyncWithBPMS} must not lose it. See {@code PeaSharedValuesTest}.
    */
   private Map<String, Object> payloadOf(
       final AggregatePersistenceAware<A> aggregatePersistence,
@@ -236,8 +232,8 @@ public class PeaProcessService<A> implements MigratableProcessService<A> {
 
     final var payload = new LinkedHashMap<String, Object>();
     if (aggregatePersistence == null) {
-      // no persistence at hand (e.g. a test driving the SPI directly): neither the
-      // shared attributes nor the technical ID variable can be determined
+      // no persistence, for example in a test which calls the SPI directly: then neither
+      // the shared attributes nor the technical id variable can be worked out
       return payload;
     }
     final var aggregate = workflowAggregate != null
@@ -252,9 +248,9 @@ public class PeaProcessService<A> implements MigratableProcessService<A> {
   }
 
   /**
-   * The constructor a platform integration uses. The collaborators are what makes the
-   * shared aggregate values and the aggregate-ID variable travel with every command, so a
-   * service built without them talks to the engine about an aggregate id and nothing else.
+   * The constructor a platform integration uses. The collaborators make the shared aggregate
+   * values and the aggregate-ID variable travel with every command. A service built without
+   * them sends the engine an aggregate id and nothing else.
    *
    * @param adapterId The configured adapter id this service serves
    * @param startProcessApi Where a workflow is started
@@ -295,19 +291,18 @@ public class PeaProcessService<A> implements MigratableProcessService<A> {
   }
 
   /**
-   * What this application version deployed - the only source of process
-   * definitions and BPMN XML (the Process-Engine-API has no repository API, see
+   * What this version of the application deployed. It is the only source of process
+   * definitions and BPMN XML, because the Process-Engine-API has no repository API (see
    * {@code GAPS.md}).
    */
   private final PeaDeployedProcesses deployedProcesses;
 
   /**
-   * The viewer API's process definitions. The Process-Engine-API knows neither
-   * process definitions nor the definition a running instance uses, so the
-   * adapter answers from what it deployed at boot. Call activities are NOT
-   * reported: the Process-Engine-API has no BPMN model type and no notion of
-   * call activities (GAPS.md) - which sub-process a call activity addresses is
-   * BPMS-dialect-specific.
+   * The process definitions for the viewer API. The Process-Engine-API knows no process
+   * definitions, and it does not say which definition a running instance uses. So the
+   * adapter answers from what it deployed at startup. Call activities are NOT reported. The
+   * Process-Engine-API has no BPMN model type and does not know call activities (GAPS.md).
+   * Which sub-process a call activity points to depends on the BPMS dialect.
    */
   @Override
   public List<ProcessDefinition> getProcessDefinitions(
@@ -318,8 +313,8 @@ public class PeaProcessService<A> implements MigratableProcessService<A> {
       final String historyContext) {
 
     if (historyContext != null) {
-      // secondary history contexts are only ever handed out by getWorkflowHistory,
-      // which this adapter cannot fill - so a context can never be one of ours
+      // only getWorkflowHistory hands out further history contexts, and this adapter
+      // cannot fill it, so a context can never be one of ours
       log.warn(
           "Process-Engine-API adapter '{}': the history context '{}' is unknown - this adapter "
               + "reports no element history and therefore no secondary contexts (see GAPS.md)",
@@ -360,16 +355,16 @@ public class PeaProcessService<A> implements MigratableProcessService<A> {
 
   /**
    * Says why a viewer gets nothing for a workflow whose BPMN process this application
-   * DECLARES without deploying a model under it - the old id of a renamed process.
+   * DECLARES but deploys no model for. That is the old id of a renamed process.
    * <p>
-   * The workflow itself may be running perfectly well and its tasks may be served (see
-   * decision 11 in the repository's DECISIONS.md), but the model behind that id was
-   * deployed by an earlier application version and the Process-Engine-API has no
-   * repository to read it back from (see {@code GAPS.md}). An empty answer is all there
-   * is, and without this line it is an empty answer nobody can explain.
+   * The workflow may run without any problem, and its tasks may be served (see decision 11
+   * in the repository's DECISIONS.md). But an earlier version of the application deployed
+   * the model behind that id, and the Process-Engine-API has no repository to read it back
+   * from (see {@code GAPS.md}). So the answer is empty. Without this line, nobody could
+   * explain why.
    * <p>
-   * Every other empty answer stays silent: a process id this adapter never heard of is a
-   * question for whoever asked it, not a limitation worth a log line.
+   * Every other empty answer stays silent. If this adapter never heard of a process id, the
+   * question is wrong. That is not a limit of the adapter and is not worth a log line.
    *
    * @param workflowModuleId The workflow module the caller asked about
    * @param bpmnProcessId The plain BPMN process id the caller asked about
@@ -400,10 +395,10 @@ public class PeaProcessService<A> implements MigratableProcessService<A> {
   }
 
   /**
-   * The Process-Engine-API has NO history or query API at all (GAPS.md): neither
-   * start/end times of a workflow nor an element history can be obtained. The
-   * SPI's answer for that is a history without elements - reported for the
-   * definition the workflow was deployed with.
+   * The Process-Engine-API has NO history or query API at all (GAPS.md). There is no way to
+   * get the start and end time of a workflow or the history of its elements. For that case
+   * the SPI answers with a history without elements, reported for the definition the
+   * workflow was deployed with.
    */
   @Override
   public WorkflowHistory getWorkflowHistory(
@@ -428,8 +423,8 @@ public class PeaProcessService<A> implements MigratableProcessService<A> {
   }
 
   /**
-   * What the engine behind the Process-Engine-API does with that type, so the startup
-   * check can say what happens to a value which travels between the application and this
+   * What the engine behind the Process-Engine-API does with that type. The startup check
+   * uses it to say what happens to a value which travels between the application and this
    * BPMS.
    *
    * @param valueType The declared type of the value
@@ -446,9 +441,9 @@ public class PeaProcessService<A> implements MigratableProcessService<A> {
   }
 
   /**
-   * The BPMS this service talks to, as the configuration and the startup lines name it.
-   * One adapter id of this type is all an application may configure, because the API
-   * cannot tell two engines behind it apart (GAPS entry 14).
+   * The BPMS this service talks to, named as in the configuration and the startup lines. An
+   * application may configure only one adapter id of this type. The API cannot tell two
+   * engines behind it apart (GAPS entry 14).
    *
    * @return The adapter type of the Process-Engine-API adapter
    */
@@ -468,16 +463,16 @@ public class PeaProcessService<A> implements MigratableProcessService<A> {
   /**
    * What this adapter does for each operation, in both phases.
    * <p>
-   * Phase one is a <code>PREFLIGHT_CHECK</code> command wherever the API offers one: it
-   * validates without advancing, and it runs as a pre-commit hook so the window to the
-   * phase-two dispatch stays small. Phase two sends the real command and is idempotent,
-   * because the outbox dispatches at-least-once.
+   * Phase one is a <code>PREFLIGHT_CHECK</code> command wherever the API offers one. It
+   * checks without moving the process on. It runs as a pre-commit hook, so the time until
+   * phase two stays short. Phase two sends the real command. It is idempotent, because the
+   * outbox may send a command more than once.
    * <p>
-   * Two operations are in the map although this adapter cannot serve them: broadcasting
-   * a signal without a <code>SignalApi</code>, and pushing a changed aggregate at all.
-   * They stay because the handler is where the reason lives - which API is missing, or
-   * which entry of GAPS.md names the gap - and a message which says only "this adapter
-   * cannot" would leave the reader without the fix.
+   * Two operations are in the map although this adapter cannot serve them: sending a signal
+   * without a <code>SignalApi</code>, and pushing a changed aggregate at all. They stay,
+   * because the handler knows the reason: which API is missing, or which entry of GAPS.md
+   * names the gap. A message which only says "this adapter cannot" would not tell the
+   * reader how to fix it.
    */
   @Override
   public Map<PhaseOperation, PhaseOperationHandler<A>> phaseOperations() {
@@ -526,10 +521,10 @@ public class PeaProcessService<A> implements MigratableProcessService<A> {
   @Override
   public boolean deliversTasksAtLeastOnce() {
 
-    // subscriptions report a task as completed AFTER the local transaction was
-    // committed, so an engine which did not learn the result delivers the task again.
-    // The identity across such a redelivery is the TASK ID the engine
-    // reports, which every invocation context carries.
+    // a subscription reports a task as completed AFTER the local transaction committed.
+    // An engine which did not learn the result delivers the task again. What stays the
+    // same across such a second delivery is the TASK ID the engine reports, and every
+    // invocation context carries it.
     return true;
 
   }
@@ -540,12 +535,11 @@ public class PeaProcessService<A> implements MigratableProcessService<A> {
       final Object workflowAggregateId,
       final String taskId) {
 
-    // the probe is a PREFLIGHT_CHECK completion - exactly what the mode is for
-    // (validate only, optimistic fast-fail, never advances the process). The
-    // Process-Engine-API does not classify failures (no typed exceptions), so a
-    // failing preflight cannot be told apart from an unreachable engine - it maps
-    // to UNKNOWN_TO_BPMS (see GAPS.md; the BPMS_UNAVAILABLE distinction would
-    // need typed errors).
+    // the probe is a PREFLIGHT_CHECK completion, which is what the mode is for: it only
+    // checks, fails early and never moves the process on. The Process-Engine-API has no
+    // typed exceptions, so a failed preflight looks the same as an engine which cannot be
+    // reached. It counts as UNKNOWN_TO_BPMS (see GAPS.md). Telling BPMS_UNAVAILABLE apart
+    // would need typed errors.
     try {
       serviceTaskCompletionApi
           .completeTask(new PeaCompleteTaskCmd(
@@ -569,9 +563,9 @@ public class PeaProcessService<A> implements MigratableProcessService<A> {
   private void preflightCompleteTask(
       final PhaseOneRequest<A> request) {
 
-    // the non-advancing phase-one check: a PREFLIGHT_CHECK completion validates the task
-    // still exists so the local transaction can abort early - run right before the commit,
-    // which keeps the window to the phase-two dispatch small
+    // the phase-one check, which does not move the process on: a PREFLIGHT_CHECK completion
+    // checks that the task still exists, so the local transaction can stop early. It runs
+    // right before the commit, so the time until phase two stays short
     beforeCommit(
         request.aggregatePersistence(),
         () -> preflight(new PeaCompleteTaskCmd(
@@ -642,15 +636,14 @@ public class PeaProcessService<A> implements MigratableProcessService<A> {
   /**
    * What a phase-one check throws once the engine has refused the task.
    * <p>
-   * The type is the one the SPI documents for a task no BPMS knows any more, so an
-   * application catching {@link TaskNotFoundException} catches this as well. Whether the
-   * task turned out to be gone while a BPMS was probed or while this check ran is the
-   * adapter's business and not the caller's.
+   * The SPI names this type for a task no BPMS knows any more. So an application which
+   * catches {@link TaskNotFoundException} catches this one as well. The caller does not need
+   * to know whether the task was found gone while a BPMS was probed or while this check ran.
    * <p>
-   * That exception carries a message and nothing else, so what the engine answered with is
-   * written to the log before it is thrown. The awareness probe says the same thing on
-   * debug, because the election reading its answer can still ask the next adapter. A check
-   * is the last word, so this line is the only place the reason is ever said.
+   * That exception carries only a message. So the answer of the engine goes to the log
+   * before the exception is thrown. The awareness probe logs the same on debug, because the
+   * election which reads its answer can still ask the next adapter. A check is the last
+   * word, so this line is the only place where the reason is ever written.
    *
    * @param taskId The task the engine refused
    * @param message What the caller reads, including what a retry does
@@ -662,8 +655,8 @@ public class PeaProcessService<A> implements MigratableProcessService<A> {
       final String message,
       final Throwable rejection) {
 
-    // the Process-Engine-API declares no typed errors (see GAPS.md), so a refusal and an
-    // unreachable engine read the same here - what the engine said is all there is to pass on
+    // the Process-Engine-API has no typed errors (see GAPS.md). A refusal looks the same as
+    // an engine which cannot be reached, so the answer of the engine is all we can pass on
     log.info(
         "PEA[{}]: the phase-one check of task '{}' was refused - the task is gone",
         adapterId,
@@ -678,8 +671,8 @@ public class PeaProcessService<A> implements MigratableProcessService<A> {
 
     try {
       serviceTaskCompletionApi
-          // The aggregate changed before the task was completed - the
-          // engine only sees what the adapter sends
+          // the aggregate changed before the task was completed, and the engine only
+          // sees what the adapter sends
           .completeTask(new PeaCompleteTaskCmd(
               request.taskId(), payloadOf(request.aggregatePersistence(), request.workflowAggregateId(), null)))
           .get();
@@ -707,8 +700,8 @@ public class PeaProcessService<A> implements MigratableProcessService<A> {
 
     try {
       serviceTaskCompletionApi
-          // The error boundary's outgoing path may branch on the
-          // aggregate, which the caller changed before canceling the task
+          // the path out of the error boundary may branch on the aggregate, and the
+          // caller changed it before canceling the task
           .completeTaskByError(new PeaCompleteTaskByErrorCmd(
               request.taskId(), scopedIdentifier(request.workflowModuleId(),
                   request.bpmnErrorCode()), "canceled via ProcessService#cancelTask", payloadOf(
@@ -740,8 +733,8 @@ public class PeaProcessService<A> implements MigratableProcessService<A> {
       final Object workflowAggregateId,
       final String taskId) {
 
-    // same probe shape as service tasks: a PREFLIGHT_CHECK completion against the
-    // USER-task completion API (untyped failures map to UNKNOWN - GAPS.md)
+    // the same probe as for service tasks: a PREFLIGHT_CHECK completion, here sent to the
+    // completion API for USER tasks. A failure has no type, so it counts as UNKNOWN (GAPS.md)
     try {
       userTaskCompletionApi
           .completeTask(new PeaCompleteTaskCmd(
@@ -862,11 +855,11 @@ public class PeaProcessService<A> implements MigratableProcessService<A> {
       final AggregatePersistenceAware<A> aggregatePersistence,
       final Object workflowAggregateId) {
 
-    // the Process-Engine-API offers NO way to probe a workflow's existence: there
-    // is no query API, and CorrelateMessageCmd is FINAL - a PREFLIGHT_CHECK
-    // execution mode cannot be transported (GAPS.md entry 11). The adapter
-    // answers OPTIMISTICALLY - fine for single-BPMS setups; unsafe for multi-BPMS
-    // migration scenarios (warned once).
+    // the Process-Engine-API has NO way to ask whether a workflow exists. There is no
+    // query API, and CorrelateMessageCmd is FINAL, so it cannot carry the PREFLIGHT_CHECK
+    // execution mode (GAPS.md entry 11). So the adapter answers OPTIMISTICALLY. That is
+    // fine with one BPMS. It is not safe while workflows move between BPMS, and the log
+    // warns about it once
     if (noWorkflowAwarenessWarned.compareAndSet(false, true)) {
       log.warn(
           "PEA[{}]: the Process-Engine-API cannot probe workflow awareness (no query API, final "
@@ -881,12 +874,12 @@ public class PeaProcessService<A> implements MigratableProcessService<A> {
   private final AtomicBoolean noWorkflowAwarenessWarned = new AtomicBoolean();
 
   /**
-   * Always <code>false</code>: the Process-Engine-API has no query API, and its command
-   * classes carry no execution mode which could ask without acting (GAPS.md entry 11).
-   * {@link #awarenessOfWorkflow} therefore answers optimistically, which is right while
-   * this is the only configured BPMS and a guess as soon as it is not - and saying so
-   * here is what makes the core refuse the second case while it boots rather than
-   * routing operations by list order.
+   * Always <code>false</code>. The Process-Engine-API has no query API. Its command classes
+   * carry no execution mode which could ask without acting (GAPS.md entry 11). So
+   * {@link #awarenessOfWorkflow} answers optimistically. That is right while this is the
+   * only configured BPMS, and a guess as soon as there are more. Because this method says
+   * so, the core refuses the second case at startup. Otherwise it would route operations by
+   * the order of the list.
    *
    * @return <code>false</code>
    */
@@ -898,14 +891,13 @@ public class PeaProcessService<A> implements MigratableProcessService<A> {
   }
 
   /**
-   * The START re-dispatch mitigation probe - STRICTER contract than
-   * {@link #awarenessOfWorkflow}: the answer must NEVER be optimistic.
-   * The Process-Engine-API cannot probe a workflow's existence at all (GAPS.md
-   * entry 11), so the honest answer is
-   * {@link WorkflowAwareness#UNKNOWN_TO_BPMS}: the recovered start proceeds and
-   * the at-least-once contract of the phase-two start applies (a duplicate
-   * is the accepted residual - the election's optimistic ACTIVE would instead
-   * SKIP the start and LOSE the workflow).
+   * The probe asked before a START is sent again. Its contract is STRICTER than the one of
+   * {@link #awarenessOfWorkflow}: the answer must NEVER be optimistic. The
+   * Process-Engine-API cannot ask whether a workflow exists at all (GAPS.md entry 11). So
+   * the honest answer is {@link WorkflowAwareness#UNKNOWN_TO_BPMS}. The recovered start goes
+   * on, and the phase-two start may then happen more than once. A duplicate is the risk we
+   * accept. The optimistic ACTIVE of the election would SKIP the start instead and LOSE the
+   * workflow.
    */
   @Override
   public WorkflowAwareness awarenessOfWorkflowForRedispatch(
@@ -920,13 +912,12 @@ public class PeaProcessService<A> implements MigratableProcessService<A> {
   /**
    * What a failed phase-two operation throws.
    * <p>
-   * The Process-Engine-API declares no typed exceptions, so this adapter cannot tell "the
-   * task is gone" - the accepted at-least-once residual - from "the engine is unreachable".
-   * It used to assume the first and consume the outbox entry with a WARN line, which lost
-   * the operation whenever the second was true. Now every failure reaches the outbox: it
-   * repeats and finally blocks the entry, so a repeated operation on something the engine
-   * already finished costs a retry series and a blocked entry, while an operation is never
-   * silently dropped again.
+   * The Process-Engine-API has no typed exceptions. So this adapter cannot tell "the task is
+   * gone" from "the engine cannot be reached". The first is a risk we accept, because the
+   * outbox may send an operation more than once. The second must never lose the operation.
+   * So every failure reaches the outbox. The outbox tries again and in the end blocks the
+   * entry. An operation on something the engine already finished then costs some retries
+   * and a blocked entry. In return, no operation is ever dropped without a trace.
    *
    * @param operationDescription What was attempted
    * @param subject What it was attempted on, as a noun ("task", "user task", "message")
@@ -958,13 +949,12 @@ public class PeaProcessService<A> implements MigratableProcessService<A> {
   /**
    * Whether repeating a failed phase-two operation may succeed.
    * <p>
-   * The Process-Engine-API declares no typed exceptions: whatever an engine
-   * implementation throws arrives wrapped in an {@link ExecutionException},
-   * and "the engine is unreachable" looks exactly like "the engine refused". So only one
-   * family can be classified, and it is the one this adapter throws itself: where the API
-   * cannot do what VanillaBP asks - a signal without a {@code SignalApi}, pushing a changed
-   * aggregate - every attempt ends the same way, and the outbox entry is blocked at once
-   * instead of being retried until its attempts are used up.
+   * The Process-Engine-API has no typed exceptions. Whatever an engine throws arrives
+   * wrapped in an {@link ExecutionException}, and "the engine cannot be reached" looks just
+   * like "the engine refused". So only one kind of failure can be told apart, and this
+   * adapter throws it itself. That is where the API cannot do what VanillaBP asks: a signal
+   * without a {@code SignalApi}, or pushing a changed aggregate. Every attempt ends the same
+   * way, so the outbox entry is blocked at once. It does not use up all its attempts first.
    * <p>
    * Everything else stays repeatable, which is the safe default of the SPI.
    *
@@ -991,17 +981,17 @@ public class PeaProcessService<A> implements MigratableProcessService<A> {
   private void preflightCorrelateMessage(
       final PhaseOneRequest<A> request) {
 
-    // no phase-one PREFLIGHT_CHECK is possible: CorrelateMessageCmd is FINAL and
-    // cannot carry a non-default execution mode (GAPS.md entry 11) - like
-    // workflow starts, phase one validates nothing against the engine
+    // there is no PREFLIGHT_CHECK for phase one: CorrelateMessageCmd is FINAL and cannot
+    // carry another execution mode than the default (GAPS.md entry 11). So phase one
+    // checks nothing against the engine here
 
   }
 
   /**
-   * Pushing a changed workflow-aggregate is not supported (GAPS.md entry 18): the
-   * Process-Engine-API can update the payload of a TASK, never the payload of a
-   * running process instance. Phase one already refuses, so an application learns it
-   * where it made the call instead of somewhere behind a commit.
+   * Pushing a changed workflow aggregate is not supported (GAPS.md entry 18). The
+   * Process-Engine-API can update the payload of a TASK, but never the payload of a running
+   * process instance. Phase one refuses already. So the application learns it where it made
+   * the call, and not somewhere after the commit.
    */
   private void preflightAggregateChanged(
       final PhaseOneRequest<A> request) {
@@ -1033,13 +1023,13 @@ public class PeaProcessService<A> implements MigratableProcessService<A> {
   }
 
   /**
-   * The Process-Engine-API is treated as a REMOTE BPMS: nothing may happen before
-   * the caller's transaction committed, so the broadcast waits for phase two.
+   * This adapter treats the Process-Engine-API as a REMOTE BPMS. Nothing may happen before
+   * the transaction of the caller commits, so the signal is sent in phase two.
    * <p>
-   * What phase one CAN answer is whether this adapter is able to broadcast at all:
-   * without a {@code SignalApi} phase two can only fail, and it would fail behind the
-   * commit, over and over, until the outbox entry is blocked. The application learns
-   * it where it made the call instead.
+   * But phase one CAN say whether this adapter is able to send signals at all. Without a
+   * {@code SignalApi}, phase two can only fail. It would fail after the commit, again and
+   * again, until the outbox entry is blocked. So the application learns it where it made
+   * the call.
    */
   private void preflightSendSignal(
       final PhaseOneRequest<A> request) {
@@ -1074,8 +1064,8 @@ public class PeaProcessService<A> implements MigratableProcessService<A> {
       throw signalNotSupported(request.workflowModuleId(), request.signalName());
     }
 
-    // no payload travels with a signal: unlike a message it is not addressed to a
-    // workflow, so there is no aggregate whose state could be meant
+    // no payload travels with a signal. Unlike a message, it is not sent to one workflow,
+    // so there is no aggregate whose state could be meant
     try {
       signalApi
           .sendSignal(new SendSignalCmd(
@@ -1088,8 +1078,8 @@ public class PeaProcessService<A> implements MigratableProcessService<A> {
           request.workflowModuleId());
     } catch (final InterruptedException e) {
       Thread.currentThread().interrupt();
-      // returning here would mark the outbox entry done although nothing was
-      // broadcast, and a signal nobody receives is a workflow waiting forever
+      // returning here would mark the outbox entry as done, although no signal was sent.
+      // A signal nobody receives leaves a workflow waiting forever
       throw new IllegalStateException(
           "PEA[%s]: broadcasting signal '%s' of workflow module '%s' was interrupted"
               .formatted(adapterId, request.signalName(), request.workflowModuleId()), e);
@@ -1104,10 +1094,10 @@ public class PeaProcessService<A> implements MigratableProcessService<A> {
   private void correlateMessage(
       final PhaseTwoRequest<A> request) {
 
-    // no message CONTENT travels - what does travel is the aggregate state shared
-    // with the engine (see decision 1 in the repository's DECISIONS.md).
-    // CorrelateMessageCmd is FINAL - the command carries the DEFAULT execution
-    // mode; the intended SYNC semantics cannot be expressed (GAPS.md entry 11).
+    // no message CONTENT travels. What travels is the aggregate state shared with the
+    // engine (see decision 1 in the repository's DECISIONS.md). CorrelateMessageCmd is
+    // FINAL, so the command carries the DEFAULT execution mode. The SYNC mode we want
+    // cannot be expressed (GAPS.md entry 11).
     final var correlationKey = request.correlationId() != null
         ? request.correlationId()
         : String.valueOf(request.workflowAggregateId());
@@ -1144,9 +1134,9 @@ public class PeaProcessService<A> implements MigratableProcessService<A> {
   private void preflightStartByMessage(
       final PhaseOneRequest<A> request) {
 
-    // start semantics: nothing to check against the engine (the degenerate
-    // two-phase case); a PREFLIGHT_CHECK cannot be expressed either -
-    // StartProcessByMessageCmd is FINAL (GAPS.md entry 11)
+    // as for any start, there is nothing to check against the engine here. A
+    // PREFLIGHT_CHECK cannot be expressed either, because StartProcessByMessageCmd is FINAL
+    // (GAPS.md entry 11)
 
   }
 
@@ -1175,8 +1165,9 @@ public class PeaProcessService<A> implements MigratableProcessService<A> {
           request.workflowAggregateId());
     } catch (final InterruptedException e) {
       Thread.currentThread().interrupt();
-      // returning here would mark the outbox entry done although no workflow was
-      // started, and the application's database would carry an aggregate no engine knows
+      // returning here would mark the outbox entry as done, although no workflow was
+      // started. The database of the application would then hold an aggregate no engine
+      // knows
       throw new IllegalStateException(
           "Phase two of starting a workflow by message '%s' was interrupted".formatted(request.messageName()), e);
     } catch (final ExecutionException e) {
@@ -1189,12 +1180,12 @@ public class PeaProcessService<A> implements MigratableProcessService<A> {
   private void preflightStart(
       final PhaseOneRequest<A> request) {
 
-    // Phase one runs inside the caller's local transaction: only validate optimistically
-    // (PREFLIGHT_CHECK). The Process-Engine-API is remote, so the instance itself must not
-    // be created here - that happens in phase two after the transaction committed, otherwise
-    // a rolled-back transaction would leave a ghost workflow behind. A failed check throws
-    // and thereby rolls the caller's transaction back (fail fast instead of committing an
-    // outbox entry which cannot be dispatched).
+    // phase one runs inside the local transaction of the caller, so it only checks
+    // (PREFLIGHT_CHECK). The Process-Engine-API is remote, so the instance must not be
+    // created here. Phase two creates it after the commit. Otherwise a transaction which is
+    // rolled back would leave a workflow behind that nobody owns. A failed check throws and
+    // so rolls the transaction of the caller back. That is better than committing an outbox
+    // entry which can never be sent
     final var aggregateId = request.aggregatePersistence().getAggregateId(request.workflowAggregate());
     await(
         startProcessApi.startProcess(
@@ -1232,22 +1223,22 @@ public class PeaProcessService<A> implements MigratableProcessService<A> {
   }
 
   /**
-   * Tells VanillaBP which instance of the engine a start created, so it can later say which
-   * workflow an aggregate belongs to without asking the engine.
+   * Tells VanillaBP which instance of the engine a start created. So VanillaBP can later say
+   * which workflow an aggregate belongs to without asking the engine.
    * <p>
    * The id is the <code>instanceId</code> of the answer to the start command. The API promises
-   * that this is the same value a delivered task names under <code>processInstanceId</code>, which
-   * is what this adapter reports as the workflow id of a delivery. An engine which answers a start
-   * with no instance id leaves nothing to report. A Camunda 8 engine started by a message may do
-   * that, because it learns the id only later. VanillaBP then finds the workflow by asking the
-   * adapters in turn.
+   * that a delivered task names the same value under <code>processInstanceId</code>. This
+   * adapter reports that value as the workflow id of a delivery. If an engine answers a start
+   * without an instance id, there is nothing to report. A Camunda 8 engine started by a message
+   * may do that, because it learns the id only later. VanillaBP then finds the workflow by
+   * asking the adapters one by one.
    * <p>
-   * The version goes with the id, read from the meta map of the answer under the same key a
-   * delivered task carries its version tag ({@link PeaTaskMeta#PROCESS_VERSION_TAG}), so the start
-   * and the deliveries of one workflow name its version the same way. The API names no such key
-   * for the answer to a start, and its reference adapter for an embedded Camunda 7 fills none
-   * there. Then the version is <code>null</code>, which tells VanillaBP that a delivery may still
-   * bring it (see <code>GAPS.md</code>, entry 31).
+   * The version goes with the id. It is read from the meta map of the answer, under the key a
+   * delivered task uses for its version tag ({@link PeaTaskMeta#PROCESS_VERSION_TAG}). So the
+   * start and the deliveries of one workflow name its version the same way. The API names no
+   * such key for the answer to a start, and its reference adapter for an embedded Camunda 7
+   * fills none there. Then the version is <code>null</code>. That tells VanillaBP that a
+   * delivery may still bring it (see <code>GAPS.md</code>, entry 31).
    *
    * @param request The phase-two request of the start
    * @param started What the engine answered, <code>null</code> where it answered nothing
@@ -1272,10 +1263,10 @@ public class PeaProcessService<A> implements MigratableProcessService<A> {
   }
 
   /**
-   * Joins the future of a Process-Engine-API command (same pattern as
-   * {@code PeaDeploymentService.deployResources}): the outcome has to reach the
-   * caller - in phase one to roll the local transaction back, in phase two to make
-   * the outbox retry.
+   * Waits for the future of a Process-Engine-API command, as
+   * {@code PeaDeploymentService.deployResources} does. The result has to reach the caller.
+   * In phase one, a failure rolls the local transaction back. In phase two, it makes the
+   * outbox try again.
    *
    * @param future The future returned by the Process-Engine-API
    * @param operation Description used in error messages
