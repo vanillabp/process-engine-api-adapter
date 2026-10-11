@@ -33,7 +33,7 @@ public class SampleWorkflowService implements AggregatePersistenceAware<Aggregat
 
   @WorkflowTask
   public void doSomething() {
-    // not exercised by the skeleton smoke test
+    // The smoke test never calls this.
   }
 
 }

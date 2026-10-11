@@ -5,10 +5,10 @@ import io.vanillabp.integration.spi.PhaseTwoOutbox;
 import jakarta.enterprise.context.ApplicationScoped;
 
 /**
- * A {@link PhaseTwoOutbox} stub for smoke tests booting WITHOUT a database: the
- * Process-Engine-API adapter sends everything through phase two, and the
- * platform wants the outbox RESOLVABLE at startup rather than at the first start. The
- * smoke tests never start workflows - any usage of the stub fails loudly.
+ * A stub of {@link PhaseTwoOutbox} for smoke tests which boot WITHOUT a database. This
+ * adapter sends everything through phase two. The platform wants the outbox RESOLVABLE at
+ * startup, not only at the first start. The smoke tests never start workflows, so any use of
+ * the stub fails loudly.
  */
 @ApplicationScoped
 public class TestPhaseTwoOutbox implements PhaseTwoOutbox {

@@ -15,18 +15,18 @@ import io.vanillabp.pea.quarkus.runtime.PeaProcessEngineProducer;
 import io.vanillabp.pea.quarkus.runtime.PeaProcessServiceProducer;
 
 /**
- * Quarkus extension deployment of the Process-Engine-API adapter. Announces the adapter and
- * its process-service bean to the VanillaBP Quarkus integration and registers the runtime
- * producers (including the default in-memory mock engine).
+ * The build steps of the Quarkus extension of the Process-Engine-API adapter. They announce
+ * the adapter and its process-service bean to the VanillaBP Quarkus integration. They also
+ * register the runtime producers, the default mock engine in memory among them.
  */
 class PeaIntegrationProcessor {
 
   private static final String FEATURE = "vanillabp-process-engine-api";
 
   /**
-   * Announces the Process-Engine-API adapter type and its
-   * {@link io.vanillabp.pea.processservice.PeaProcessService} bean to
-   * the VanillaBP Quarkus integration.
+   * Announces the adapter type and its
+   * {@link io.vanillabp.pea.processservice.PeaProcessService} bean to the VanillaBP Quarkus
+   * integration.
    *
    * @param properties Build-time properties (forces config root registration)
    * @param featureProducer Feature build item producer
@@ -42,19 +42,18 @@ class PeaIntegrationProcessor {
     return VanillaBpMigratableProcessServiceBuildItem
         .builder()
         .adapterType(PeaAdapter.ADAPTER_TYPE)
-        // the announced bean class is registered by the VanillaBP extension - it
-        // has to be the producer, not the core process-service class
+        // The VanillaBP extension registers the announced bean class. So it has to be the
+        // producer, not the process-service class of the core.
         .migratableProcessServiceBeanClass(PeaProcessServiceProducer.class.getName())
         .build();
 
   }
 
   /**
-   * Builds the {@link VanillaBpAdapterDeploymentServiceBuildItem} used by the VanillaBP
-   * Quarkus integration to determine and register the deployment-service bean of the
-   * Process-Engine-API adapter - consumed by the platform's runtime deployment pipeline
-   * (readBpmn &rarr; prepareBpmn &rarr; wireBpmn &rarr; deployResources &rarr;
-   * startWorkflowProcessing).
+   * Builds the {@link VanillaBpAdapterDeploymentServiceBuildItem}. The VanillaBP Quarkus
+   * integration uses it to find and register the deployment-service bean of this adapter.
+   * The deployment pipeline of the platform then runs that bean at runtime: readBpmn &rarr;
+   * prepareBpmn &rarr; wireBpmn &rarr; deployResources &rarr; startWorkflowProcessing.
    *
    * @return The {@link VanillaBpAdapterDeploymentServiceBuildItem}
    */
@@ -78,9 +77,9 @@ class PeaIntegrationProcessor {
   @BuildStep
   AdditionalBeanBuildItem registerProducers() {
 
-    // the process-service and deployment-service producers are registered by the
-    // VanillaBP extension via the build items above - only the mock-engine producer
-    // is registered here
+    // The VanillaBP extension registers the producers of the process service and of the
+    // deployment service, through the build items above. Only the producer of the mock
+    // engine is registered here.
     return AdditionalBeanBuildItem
         .builder()
         .addBeanClass(PeaProcessEngineProducer.class)
@@ -90,9 +89,9 @@ class PeaIntegrationProcessor {
   }
 
   /**
-   * Keeps the user-task observers of an application alive. Nothing of the application
-   * injects them - the deployment services are handed them while they are produced - and ArC
-   * removes beans nobody injects.
+   * Keeps the user-task observers of an application alive. ArC removes beans nobody injects.
+   * Nothing of the application injects the observers: the deployment services get them while
+   * they are produced.
    *
    * @return What must not be removed
    */

@@ -11,9 +11,9 @@ import jakarta.enterprise.event.Observes;
 
 /**
  * Registers the contract of {@link Glimpse} while the application starts. An observer of the
- * default priority runs before VanillaBP deploys, so the adapter knows the extension's
- * variables when it opens its subscriptions. That is how the Business Cockpit registers its
- * contracts as well.
+ * default priority runs before VanillaBP deploys. So the adapter knows the variables of the
+ * extension when it opens its subscriptions. The Business Cockpit registers its contracts the
+ * same way.
  */
 @ApplicationScoped
 public class GlimpseContract {

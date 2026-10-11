@@ -26,16 +26,16 @@ import io.vanillabp.pea.quarkus.observersample.ThrowingUserTaskObserver;
 import jakarta.inject.Inject;
 
 /**
- * The user-task observer seam on Quarkus: a CDI bean of {@link PeaUserTaskObserver} is found
- * by the extension (which declares the type unremovable, since nothing of the application
- * injects it), handed to the deployment services while they are produced, and told about
- * every delivery of every user-task subscription plus the terminations the engine reports.
- * A second observer which throws fails the delivery towards the engine, and the recording
- * one hears about the task before that happens.
+ * The user-task observers on Quarkus. The extension finds a CDI bean of
+ * {@link PeaUserTaskObserver}. It declares the type unremovable, because nothing of the
+ * application injects it. The deployment services get the bean while they are produced. The
+ * bean is told about every delivery of every user-task subscription, and about the
+ * terminations the engine reports. A second observer which throws makes the delivery fail
+ * towards the engine. The recording observer hears about the task before that happens.
  * <p>
- * The full matrix - the order observers are called in, what an observation carries where the
- * delivery leaves something open - runs in the core's {@code PeaUserTaskObserverTest} and on
- * Spring Boot; this test proves the Quarkus glue.
+ * The core's {@code PeaUserTaskObserverTest} and the Spring Boot tests run all the cases: the
+ * order the observers are called in, and what an observation carries if the delivery leaves
+ * something open. This test proves the Quarkus code which connects the parts.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class PeaUserTaskObserverTest {
@@ -164,8 +164,8 @@ public class PeaUserTaskObserverTest {
     Assertions.assertEquals("q-5001", observation.workflowAggregateId());
     Assertions.assertEquals("q-obs-1", observation.taskId());
 
-    // the observer which throws is registered next to the recording one and is quiet
-    // here, so the notification ran like on any other delivery
+    // The observer which throws is registered next to the recording one. Here it does not
+    // throw, so the notification ran as on any other delivery.
     Assertions.assertEquals(
         "notified:q-obs-1",
         ObserverWorkflowService.AGGREGATES.get("q-5001").results);

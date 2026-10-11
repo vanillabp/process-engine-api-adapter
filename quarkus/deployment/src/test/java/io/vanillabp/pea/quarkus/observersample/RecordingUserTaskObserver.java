@@ -8,9 +8,9 @@ import io.vanillabp.pea.observation.PeaUserTaskObserver;
 import jakarta.enterprise.context.ApplicationScoped;
 
 /**
- * The observer bean of the application: a plain CDI bean of the adapter's interface, which
- * nothing of the application injects - the adapter's deployment services are handed it while
- * they are produced.
+ * The observer bean of the application. It is a plain CDI bean of the interface of the
+ * adapter. Nothing of the application injects it. The deployment services of the adapter get
+ * it while they are produced.
  */
 @ApplicationScoped
 public class RecordingUserTaskObserver implements PeaUserTaskObserver {

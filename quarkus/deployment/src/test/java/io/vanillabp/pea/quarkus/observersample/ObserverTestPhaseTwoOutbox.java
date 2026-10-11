@@ -5,8 +5,8 @@ import io.vanillabp.integration.spi.PhaseTwoOutbox;
 import jakarta.enterprise.context.ApplicationScoped;
 
 /**
- * A {@link PhaseTwoOutbox} stub - this test delivers user tasks directly through the mock
- * engine and never starts a workflow, so any usage fails loudly.
+ * A stub of {@link PhaseTwoOutbox}. This test delivers user tasks directly through the mock
+ * engine and never starts a workflow. So any use of the stub fails loudly.
  */
 @ApplicationScoped
 public class ObserverTestPhaseTwoOutbox implements PhaseTwoOutbox {

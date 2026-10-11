@@ -5,8 +5,8 @@ import io.quarkus.runtime.annotations.ConfigRoot;
 import io.smallrye.config.ConfigMapping;
 
 /**
- * Build-time configuration root of the Process-Engine-API adapter. Empty for now
- * (skeleton); adapter-specific build-time settings are added by later feature stories.
+ * The root of the build-time configuration of this adapter. It is empty for now. Later
+ * feature stories add build-time settings of the adapter here.
  */
 @ConfigRoot(phase = ConfigPhase.BUILD_TIME)
 @ConfigMapping(prefix = "vanillabp")

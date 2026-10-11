@@ -12,8 +12,8 @@ import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
 /**
  * The key <code>fetch-variables</code> was removed in version 2.0. An application which still
- * sets it does not start, and the message names every key which sets it, here one at the
- * adapter level and one at the task level, and says what applies instead.
+ * sets it does not start. The message names every key which sets it, here one at the adapter
+ * level and one at the task level. It also says what applies instead.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class PeaRemovedFetchVariablesTest {
@@ -52,7 +52,7 @@ public class PeaRemovedFetchVariablesTest {
 
   @Test
   public void theRemovedKeyEndsTheStart() {
-    // never runs, because the start fails as expected
+    // Never runs, because the start fails as it should.
   }
 
 }

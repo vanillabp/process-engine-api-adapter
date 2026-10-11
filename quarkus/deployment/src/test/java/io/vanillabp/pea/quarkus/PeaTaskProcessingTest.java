@@ -20,12 +20,12 @@ import io.vanillabp.pea.quarkus.tasksample.TaskWorkflowService;
 import jakarta.inject.Inject;
 
 /**
- * Task processing on Quarkus: the adapter subscribes per task
- * definition at boot and a delivered task dispatches through the core's
- * transaction runner (JTA transaction + activated request context) into the
- * {@code @WorkflowTask} handler - the aggregate mutation is committed BEFORE the
- * task completion reaches the mock engine. The full outcome matrix runs on Spring
- * Boot ({@code TaskProcessingIntegrationTest}); this test proves the Quarkus glue.
+ * Task processing on Quarkus. The adapter opens one subscription per task definition at
+ * boot. A delivered task goes through the transaction runner of the core (a JTA transaction
+ * and an active request context) into the {@code @WorkflowTask} handler. The change to the
+ * aggregate is committed BEFORE the task completion reaches the mock engine. The Spring Boot
+ * tests run all the outcomes ({@code TaskProcessingIntegrationTest}). This test proves the
+ * Quarkus code which connects the parts.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class PeaTaskProcessingTest {
@@ -65,8 +65,8 @@ public class PeaTaskProcessingTest {
         subscribed,
         "expected one subscription per task definition of the deployed BPMN");
 
-    // The subscription names what the delivery has to carry - here the
-    // aggregate-ID variable alone, since the handler declares no @TaskParam
+    // The subscription names what the delivery has to carry. Here that is only the variable
+    // with the aggregate ID, because the handler declares no @TaskParam.
     Assertions.assertEquals(
         Set.of("id"),
         inMemoryProcessEngine
@@ -90,7 +90,7 @@ public class PeaTaskProcessingTest {
         "QuarkusTaskProcess",
         Map.of("id", "q-4711"));
 
-    // the mutation was committed (visible via the copying store) ...
+    // The change was committed, which the store shows because it keeps copies ...
     Assertions.assertEquals("happy", TaskWorkflowService.AGGREGATES.get("q-4711").results);
     // ... and the task was completed afterwards
     Assertions.assertEquals(

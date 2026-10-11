@@ -5,11 +5,11 @@ import io.vanillabp.pea.observation.PeaUserTaskObserver;
 import jakarta.enterprise.context.ApplicationScoped;
 
 /**
- * The broken one, registered next to {@link RecordingUserTaskObserver}: what the recording
- * observer sees is what an observer which throws costs the others, whichever order ArC lists
- * the two beans in.
+ * The broken observer, registered next to {@link RecordingUserTaskObserver}. What the
+ * recording observer sees is what an observer which throws costs the others, in whatever
+ * order ArC lists the two beans.
  * <p>
- * It breaks only where a test says so. Since a failing observer fails the delivery, a test
+ * It breaks only where a test says so. A failing observer makes the delivery fail. So a test
  * about anything else would have to catch that failure for no reason.
  */
 @ApplicationScoped

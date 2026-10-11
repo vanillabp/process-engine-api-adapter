@@ -45,45 +45,44 @@ import dev.bpmcrafters.processengineapi.task.UnsubscribeFromTaskCmd;
 import dev.bpmcrafters.processengineapi.task.UserTaskCompletionApi;
 
 /**
- * Hand-written, in-memory fake of the bpm-crafters Process-Engine-API. It implements the
- * real Process-Engine-API interfaces so the VanillaBP Process-Engine-API adapter can run
- * (in tests and early applications) without a real BPMS and without Mockito.
+ * A fake of the bpm-crafters Process-Engine-API, written by hand, which keeps everything in
+ * memory. It implements the real interfaces of the API. So the VanillaBP adapter runs without
+ * a real BPMS and without Mockito, in tests and in early applications.
  * <p>
- * <b>Purpose - mock-first development:</b> this fake grows with every feature story of the
- * adapter. Its job is to make it obvious, feature by feature, where either VanillaBP or
- * the Process-Engine-API needs an extension. Findings are collected in the adapter repo's
- * {@code GAPS.md}. It is intentionally <i>not</i> a Mockito mock: later stories need it to
- * carry real state (deployed definitions, started instances, subscribed tasks), which a
- * generated mock cannot do.
+ * <b>Why a fake comes first:</b> this fake grows with every feature story of the adapter.
+ * Feature by feature, it shows where VanillaBP or the Process-Engine-API has to be extended.
+ * The findings go into {@code GAPS.md} of the adapter repository. It is not a Mockito mock on
+ * purpose. Later stories need it to keep real state: deployed definitions, started instances,
+ * subscribed tasks. A generated mock cannot do that.
  * <p>
- * <b>What it records and what it keeps:</b> every API method records its invocation - the
- * command object and, where the command carries one, its {@link ExecutionMode} - into the
- * public, inspectable {@link #invocations} list. Beside that it keeps the state a test has
- * to be able to assert: the deployed bundles, the instances a {@link ExecutionMode#SYNC}
- * start created, the open subscriptions, which task went to which of them, and what a
- * completion carried. A task is delivered by a test calling {@code deliverTask}, because
- * nothing here polls. {@link #reset()} clears all of it between tests.
+ * <b>What it records and what it keeps:</b> every method of the API records its call in the
+ * public list {@link #invocations}. A record holds the command and, if the command has one,
+ * its {@link ExecutionMode}. Next to that, the fake keeps the state a test has to assert: the
+ * deployed bundles, the instances a {@link ExecutionMode#SYNC} start created, the open
+ * subscriptions, which task went to which subscription, and what a completion carried.
+ * Nothing here polls, so a test delivers a task by calling {@code deliverTask}.
+ * {@link #reset()} clears all of it between tests.
  * <p>
- * <b>A task names the instance it belongs to.</b> The API promises that the
- * <code>instanceId</code> of the answer to a start is the <code>processInstanceId</code> in the
- * meta of every task of that instance. This engine keeps that promise for the instances it
- * started: see {@link #deliverTask(String, String, String, Map, Map)} for how it finds the
+ * <b>A task names the instance it belongs to.</b> The API promises this: the
+ * <code>instanceId</code> in the answer to a start is the <code>processInstanceId</code> in the
+ * meta of every task of that instance. This engine keeps the promise for the instances it
+ * started. {@link #deliverTask(String, String, String, Map, Map)} says how it finds the
  * instance of a delivered task.
  * <p>
- * <b>It refuses what the engines behind the API refuse</b> - a preflight against a task
- * which is not open, a completion of a task which is gone - and no more than that. A fake
- * stricter than the real thing turns a legitimate call into a failing test, which is how
- * a null value in a shared aggregate attribute was found once.
+ * <b>It refuses what the engines behind the API refuse, and no more.</b> That is a preflight
+ * against a task which is not open, and a completion of a task which is gone. A fake which is
+ * stricter than the real engine makes a valid call fail in a test. This is how a null value
+ * in a shared aggregate attribute was found once.
  * <p>
- * A single instance implements all Process-Engine-API interfaces the adapter needs, so the
- * platform modules can inject the same bean wherever any of these interfaces is required.
+ * One instance implements every interface of the API the adapter needs. So the platform
+ * modules can inject the same bean wherever one of these interfaces is asked for.
  */
 public class InMemoryProcessEngine implements DeploymentApi, StartProcessApi, CorrelationApi, SignalApi, TaskSubscriptionApi, ServiceTaskCompletionApi, UserTaskCompletionApi {
 
   /**
-   * Starts out with nothing deployed, nothing running and nothing recorded. One instance
-   * serves every Process-Engine-API interface the adapter needs, so a test wires the same
-   * object everywhere and sees one engine.
+   * Starts with nothing deployed, nothing running and nothing recorded. One instance serves
+   * every interface of the API the adapter needs. So a test wires the same object everywhere
+   * and sees one engine.
    */
   public InMemoryProcessEngine() {
 
@@ -115,10 +114,10 @@ public class InMemoryProcessEngine implements DeploymentApi, StartProcessApi, Co
   }
 
   /**
-   * An in-memory process instance created by a {@link ExecutionMode#SYNC} start (phase
-   * two of VanillaBP's two-phase start). The workflow-aggregate id is one of the
-   * {@code variables} - which one is the adapter's decision (the variable is named
-   * after the aggregate's ID property), so the engine fake does not single it out.
+   * A process instance in memory, created by a {@link ExecutionMode#SYNC} start. That is
+   * phase two of the two-phase start of VanillaBP. The id of the workflow aggregate is one of
+   * the {@code variables}. The adapter decides which one: the variable is named after the ID
+   * property of the aggregate. So the fake does not single it out.
    *
    * @param instanceId The generated instance id
    * @param variables The process variables the instance was started with
@@ -128,12 +127,12 @@ public class InMemoryProcessEngine implements DeploymentApi, StartProcessApi, Co
   public record StartedInstance(String instanceId, Map<String, Object> variables, String bpmnProcessId) {
 
     /**
-     * Whether a task with this payload is a task of this instance. Nothing here runs a model,
-     * so the mock goes by what an instance carries: the task has to name at least one of the
-     * variables the instance was started with, and with the same value for every one it names.
-     * The aggregate-ID variable is such a variable, and it never changes. A shared value which
-     * changed since the start makes the task match no instance, and then it names none, as it
-     * did before the mock kept the promise.
+     * Whether a task with this payload is a task of this instance. Nothing here runs a model.
+     * So the mock goes by what an instance carries. The task has to name at least one of the
+     * variables the instance was started with. Every variable it names needs the same value.
+     * The variable with the aggregate ID is such a variable, and it never changes. If a shared
+     * value changed since the start, the task matches no instance. Then it names no instance,
+     * as it did before the mock kept the promise.
      *
      * @param bpmnProcessIdOfTask The BPMN process the task was delivered as
      * @param payload What the task carries
@@ -159,7 +158,7 @@ public class InMemoryProcessEngine implements DeploymentApi, StartProcessApi, Co
   }
 
   /**
-   * All invocations recorded so far, in call order. Public and inspectable on purpose:
+   * All calls recorded so far, in the order they came. It is public on purpose, because
    * tests assert against it directly.
    */
   public final List<Invocation> invocations = new CopyOnWriteArrayList<>();
@@ -167,30 +166,30 @@ public class InMemoryProcessEngine implements DeploymentApi, StartProcessApi, Co
   private final List<Deployment> deployments = new CopyOnWriteArrayList<>();
 
   /**
-   * All instances created by {@link ExecutionMode#SYNC} starts, in creation order.
-   * Deliberately a LIST (not a map keyed by aggregate id): duplicate starts for the
-   * same aggregate have to be observable by tests - a map would silently overwrite
-   * and hide exactly the bug the mock is meant to surface.
+   * All instances created by {@link ExecutionMode#SYNC} starts, in the order they were made.
+   * This is a list on purpose, not a map by aggregate id. A test has to see two starts for
+   * the same aggregate. A map would overwrite the first one without a word, and hide exactly
+   * the bug the mock is there to show.
    */
   private final List<StartedInstance> startedInstances = new CopyOnWriteArrayList<>();
 
   /**
-   * BPMN process ids whose {@link ExecutionMode#PREFLIGHT_CHECK} is injected to
-   * fail - used by tests to assert that a failed phase one rolls the caller's
-   * transaction back.
+   * The BPMN process ids whose {@link ExecutionMode#PREFLIGHT_CHECK} is made to fail. Tests
+   * use it to show that a failed phase one rolls back the transaction of the caller.
    */
   private final Set<String> failPreflightForProcessIds = ConcurrentHashMap.newKeySet();
 
   /**
-   * BPMN process ids whose {@link ExecutionMode#SYNC} start is injected to fail
-   * ONCE per entry - used by tests to assert that a failed phase two makes the
-   * outbox retry the dispatch.
+   * The BPMN process ids whose {@link ExecutionMode#SYNC} start is made to fail, ONCE per
+   * entry. Tests use it to show that the outbox tries the dispatch again after a failed
+   * phase two.
    */
   private final Set<String> failNextSyncForProcessIds = ConcurrentHashMap.newKeySet();
 
   /**
-   * What the answer to a created instance carries in its meta map. Empty unless a test says
-   * otherwise, like the answer of the API's reference adapter, which fills no version tag.
+   * What the answer about a created instance carries in its meta map. It stays empty unless
+   * a test sets something. That matches the reference adapter of the API, which fills in no
+   * version tag.
    */
   private final Map<String, String> metaOfStartAnswers = new ConcurrentHashMap<>();
 
@@ -199,8 +198,7 @@ public class InMemoryProcessEngine implements DeploymentApi, StartProcessApi, Co
   private final AtomicLong instanceCounter = new AtomicLong();
 
   /**
-   * Every call the adapter made, which is what a test asserts a command and its execution
-   * mode against.
+   * Every call the adapter made. A test checks a command and its execution mode against it.
    *
    * @return All invocations recorded so far, in call order.
    */
@@ -211,8 +209,9 @@ public class InMemoryProcessEngine implements DeploymentApi, StartProcessApi, Co
   }
 
   /**
-   * What the adapter handed over as a bundle. The API deploys opaque resources, so these are
-   * bytes and a name, and a test reads them to check what the scoping rewrote.
+   * What the adapter handed over as a bundle. The API deploys resources without looking into
+   * them, so these are bytes and a name. A test reads them to check what the scoping
+   * rewrote.
    *
    * @return All resource bundles deployed so far, in deployment order.
    */
@@ -223,10 +222,10 @@ public class InMemoryProcessEngine implements DeploymentApi, StartProcessApi, Co
   }
 
   /**
-   * The workflows this engine really started. A preflight creates nothing, so the
-   * difference between this list and the recorded invocations is what the two phases did.
-   * Duplicates are kept rather than folded away: a start dispatched twice is the residual
-   * an at-least-once outbox has, and a test has to be able to see it.
+   * The workflows this engine really started. A preflight creates nothing. So the difference
+   * between this list and the recorded calls is what the two phases did. Duplicates are
+   * kept. An outbox which delivers at least once may dispatch a start twice, and a test has
+   * to see that.
    *
    * @return All process instances created by a {@link ExecutionMode#SYNC} start, in
    *         creation order (duplicates for the same aggregate id are visible)
@@ -238,8 +237,8 @@ public class InMemoryProcessEngine implements DeploymentApi, StartProcessApi, Co
   }
 
   /**
-   * Injects a failing {@link ExecutionMode#PREFLIGHT_CHECK} for the given BPMN
-   * process id (until {@link #reset()}).
+   * Makes the {@link ExecutionMode#PREFLIGHT_CHECK} for the given BPMN process id fail,
+   * until {@link #reset()}.
    *
    * @param bpmnProcessId The BPMN process id whose preflight check should fail
    */
@@ -251,8 +250,8 @@ public class InMemoryProcessEngine implements DeploymentApi, StartProcessApi, Co
   }
 
   /**
-   * Injects ONE failing {@link ExecutionMode#SYNC} start for the given BPMN process
-   * id - the next start fails, subsequent starts succeed (retry testing).
+   * Makes ONE {@link ExecutionMode#SYNC} start for the given BPMN process id fail. The next
+   * start fails, and the starts after it work. Tests use it for retries.
    *
    * @param bpmnProcessId The BPMN process id whose next SYNC start should fail
    */
@@ -264,9 +263,9 @@ public class InMemoryProcessEngine implements DeploymentApi, StartProcessApi, Co
   }
 
   /**
-   * Lets every following start which creates an instance answer with this meta map (until
-   * {@link #reset()}). An engine adapter fills whatever it has there, and a test uses this to
-   * play an engine which names the version tag of the started process definition.
+   * Every start after this call which creates an instance answers with this meta map, until
+   * {@link #reset()}. An engine adapter puts there whatever it has. A test uses this to play
+   * an engine which names the version tag of the started process definition.
    *
    * @param meta What the answer to a start carries in its meta map
    */
@@ -279,11 +278,11 @@ public class InMemoryProcessEngine implements DeploymentApi, StartProcessApi, Co
   }
 
   /**
-   * Clears the recordings and every injected failure while KEEPING deployments,
-   * started instances and active subscriptions - for tests exercising several
-   * operations against the subscriptions opened at startup. The start-failure
-   * injections are cleared here as well: {@link #failPreflightFor(String)} is not
-   * one-shot, so a test leaving it behind would fail every workflow start after it.
+   * Clears the recordings and every failure a test asked for. It KEEPS the deployments, the
+   * started instances and the open subscriptions. This is for tests which run several
+   * operations against the subscriptions opened at startup. The failures asked for at a
+   * start are cleared too: {@link #failPreflightFor(String)} does not end after one use. A
+   * test which left it behind would make every workflow start after it fail.
    */
   public void clearTaskRecordings() {
 
@@ -304,7 +303,7 @@ public class InMemoryProcessEngine implements DeploymentApi, StartProcessApi, Co
   }
 
   /**
-   * Clears all recorded invocations and all fake state (deployments, started instances).
+   * Clears all recorded calls and all state of the fake.
    */
   public void reset() {
 
@@ -329,11 +328,10 @@ public class InMemoryProcessEngine implements DeploymentApi, StartProcessApi, Co
   }
 
   /**
-   * Extracts the BPMN process id from the command. The Process-Engine-API's
-   * {@code StartProcessCommand} interface has no accessor for it, and depending on
-   * the adapter core only for its command type would couple this fake to the
-   * adapter - so the id is read reflectively from a {@code getBpmnProcessId()}
-   * method if present.
+   * Reads the BPMN process id from the command. The interface {@code StartProcessCommand} of
+   * the API has no getter for it. Depending on the adapter core just for its command type
+   * would tie this fake to the adapter. So the id is read by reflection, from a method
+   * {@code getBpmnProcessId()} if there is one.
    *
    * @param cmd The start command
    * @return The BPMN process id or null if not determinable
@@ -384,12 +382,12 @@ public class InMemoryProcessEngine implements DeploymentApi, StartProcessApi, Co
       final StartProcessCommand cmd) {
 
     final var bpmnProcessId = bpmnProcessIdOf(cmd);
-    // Only ExecutionMode.SYNC creates an instance: this is phase two of VanillaBP's
-    // two-phase start. ExecutionMode.PREFLIGHT_CHECK (phase one) validates only and
-    // must not create one; any other mode is recorded but creates nothing either.
-    // NOTE: the mock cannot validate a PREFLIGHT_CHECK against the deployed
-    // processes - deployed resources are opaque (no BPMN model type, see GAPS.md);
-    // tests inject failures via failPreflightFor instead.
+    // Only ExecutionMode.SYNC creates an instance. It is phase two of the two-phase start.
+    // ExecutionMode.PREFLIGHT_CHECK is phase one. It only checks and must not create an
+    // instance. Any other mode is recorded and creates nothing either.
+    // The mock cannot check a PREFLIGHT_CHECK against the deployed processes. It cannot
+    // read the deployed resources, because the API has no BPMN model type (see GAPS.md).
+    // So tests ask for a failure through failPreflightFor instead.
     if (cmd.executionMode() == ExecutionMode.PREFLIGHT_CHECK) {
       record("StartProcessApi", "startProcess", cmd);
       if ((bpmnProcessId != null) && failPreflightForProcessIds.contains(bpmnProcessId)) {
@@ -400,9 +398,9 @@ public class InMemoryProcessEngine implements DeploymentApi, StartProcessApi, Co
     }
     if ((cmd
         .executionMode() != ExecutionMode.SYNC) && !(cmd instanceof StartProcessByMessageCmd)) {
-      // StartProcessByMessageCmd is FINAL and cannot carry a non-default
-      // execution mode (GAPS.md entry 11) - its DEFAULT-mode command is the
-      // phase-two start and creates an instance like a SYNC one
+      // StartProcessByMessageCmd is final and cannot carry an execution mode other than the
+      // default (GAPS.md entry 11). So its command in DEFAULT mode is the start of phase two,
+      // and it creates an instance like a SYNC one.
       record("StartProcessApi", "startProcess", cmd);
       return CompletableFuture.completedFuture(new ProcessInformation("mock-no-instance", Map.of()));
     }
@@ -418,8 +416,8 @@ public class InMemoryProcessEngine implements DeploymentApi, StartProcessApi, Co
     final var instanceId = "mock-instance-"
         + instanceCounter.incrementAndGet();
     startedInstances.add(new StartedInstance(instanceId, variables, bpmnProcessId));
-    // record LAST: tests await the SYNC invocation and then assert the started
-    // instance - recording first would open a race window for the asserting thread
+    // Record LAST. Tests wait for the SYNC call and then assert the started instance. If
+    // the call were recorded first, the test thread could look before the instance exists.
     record("StartProcessApi", "startProcess", cmd);
     return CompletableFuture.completedFuture(new ProcessInformation(instanceId, Map.copyOf(metaOfStartAnswers)));
 
@@ -453,7 +451,7 @@ public class InMemoryProcessEngine implements DeploymentApi, StartProcessApi, Co
   }
 
   /**
-   * The signals broadcast so far - inspectable by tests.
+   * The signals sent so far, for tests to read.
    *
    * @return The signal names, in the order they were broadcast
    */
@@ -466,7 +464,7 @@ public class InMemoryProcessEngine implements DeploymentApi, StartProcessApi, Co
   private final List<String> broadcastSignals = new CopyOnWriteArrayList<>();
 
   /**
-   * A correlated message - inspectable by tests.
+   * A correlated message, for tests to read.
    *
    * @param messageName The BPMN message name
    * @param correlationKey The correlation key (aggregate ID or correlation id)
@@ -477,8 +475,8 @@ public class InMemoryProcessEngine implements DeploymentApi, StartProcessApi, Co
   private final List<CorrelatedMessage> correlatedMessages = new CopyOnWriteArrayList<>();
 
   /**
-   * What was correlated. A message carries no content of its own here, so a name and a
-   * correlation key are all there is to assert.
+   * What was correlated. A message carries no content of its own here. So a name and a
+   * correlation key are all a test can assert.
    *
    * @return The messages correlated so far, in call order
    */
@@ -491,14 +489,14 @@ public class InMemoryProcessEngine implements DeploymentApi, StartProcessApi, Co
   // --- TaskSubscriptionApi ---
 
   /**
-   * One active task subscription: the subscribed task definition, the payload
-   * variables it asked for and the handler task deliveries are dispatched to.
+   * One open task subscription. It holds the subscribed task definition, the payload
+   * variables it asked for, and the handler which gets the delivered tasks.
    *
    * @param taskDescriptionKey The subscribed task definition
-   * @param taskType Whether the subscriber asked for asynchronous tasks or for user tasks -
-   *          one name may be subscribed as both, and then the two are told apart by this
-   * @param payloadDescription The payload variables the subscription asked for - an
-   *          EMPTY set is the API's way of asking for everything
+   * @param taskType Whether the subscriber asked for asynchronous tasks or for user tasks.
+   *          One name may be subscribed as both, and then this tells the two apart
+   * @param payloadDescription The payload variables the subscription asked for. An EMPTY
+   *          set is how the API asks for everything
    * @param handler The subscriber's task handler
    * @param termination Where the subscriber is told that a delivered task is gone
    */
@@ -510,8 +508,8 @@ public class InMemoryProcessEngine implements DeploymentApi, StartProcessApi, Co
                                    TaskTerminationHandler termination) implements TaskSubscription {
 
     /**
-     * Narrows a delivered payload the way an engine does: a subscription naming
-     * variables gets those and nothing else, one naming none gets everything.
+     * Cuts down a delivered payload the way an engine does. A subscription which names
+     * variables gets those and nothing else. One which names none gets everything.
      *
      * @param payload What the process instance holds
      * @return What this subscription's handler sees
@@ -536,14 +534,11 @@ public class InMemoryProcessEngine implements DeploymentApi, StartProcessApi, Co
 
   }
 
-  /**
-   * The active task subscriptions - inspectable by tests.
-   */
   private final List<ActiveSubscription> subscriptions = new CopyOnWriteArrayList<>();
 
   /**
    * Which tasks this engine would deliver to whom. A test reads them to check what the
-   * subscription asks the engine for.
+   * subscriptions ask the engine for.
    *
    * @return The subscriptions which are open, in the order they were opened
    */
@@ -554,11 +549,11 @@ public class InMemoryProcessEngine implements DeploymentApi, StartProcessApi, Co
   }
 
   /**
-   * Delivers a task to the subscription matching the given task definition - the
-   * mock cannot derive tasks from the deployed (opaque) resources, so tests drive
-   * deliveries explicitly (incl. DUPLICATE deliveries for at-least-once tests).
-   * The BPMN process ID travels in the {@code TaskInformation} meta (adapter
-   * convention key <code>bpmnProcessId</code>).
+   * Delivers a task to the subscription for the given task definition. The mock cannot read
+   * tasks out of the deployed resources. So tests deliver tasks themselves, and they deliver
+   * a task TWICE to test delivery at least once. The BPMN process ID goes in the meta of
+   * {@code TaskInformation}, under the key <code>bpmnProcessId</code> the adapter agrees
+   * on.
    *
    * @param taskId The delivered task's ID
    * @param taskDefinition The task definition (matched against subscriptions)
@@ -576,22 +571,22 @@ public class InMemoryProcessEngine implements DeploymentApi, StartProcessApi, Co
   }
 
   /**
-   * Delivers a task the way an engine does which fills its meta map generously: next to
-   * the BPMN process id the subscriber gets whatever this engine knows about the task -
-   * the element id, the assignee, the candidate users and groups, a due date, the name a
-   * modeller wrote. The reference adapter for an embedded Camunda 7 fills that set, and a
-   * test asserting what a subscriber makes of it needs an engine which can produce it.
+   * Delivers a task the way an engine does which puts a lot into its meta map. Next to the
+   * BPMN process id, the subscriber gets whatever this engine knows about the task: the
+   * element id, the assignee, the candidate users and groups, a due date, the name a modeller
+   * wrote. The reference adapter for an embedded Camunda 7 fills in these keys. A test about
+   * what a subscriber makes of them needs an engine which can send them.
    * <p>
-   * The keys are the engine's own words. What they are called on the adapter's side is
-   * {@code PeaTaskMeta}, which the mock cannot reach: the adapter depends on this module,
-   * not the other way round.
+   * The keys are the words of the engine. On the side of the adapter, {@code PeaTaskMeta}
+   * names them. The mock cannot reach that class, because the adapter depends on this
+   * module and not the other way round.
    * <p>
-   * The task names its instance under {@link CommonRestrictions#PROCESS_INSTANCE_ID}: the
-   * latest instance this engine started for that BPMN process whose start variables the
-   * payload agrees with (see {@link StartedInstance}). The id is the one the start answered
-   * with. A task which matches no started instance names none. A <code>meta</code> which
-   * names an instance itself wins: that is how a test plays a task of a called process,
-   * which sits in an instance the application never started.
+   * The task names its instance under {@link CommonRestrictions#PROCESS_INSTANCE_ID}. That is
+   * the latest instance this engine started for that BPMN process whose start variables agree
+   * with the payload (see {@link StartedInstance}). The id is the one the start answered
+   * with. A task which matches no started instance names none. If the <code>meta</code> names
+   * an instance itself, that one wins. This is how a test plays a task of a called process,
+   * which runs in an instance the application never started.
    *
    * @param taskId The delivered task's ID
    * @param taskDefinition The task definition (matched against subscriptions)
@@ -609,9 +604,9 @@ public class InMemoryProcessEngine implements DeploymentApi, StartProcessApi, Co
 
     openTaskIds.add(taskId);
     final var subscription = subscriptionFor(taskDefinition);
-    // which subscription a task was given to, so that a completion can tell the same one
-    // that the task is gone - an engine remembers this, and without it the completion API
-    // and the termination callback would be two unrelated things here
+    // Remember which subscription got the task. Then a completion can tell the same
+    // subscription that the task is gone. An engine remembers this too. Without it, the
+    // completion API and the termination callback would have nothing to do with each other.
     deliveredTo.put(taskId, subscription);
     deliveredAs.put(taskId, bpmnProcessId);
     final var all = withInstance(taskId, bpmnProcessId, payload, meta);
@@ -619,15 +614,15 @@ public class InMemoryProcessEngine implements DeploymentApi, StartProcessApi, Co
         .handler()
         .accept(
             new TaskInformation(taskId, metaOf(bpmnProcessId, all)),
-            // an engine hands the subscriber what the subscription asked for, and the
-            // adapter's derivation is only worth anything if the mock does the same
+            // An engine hands the subscriber what the subscription asked for. What the
+            // adapter works out from it only counts if the mock does the same.
             subscription.narrow(payload));
 
   }
 
   /**
-   * The meta map of a delivery or a termination: what the caller said about the task, plus
-   * the BPMN process id this engine always names where it knows one.
+   * The meta map of a delivery or a termination. It holds what the caller said about the
+   * task. It also holds the BPMN process id, which this engine always names if it knows it.
    *
    * @param bpmnProcessId The BPMN process, or <code>null</code> for an engine which fills
    *          none
@@ -647,8 +642,8 @@ public class InMemoryProcessEngine implements DeploymentApi, StartProcessApi, Co
   }
 
   /**
-   * Adds the instance a delivered task belongs to, unless the caller named one, and remembers
-   * it for the termination of that task.
+   * Adds the instance a delivered task belongs to, unless the caller named one. It remembers
+   * the instance for the termination of that task.
    *
    * @param taskId The delivered task
    * @param bpmnProcessId The BPMN process the task is delivered as, or <code>null</code>
@@ -684,8 +679,8 @@ public class InMemoryProcessEngine implements DeploymentApi, StartProcessApi, Co
   }
 
   /**
-   * The meta of a termination: the instance the task was delivered in, unless the caller named
-   * one. An engine names the instance when it withdraws a task as well.
+   * The meta of a termination. It names the instance the task was delivered in, unless the
+   * caller named one. An engine names the instance when it takes a task back, too.
    *
    * @param instanceId The instance the task was delivered in, or <code>null</code>
    * @param meta What the caller says about the task
@@ -705,12 +700,12 @@ public class InMemoryProcessEngine implements DeploymentApi, StartProcessApi, Co
   }
 
   /**
-   * Withdraws a task the mock delivered: the subscription's termination handler is called
-   * with the engine's word for why, the way an engine tells a subscriber that a task it was
-   * given is gone. The reason travels in {@code TaskInformation.meta} under
-   * {@link TaskInformation#REASON} - {@code complete} where a task was finished through a
-   * completion API, {@code delete} for everything else, which is the vocabulary the API's own
-   * engine adapters use.
+   * Takes back a task the mock delivered. The termination handler of the subscription is
+   * called with the reason, in the words of the engine. This is how an engine tells a
+   * subscriber that a task it got is gone. The reason goes in {@code TaskInformation.meta}
+   * under {@link TaskInformation#REASON}. It is {@code complete} if a completion API finished
+   * the task, and {@code delete} for everything else. These are the words the engine adapters
+   * of the API use.
    *
    * @param taskId The terminated task's ID
    * @param taskDefinition The task definition (matched against subscriptions)
@@ -729,8 +724,8 @@ public class InMemoryProcessEngine implements DeploymentApi, StartProcessApi, Co
   }
 
   /**
-   * Withdraws a task and says as much about it as {@link #deliverTask(String, String,
-   * String, Map, Map)} does - an engine which fills its meta map generously fills it for a
+   * Takes back a task and says as much about it as {@link #deliverTask(String, String,
+   * String, Map, Map)} does. An engine which puts a lot into its meta map does so for a
    * termination too.
    *
    * @param taskId The terminated task's ID
@@ -755,10 +750,10 @@ public class InMemoryProcessEngine implements DeploymentApi, StartProcessApi, Co
   }
 
   /**
-   * Tells the subscription a task was DELIVERED to that the task is gone - what an engine
-   * does after a completion API finished it, and what makes the reason of a termination
-   * observable end to end rather than only when a test calls
-   * {@link #terminateTask(String, String, String, String)} itself.
+   * Tells the subscription which got a task that the task is gone. An engine does this after
+   * a completion API finished the task. So a test sees the reason of a termination from end
+   * to end, and not only when it calls {@link #terminateTask(String, String, String, String)}
+   * itself.
    *
    * @param taskId The completed task
    * @param reason The engine's word for what happened to it
@@ -771,7 +766,7 @@ public class InMemoryProcessEngine implements DeploymentApi, StartProcessApi, Co
     final var bpmnProcessId = deliveredAs.remove(taskId);
     final var instanceId = deliveredIn.remove(taskId);
     if (subscription == null) {
-      // a task completed without ever having been delivered here: nobody to tell
+      // The task was completed but never delivered here, so there is nobody to tell.
       return;
     }
     terminate(subscription, taskId, bpmnProcessId, reason, withInstance(instanceId, Map.of()));
@@ -793,10 +788,10 @@ public class InMemoryProcessEngine implements DeploymentApi, StartProcessApi, Co
 
   /**
    * Delivers a task to the subscription of that name AND of that kind. One task definition
-   * may be subscribed as an asynchronous task and as a user task at the same time, which is
-   * what an application does for a BPMN process id it declares without a model: it cannot
-   * tell which of the two the task was. An engine knows, so a test which is about that case
-   * says which one it delivers.
+   * may be subscribed as an asynchronous task and as a user task at the same time. An
+   * application does that for a BPMN process id it declares without a model, because it
+   * cannot tell which of the two the task is. An engine knows. So a test about that case says
+   * which one it delivers.
    *
    * @param taskId The delivered task's ID
    * @param taskDefinition The task definition (matched against subscriptions)
@@ -889,7 +884,7 @@ public class InMemoryProcessEngine implements DeploymentApi, StartProcessApi, Co
   // --- ServiceTaskCompletionApi / UserTaskCompletionApi (shared method signatures) ---
 
   /**
-   * A completed task (via {@code completeTask}) - inspectable by tests.
+   * A task completed through {@code completeTask}, for tests to read.
    *
    * @param taskId The task which was completed
    */
@@ -897,7 +892,7 @@ public class InMemoryProcessEngine implements DeploymentApi, StartProcessApi, Co
   }
 
   /**
-   * A task completed by BPMN error - inspectable by tests.
+   * A task completed by a BPMN error, for tests to read.
    *
    * @param taskId The task which raised the error
    * @param errorCode The BPMN error code, which is what the model catches
@@ -907,11 +902,11 @@ public class InMemoryProcessEngine implements DeploymentApi, StartProcessApi, Co
   }
 
   /**
-   * A failed task (via {@code failTask}) - inspectable by tests.
+   * A task reported as failed through {@code failTask}, for tests to read.
    *
    * @param taskId The task whose handler threw
    * @param reason The short reason the adapter reported
-   * @param retryCount How many attempts the adapter left the task, or <code>null</code> where
+   * @param retryCount How many attempts the adapter left the task, or <code>null</code> if
    *          it left the number to the engine
    */
   public record FailedTask(String taskId, String reason, Integer retryCount) {
@@ -919,21 +914,15 @@ public class InMemoryProcessEngine implements DeploymentApi, StartProcessApi, Co
 
   private final List<CompletedTask> completedTasks = new CopyOnWriteArrayList<>();
 
-  /**
-   * The payload a completion command carried, per task ID: the values
-   * the workflow aggregate shares with the engine plus the aggregate-ID variable.
-   * Kept beside {@link #completedTasks} so tests asserting the completion itself
-   * stay unaffected.
-   */
   private final Map<String, Map<String, Object>> completionPayloads = new ConcurrentHashMap<>();
 
   /**
-   * What travelled with a completion: the values the aggregate shares plus the aggregate-ID
-   * variable. Kept per task rather than in the list of completions, so a test asserting the
-   * completion itself is unaffected by what the sync model happens to share.
+   * What came with a completion: the values the aggregate shares, and the variable with the
+   * aggregate ID. It is kept per task and not in the list of completions. So a test about
+   * the completion itself does not depend on what the aggregate shares.
    *
    * @param taskId The completed (or by-error completed) task
-   * @return The payload the completion carried - empty if none or unknown task
+   * @return The payload the completion carried, or an empty map for none or an unknown task
    */
   public Map<String, Object> getCompletionPayload(
       final String taskId) {
@@ -947,22 +936,22 @@ public class InMemoryProcessEngine implements DeploymentApi, StartProcessApi, Co
   private final List<FailedTask> failedTasks = new CopyOnWriteArrayList<>();
 
   /**
-   * Task IDs whose NEXT completeTask fails once (removed on use) - lets tests
-   * exercise the at-least-once residual (completion fails after the local commit,
-   * the engine redelivers, the handler converges).
+   * The task IDs whose NEXT completeTask fails, once. An entry is removed when it is used.
+   * Tests use it for what delivery at least once leaves over: the completion fails after the
+   * local commit, the engine delivers again, and the handler ends in the same state.
    */
   private final Set<String> failNextCompletionForTaskIds = ConcurrentHashMap.newKeySet();
 
   /**
-   * Task IDs delivered via {@link #deliverTask} and not yet completed/canceled -
-   * the basis for honest {@code PREFLIGHT_CHECK} validation of task completions
-   * (unlike deployments, the mock KNOWS which tasks are open).
+   * The task IDs delivered through {@link #deliverTask} and not yet completed or canceled.
+   * The mock does not know what a deployment holds, but it KNOWS which tasks are open. So it
+   * can check a {@code PREFLIGHT_CHECK} of a task completion for real.
    */
   private final Set<String> openTaskIds = ConcurrentHashMap.newKeySet();
 
   /**
-   * Which subscription a delivered task was given to, and which BPMN process it was
-   * delivered as - the engine's memory a termination is told from.
+   * Which subscription got a delivered task, and as which BPMN process. This is what the
+   * engine remembers, and a termination is reported from it.
    */
   private final Map<String, ActiveSubscription> deliveredTo = new ConcurrentHashMap<>();
 
@@ -974,8 +963,8 @@ public class InMemoryProcessEngine implements DeploymentApi, StartProcessApi, Co
   private final Map<String, String> deliveredIn = new ConcurrentHashMap<>();
 
   /**
-   * The tasks this engine considers open: delivered and neither completed nor terminated.
-   * It is what a preflight is answered from.
+   * The tasks this engine holds as open: delivered, and neither completed nor terminated.
+   * A preflight is answered from it.
    *
    * @return The ids of the open tasks
    */
@@ -1009,8 +998,8 @@ public class InMemoryProcessEngine implements DeploymentApi, StartProcessApi, Co
   }
 
   /**
-   * The tasks whose handler threw. A real engine would count retries down and end in an
-   * incident; this one only remembers that it was told.
+   * The tasks whose handler threw. A real engine would count the retries down and end in an
+   * incident. This one only remembers that it was told.
    *
    * @return The tasks reported as failed so far, in call order
    */
@@ -1021,8 +1010,8 @@ public class InMemoryProcessEngine implements DeploymentApi, StartProcessApi, Co
   }
 
   /**
-   * Makes the next completion of that task fail, so a test can drive the path an outbox
-   * retry takes without a real engine misbehaving.
+   * Makes the next completion of that task fail. So a test can take the path of an outbox
+   * retry without a real engine that fails.
    *
    * @param taskId The task whose next completion fails
    */
@@ -1039,7 +1028,7 @@ public class InMemoryProcessEngine implements DeploymentApi, StartProcessApi, Co
 
     record("TaskCompletionApi", "completeTask", cmd);
     if (cmd.executionMode() == ExecutionMode.PREFLIGHT_CHECK) {
-      // validate only, never advance: the task has to be OPEN
+      // Only check, never move on: the task has to be OPEN.
       if (!openTaskIds.contains(cmd.getTaskId())) {
         return CompletableFuture.failedFuture(new IllegalStateException(
             "Task '%s' is not open (preflight failed)".formatted(cmd.getTaskId())));
@@ -1051,15 +1040,15 @@ public class InMemoryProcessEngine implements DeploymentApi, StartProcessApi, Co
           "Completing task '%s' failed (injected by the mock)".formatted(cmd.getTaskId())));
     }
     if (!openTaskIds.remove(cmd.getTaskId())) {
-      // the SYNC completion of a gone task fails - the adapter tolerates this as
-      // the at-least-once residual
+      // The SYNC completion of a task which is gone fails. The adapter accepts this as what
+      // delivery at least once leaves over.
       return CompletableFuture.failedFuture(new IllegalStateException(
           "Task '%s' is not open (already completed or canceled)".formatted(cmd.getTaskId())));
     }
     completedTasks.add(new CompletedTask(cmd.getTaskId()));
     completionPayloads.put(cmd.getTaskId(), payloadOf(cmd.get()));
-    // the reason the reference adapter for an embedded Camunda 7 reports for a task which
-    // was finished through a completion API
+    // The reason the reference adapter for an embedded Camunda 7 reports for a task which a
+    // completion API finished.
     terminateDelivered(cmd.getTaskId(), TaskInformation.COMPLETE);
     return CompletableFuture.completedFuture(Empty.INSTANCE);
 
@@ -1083,20 +1072,19 @@ public class InMemoryProcessEngine implements DeploymentApi, StartProcessApi, Co
     }
     erroredTasks.add(new ErroredTask(cmd.getTaskId(), cmd.getErrorCode(), cmd.getErrorMessage()));
     completionPayloads.put(cmd.getTaskId(), payloadOf(cmd.get()));
-    // a task ended by a BPMN error did not finish: the reference adapter says 'delete' for
-    // everything it notices which was not a completion
+    // A task ended by a BPMN error did not finish. The reference adapter says 'delete' for
+    // everything it sees which was not a completion.
     terminateDelivered(cmd.getTaskId(), TaskInformation.DELETE);
     return CompletableFuture.completedFuture(Empty.INSTANCE);
 
   }
 
   /**
-   * A defensive copy of a completion payload which KEEPS null values. An aggregate
-   * attribute the workflow has not filled yet travels as null - {@code Map.copyOf}
-   * rejects that, and a mock stricter than the engines it stands in for turns a
-   * legitimate completion into a crash. Found by the Quarkus end-to-end suite,
-   * where the first aggregate with an unset shared attribute reached a
-   * task completion.
+   * A copy of a completion payload which KEEPS null values. An attribute of the aggregate
+   * which the workflow has not filled yet comes as null. {@code Map.copyOf} refuses that. A
+   * mock which is stricter than the engines it stands in for makes a valid completion crash.
+   * The Quarkus end-to-end tests found this, when the first aggregate with an unset shared
+   * attribute reached a task completion.
    *
    * @param payload The payload the completion command carried
    * @return An unmodifiable copy, null values included

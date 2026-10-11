@@ -12,9 +12,9 @@ import jakarta.inject.Inject;
 import jakarta.inject.Singleton;
 
 /**
- * Workflow service of the Quarkus task-processing smoke test: one happy-path
- * handler plus an inline in-memory persistence copying aggregates on save/load
- * (only saved state survives - commit behavior is observable).
+ * The workflow service of the Quarkus smoke test of task processing. It has one handler for
+ * the normal path. It also has a small store in memory, which copies aggregates on save and
+ * on load. Only saved state is kept, so a test can see what was committed.
  */
 @Singleton
 @WorkflowService(
