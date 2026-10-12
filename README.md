@@ -176,7 +176,7 @@ does this, on Quarkus any bean which is not a default bean.
   no slot for a business key ([`GAPS.md`](GAPS.md), entry 3). Phase two runs at least once and
   maybe more often. A crash after a successful start, but before the outbox entry is marked as
   done, can therefore create the instance twice. No registry will come to prevent this: a
-  workflow is found by asking, not by remembering it (decision 25 of the platform's
+  workflow is found by asking, not by remembering it (decision 5 of the platform's
   `DECISIONS.md`). What makes the window smaller is the probe the core runs before it dispatches
   a start again. This adapter cannot answer that probe, see [`GAPS.md`](GAPS.md), entry 11, and
   the remaining risk described by the

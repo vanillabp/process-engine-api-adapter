@@ -667,7 +667,7 @@ public class TaskProcessingIntegrationTest {
 
     assertTrue(exception.getMessage().contains("no-such-task"));
     // The preflight completion gives an exact answer, and it runs in the transaction of
-    // the caller. So the call fails there and does not wait for anything (decision 27 of
+    // the caller. So the call fails there and does not wait for anything (decision 5 of
     // the platform's DECISIONS.md).
     assertTrue(
         elapsed.toSeconds() < 5,

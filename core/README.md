@@ -84,7 +84,7 @@ rollback records the `PREFLIGHT_CHECK` but never dispatches a `SYNC`.
 **Idempotency limitation:** phase two runs at least once and maybe more often, because it goes
 through the outbox. So a crash after a successful create, but before the outbox entry is
 removed, can create the instance twice. There is no registry which could strictly remove the
-duplicate: a workflow is found by asking, not by remembering it (decision 25 of the platform's
+duplicate: a workflow is found by asking, not by remembering it (decision 5 of the platform's
 `DECISIONS.md`). The core makes the window smaller with a probe before it dispatches a start
 again. This adapter cannot ask the engine ([`GAPS.md`](../GAPS.md), entry 11), so it answers that
 probe with `UNKNOWN_TO_BPMS`, and the start goes on. So the remaining risk is bigger here than on
