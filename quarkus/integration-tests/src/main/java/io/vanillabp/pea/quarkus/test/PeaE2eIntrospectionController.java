@@ -392,8 +392,8 @@ public class PeaE2eIntrospectionController {
   }
 
   /**
-   * Lets the engine refuse the next phase one for a BPMN process. The next
-   * {@code introspect/reset} clears it.
+   * Lets the engine refuse every phase one for a BPMN process, not only the next one. The
+   * next {@code introspect/reset} clears it.
    *
    * @param bpmnProcessId The BPMN process whose preflight fails
    */

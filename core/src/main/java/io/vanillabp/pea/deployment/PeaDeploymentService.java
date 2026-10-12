@@ -87,7 +87,8 @@ public class PeaDeploymentService implements AdapterDeploymentService<PeaBpmnMod
 
   /**
    * Where the core hears about workflows which ended. This service uses it ONLY to warn
-   * about methods this adapter cannot serve. May be <code>null</code> (tests).
+   * about methods this adapter cannot serve. It is <code>null</code> whenever the
+   * collaborators carry none.
    */
   private final WorkflowEndedInvoker workflowEndedInvoker;
 
@@ -182,7 +183,7 @@ public class PeaDeploymentService implements AdapterDeploymentService<PeaBpmnMod
 
   /**
    * Sets who watches this adapter's user-task deliveries (the platform modules collect the
-   * beans of the application and inject them after construction, like the resolver above).
+   * beans of the application and inject them after construction).
    *
    * @param userTaskObservers The observers in the order the platform resolved them, or
    *          <code>null</code> for none

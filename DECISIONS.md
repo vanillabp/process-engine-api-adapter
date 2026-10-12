@@ -58,6 +58,8 @@ documented in [`GAPS.md`](./GAPS.md) instead of being faked. Where the platform 
 hook, the preflights run in it. Where it offers none, they run at once, so the adapter still works
 in a test without one.
 
+*Note 2026-10-12: the platform always hands over a pre-commit registrar, and an adapter without one is not built. Where the transaction runner of the aggregate has no hook, the platform runs the check at once. The adapter itself runs it at once only for a caller which names no aggregate persistence.*
+
 ### 5. A failure of phase two is reported, not dropped
 
 Every phase-two operation of the process service used to catch `ExecutionException`, write "task

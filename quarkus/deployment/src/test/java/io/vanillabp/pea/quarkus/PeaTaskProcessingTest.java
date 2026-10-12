@@ -22,8 +22,9 @@ import jakarta.inject.Inject;
 /**
  * Task processing on Quarkus. The adapter opens one subscription per task definition at
  * boot. A delivered task goes through the transaction runner of the core (a JTA transaction
- * and an active request context) into the {@code @WorkflowTask} handler. The change to the
- * aggregate is committed BEFORE the task completion reaches the mock engine. The Spring Boot
+ * and an active request context) into the {@code @WorkflowTask} handler. The test checks
+ * that the change to the aggregate was committed and that the task completion reached the
+ * mock engine. It does not check the order of the two. The Spring Boot
  * tests run all the outcomes ({@code TaskProcessingIntegrationTest}). This test proves the
  * Quarkus code which connects the parts.
  */
@@ -92,7 +93,7 @@ public class PeaTaskProcessingTest {
 
     // The change was committed, which the store shows because it keeps copies ...
     Assertions.assertEquals("happy", TaskWorkflowService.AGGREGATES.get("q-4711").results);
-    // ... and the task was completed afterwards
+    // ... and the task was completed
     Assertions.assertEquals(
         List.of(new InMemoryProcessEngine.CompletedTask("task-q-1")),
         inMemoryProcessEngine.getCompletedTasks());

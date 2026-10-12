@@ -26,7 +26,7 @@ import lombok.extern.slf4j.Slf4j;
  * The other two modes need nothing here. {@link NameClashAvoidance#NONE} scopes nothing.
  * {@link NameClashAvoidance#BY_ADAPTER} is refused at startup, because the
  * Process-Engine-API has no isolation mechanism of its own (see
- * {@code GAPS.md}, entry 4).
+ * {@code GAPS.md}, entry 15).
  */
 @Slf4j
 public final class PeaScoping {

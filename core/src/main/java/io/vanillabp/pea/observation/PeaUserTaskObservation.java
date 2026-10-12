@@ -21,7 +21,7 @@ import dev.bpmcrafters.processengineapi.task.TaskInformation;
  * is keyed by the scoped task definition and the engine reports the scoped BPMN process id,
  * and {@code PeaUserTaskHandler} translates both back before building this, so an observer
  * sees the names the application's BPMN and its configuration use (see decision 2 in the
- * repository's DECISIONS.md). {@code UserTaskObserverIntegrationTest} holds that under
+ * repository's DECISIONS.md). {@code UserTaskObserverScopingIntegrationTest} holds that under
  * <code>use-prefix</code>.
  *
  * @param adapterId The configured adapter id whose engine delivered this task

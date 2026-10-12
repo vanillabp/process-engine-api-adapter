@@ -69,8 +69,9 @@ class PeaIntegrationProcessor {
   }
 
   /**
-   * Registers the runtime producers: the Process-Engine-API adapter's process service and
-   * the default in-memory mock engine backing it.
+   * Registers the producer of the default in-memory mock engine and of the registry of
+   * deployed processes. The producers of the process service and of the deployment service
+   * come in through the build items above.
    *
    * @return The bean registration build item
    */

@@ -69,7 +69,8 @@ mapping is direct:
 | phase two (`startWorkflowPhaseTwo`) | after commit, via the transaction outbox | `SYNC`                             | actually create the process instance                                                     |
 
 In both phases the command is a `PeaStartProcessCommand` with the same BPMN process id. The
-aggregate id is passed as the payload variable `aggregateId`. The two commands differ only in
+aggregate id is passed as a payload variable named after the aggregate's id property
+(`getAggregateIdName()` of its persistence). The two commands differ only in
 the `ExecutionMode`. The platform passes the workflow module id and the BPMN process id to both
 `startWorkflowPhaseOne(module, process, aggregatePersistence, aggregate)` and
 `startWorkflowPhaseTwo(module, process, aggregateId)`.
@@ -85,8 +86,9 @@ through the outbox. So a crash after a successful create, but before the outbox 
 removed, can create the instance twice. There is no registry which could strictly remove the
 duplicate: a workflow is found by asking, not by remembering it (decision 25 of the platform's
 `DECISIONS.md`). The core makes the window smaller with a probe before it dispatches a start
-again. This adapter answers that probe optimistically ([`GAPS.md`](../GAPS.md), entry 11). So
-the remaining risk is bigger here than on an adapter which can be asked.
+again. This adapter cannot ask the engine ([`GAPS.md`](../GAPS.md), entry 11), so it answers that
+probe with `UNKNOWN_TO_BPMS`, and the start goes on. So the remaining risk is bigger here than on
+an adapter which can be asked.
 
 ## Observing user tasks (`io.vanillabp.pea.observation`)
 
@@ -96,7 +98,7 @@ It would either see nothing or take the delivery away from the workflow applicat
 happens depends on the order the two subscriptions were registered in. So the place to watch from
 is inside the adapter's own subscription.
 
-The package holds three types:
+The package holds four types:
 
 - `PeaUserTaskObserver`: what an application or an extension implements. It has two methods,
   `userTaskDelivered` and `userTaskTerminated`. The contract for users is in
@@ -110,12 +112,15 @@ The package holds three types:
   two of them open, `bpmnProcessId` and `workflowAggregateId`. They are documented as nullable,
   not filled with made-up values.
 - `PeaUserTaskObservers`: the observers of one adapter id, and the one place they are called
-  from. So what an observer costs the task it watches is decided once, for both platforms.
-  Nothing that happens in there reaches the caller. An observer which throws is caught and
-  logged, and the next one is called anyway. The same goes for a failure while DESCRIBING the
-  task. Otherwise it would land in the handler's own catch block and cost the application its
-  notification. An application which registered nothing never builds an observation, because
-  the callers hand over a `Supplier`.
+  from. So what a failing observer means for the task it watches is decided once, for both
+  platforms. An observer which throws makes the delivery fail, but every other observer is told
+  first. The first failure leaves the class, and the failures of the others hang on it as
+  suppressed exceptions. A failure while DESCRIBING the task is the same case (decision 12 in
+  [`../DECISIONS.md`](../DECISIONS.md)). An application which registered nothing never builds
+  an observation, because the callers hand over a `Supplier`.
+- `PeaUserTaskObserverFailure`: what leaves `PeaUserTaskObservers` when an observer failed. The
+  handler throws it after the application got its notification, so the engine learns that the
+  delivery did not work.
 
 Where it is called from:
 

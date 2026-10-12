@@ -25,8 +25,8 @@ import io.vanillabp.spi.process.TaskNotFoundException;
 /**
  * The phase-one check of this adapter is handed to the platform's pre-commit hook
  * instead of running when the application calls, so the window in which its answer goes
- * stale before phase two stays small. Without a hook it runs immediately, the behaviour this
- * adapter had before.
+ * stale before phase two stays small. A caller which names no aggregate persistence gets
+ * its check run at once, the behaviour this adapter had before.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class PeaPreCommitHookTest {

@@ -431,7 +431,8 @@ public class TaskParameterTypesIntegrationTest {
   public void aDecimalKeepsItsScale() {
 
     // The Process-Engine-API uses Map<String, Object> from end to end. So the handler reads
-    // the very BigDecimal object the aggregate shared.
+    // a BigDecimal with the scale the aggregate shared. assertEquals of BigDecimal compares
+    // the scale as well.
     assertEquals(new BigDecimal("120.50"), deliver("totalAsBigDecimal"));
 
   }

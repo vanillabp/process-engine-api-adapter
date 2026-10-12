@@ -264,7 +264,7 @@ public class PeaDeployedProcesses {
    * BPMN element id. An element id is unique in a BPMN file. But two processes of one module
    * may use the same one, so the answer is a collection.
    * <p>
-   * The order is the one the processes were deployed in.
+   * The order is not defined. A caller must not depend on it.
    *
    * @param workflowModuleId The workflow module to look in
    * @param bpmnTaskId The BPMN element id of the user task
@@ -285,7 +285,7 @@ public class PeaDeployedProcesses {
    * A form reference is NOT unique in a workflow module. Two processes may show the same
    * form, and with the name-clash-avoidance mode {@code none} the engine does not keep them
    * apart either. So the answer is a collection, and the caller decides. The
-   * order is the one the processes were deployed in.
+   * order is not defined.
    *
    * @param workflowModuleId The workflow module to look in
    * @param formReference The plain external form reference

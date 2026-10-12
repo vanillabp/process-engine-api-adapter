@@ -112,9 +112,9 @@ public class PeaProcessService<A> implements MigratableProcessService<A> {
 
   /**
    * Runs a phase-one check right before the transaction of the workflow aggregate commits
-   * (platform-supplied). Optional: without it the checks run when the application
-   * calls, which is what this adapter did before - correct, with a wider window between the
-   * check and the phase-two dispatch.
+   * (platform-supplied). It always arrives, because the platform refuses to build the
+   * collaborators without one. Where the transaction runner of the aggregate offers no
+   * hook, the platform runs the check at once.
    */
   private final PreCommitRegistrar preCommitRegistrar;
 
@@ -589,7 +589,9 @@ public class PeaProcessService<A> implements MigratableProcessService<A> {
    * Hands a phase-one check to the platform's pre-commit hook, so it runs right
    * before the transaction of the workflow aggregate commits instead of when the application
    * called - the later the check, the smaller the window in which its answer goes stale
-   * before phase two acts on it. Without a hook the check runs immediately.
+   * before phase two acts on it. A caller which names no aggregate persistence gets its
+   * check run at once. Where the transaction runner offers no hook, the platform runs it
+   * at once as well.
    *
    * @param aggregatePersistence The persistence of the aggregate whose transaction is meant
    * @param check The check to run
@@ -1146,8 +1148,9 @@ public class PeaProcessService<A> implements MigratableProcessService<A> {
     // no message CONTENT travels - what travels is the aggregate state shared with
     // the engine plus the technical aggregate-ID variable;
     // StartProcessByMessageCmd is FINAL - the DEFAULT execution mode travels
-    // (GAPS.md entry 11); schedule deduplication comes from the outbox key
-    // 'module|process|aggregateId'
+    // (GAPS.md entry 11); a second scheduled start of the same aggregate is dropped by the
+    // outbox key 'START_WORKFLOW|module|process|aggregateId', which a start by message
+    // shares with a plain start
     try {
       final var started = startProcessApi
           .startProcess(new StartProcessByMessageCmd(
@@ -1208,8 +1211,9 @@ public class PeaProcessService<A> implements MigratableProcessService<A> {
     // outbox retries the dispatch. A crash between a successful create and marking the
     // outbox entry DONE may duplicate the instance (at-least-once): a workflow is located
     // by asking rather than remembered in a registry (decision 25 of the platform's
-    // DECISIONS.md), and the core's probe before a re-dispatched start is what narrows
-    // the window - which this adapter answers optimistically (GAPS.md, entry 11).
+    // DECISIONS.md). The core asks a probe before it sends a start again. This adapter
+    // cannot ask the engine (GAPS.md, entry 11), so it answers that probe with
+    // UNKNOWN_TO_BPMS, and the recovered start goes on.
     final var started = await(
         startProcessApi.startProcess(
             new PeaStartProcessCommand(
