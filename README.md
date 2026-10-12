@@ -707,7 +707,8 @@ phase two.
 
 The platform first looks up the transaction runner of the aggregate. So the check hooks into the
 unit of work the aggregate is really stored in, and this may be one the application brought.
-Where no hook is available, the check runs at once, as this adapter did before.
+Where the runner offers no hook, the platform runs the check at once, as this adapter did before.
+A caller which names no aggregate persistence gets its check run at once as well.
 
 A check which finds the task gone throws `io.vanillabp.spi.process.TaskNotFoundException`. The SPI
 documents this type for a task no BPMS knows any more, and the platform throws it when its own

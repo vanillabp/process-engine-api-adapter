@@ -220,8 +220,9 @@ public final class PeaFetchVariables {
    * What a delivery says when a <code>&#64;TaskParam</code> names a variable this
    * subscription did not ask for. The adapter cannot tell this case from a variable which
    * really is not there. Handing the method a <code>null</code> would silently lose what
-   * the engine computed. So the delivery fails and the task is failed, and the engine
-   * behind the API decides about retries.
+   * the engine computed. So the delivery fails. For a service task the task is failed, and
+   * the engine behind the API decides about retries. For a user task the handler logs the
+   * error and the user task stays open; nothing is failed or retried.
    * <p>
    * A subscription asks for every name which a <code>&#64;TaskParam</code> of its tasks
    * DECLARES. So if this happens, the name was not declared on the method. It was built at

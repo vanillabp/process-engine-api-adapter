@@ -42,8 +42,10 @@ public class PeaProcessingContext {
   }
 
   /**
-   * Which module this context is about. Every identifier below is scoped with it on its way
-   * to the engine, because this BPMS has no namespace matching a workflow module.
+   * Which module this context is about. Under the name-clash-avoidance mode
+   * <code>use-prefix</code> every identifier below is scoped with it on its way to the
+   * engine, because this BPMS has no namespace matching a workflow module. Under
+   * <code>none</code> the identifiers go to the engine as modelled.
    *
    * @return The workflow module this context belongs to
    */
@@ -55,7 +57,7 @@ public class PeaProcessingContext {
 
   /**
    * The processes read so far, in the order the pipeline handed the files over. That order
-   * is the one they are deployed in, and the one the registry of deployed processes keeps.
+   * is the one they are deployed in. The registry of deployed processes does not keep it.
    *
    * @return The models of this workflow module
    */

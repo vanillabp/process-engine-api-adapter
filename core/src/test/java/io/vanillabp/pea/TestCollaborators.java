@@ -33,8 +33,9 @@ public final class TestCollaborators {
   }
 
   /**
-   * The default of this adapter: identifiers are deployed as modelled. A bare mock would
-   * answer null for each of them, and the platform never gives an adapter null.
+   * The default of this helper: identifiers are deployed as modelled (mode <code>none</code>).
+   * The platform's default is <code>by-adapter</code>, which this adapter refuses. A bare mock
+   * would answer null for each of them, and the platform never gives an adapter null.
    */
   private static NameClashAvoidanceSupport scopingWithoutNameClashAvoidance() {
 

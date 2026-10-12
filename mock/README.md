@@ -19,20 +19,21 @@ Every API method records its call in the public list `InMemoryProcessEngine.invo
 which a test can read (also through `getInvocations()`). An entry is
 `Invocation(String api, String method, Object command, ExecutionMode executionMode)`. The
 `executionMode` comes from the command when the command is `ExecutionModeAware`, and is `null`
-otherwise (for example for task subscription commands). Besides recording, two APIs hold real
-state:
+otherwise (for example for task subscription commands). Besides recording, the fake keeps
+state. The two starting points are these:
 
 - **`deploy(DeployBundleCommand)`** stores one `Deployment(deploymentKey, resources, tenantId)`
   per call, which `getDeployments()` returns. It answers with a `DeploymentInformation`.
 - **`startProcess(StartProcessCommand)`** records the command and its `ExecutionMode`. Only for
   `ExecutionMode.SYNC`, phase two of VanillaBP's two-phase start, it creates a
-  `StartedInstance(instanceId, variables)`, which `getStartedInstances()` returns. The aggregate
+  `StartedInstance(instanceId, variables, bpmnProcessId)`, which `getStartedInstances()` returns. The aggregate
   id is one of the `variables`. The adapter decides which one: the variable is named after the ID
   property of the aggregate. So the fake engine does not pick it out. `ExecutionMode.PREFLIGHT_CHECK`
   (phase one) and every other mode create no instance.
 
-All other methods still return a completed future, or an empty result of the declared type.
-`reset()` clears the recordings and all state of the fake (deployments, started instances).
+It also keeps the open subscriptions (`getSubscriptions()`), the open tasks (`getOpenTaskIds()`),
+the completed, errored and failed tasks, the correlated messages and the broadcast signals. Each of
+them has a getter of its own. `reset()` clears the recordings and the state of the fake, except the broadcast signals.
 
 ## Interfaces implemented
 

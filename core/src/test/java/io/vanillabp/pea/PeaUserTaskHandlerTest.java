@@ -227,18 +227,20 @@ public class PeaUserTaskHandlerTest {
   @DisplayName("Defects never break the user task: missing variable, ambiguous routing, TaskException")
   public void defectsAreLoggedNotThrown() {
 
+    // Each call returns normally, so no exception escapes. Each defect is one line which
+    // names the user task.
     // The aggregate ID variable is missing.
-    handler(List.of("OnlyProcess"))
-        .accept(new TaskInformation("utask-3", Map.of()), Map.of("unrelated", "x"));
+    assertLoggedOnce("utask-3", warningsOf(() -> handler(List.of("OnlyProcess"))
+        .accept(new TaskInformation("utask-3", Map.of()), Map.of("unrelated", "x"))));
 
     // Without the meta entry, the routing is ambiguous.
-    handler(List.of("ProcessA", "ProcessB"))
-        .accept(new TaskInformation("utask-4", Map.of()), Map.of("id", "4711"));
+    assertLoggedOnce("utask-4", warningsOf(() -> handler(List.of("ProcessA", "ProcessB"))
+        .accept(new TaskInformation("utask-4", Map.of()), Map.of("id", "4711"))));
 
     // A TaskException as outcome is a defect. It is logged, not thrown.
     invoker.outcome = WorkflowTaskOutcome.bpmnError("SOME_ERROR", null);
-    handler(List.of("OnlyProcess"))
-        .accept(new TaskInformation("utask-5", Map.of()), Map.of("id", "4711"));
+    assertLoggedOnce("utask-5", warningsOf(() -> handler(List.of("OnlyProcess"))
+        .accept(new TaskInformation("utask-5", Map.of()), Map.of("id", "4711"))));
 
   }
 
@@ -275,6 +277,21 @@ public class PeaUserTaskHandlerTest {
   /**
    * What the handler logged at WARN or above while the given work ran.
    */
+  private static void assertLoggedOnce(
+      final String taskId,
+      final List<String> lines) {
+
+    assertEquals(1, lines.size(), () -> "expected exactly one line about "
+        + taskId
+        + " but got: "
+        + lines);
+    assertTrue(lines.getFirst().contains(taskId), () -> "expected the line to name "
+        + taskId
+        + " but got: "
+        + lines.getFirst());
+
+  }
+
   private List<String> warningsOf(
       final Runnable work) {
 

@@ -28,8 +28,8 @@ import jakarta.enterprise.inject.Produces;
 
 /**
  * Provides the {@link PeaProcessService} of this adapter as a CDI bean. The process service
- * beans which the VanillaBP Quarkus integration generates pick it up. The adapter id is
- * resolved from the configuration (first adapter of type {@code process-engine-api}).
+ * beans which the VanillaBP Quarkus integration generates pick it up. It builds one process
+ * service for each configured adapter id of type {@code process-engine-api}.
  * <p>
  * The interfaces of the Process-Engine-API are injected, one for each interface the API
  * splits its commands into. By default they are all the default bean

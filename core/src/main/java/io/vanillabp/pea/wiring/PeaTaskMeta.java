@@ -50,8 +50,8 @@ public final class PeaTaskMeta {
 
   /**
    * The BPMN element id of the task, what a modeller wrote as the element's id. Both task
-   * handlers report it to the core, which writes it into the delivery record; an engine
-   * filling no such key leaves the record without an element.
+   * handlers report it to the core, which writes it into the delivery record. Where the
+   * engine fills no such key, both handlers take the element of the deployed model instead.
    */
   public static final String BPMN_TASK_ID = CommonRestrictions.ACTIVITY_ID;
 

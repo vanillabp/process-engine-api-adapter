@@ -25,8 +25,8 @@ import io.vanillabp.spi.process.TaskNotFoundException;
 /**
  * Task-operation edge cases of the {@link PeaProcessService} at the
  * Process-Engine-API boundary: the awareness probe (PREFLIGHT_CHECK completion),
- * the phase-one existence check aborting the transaction and the gone-task
- * tolerance of phase two (at-least-once residual).
+ * the phase-one existence check aborting the transaction, and phase two reporting a gone
+ * task as a failure instead of dropping it (decision 5).
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class PeaProcessServiceTaskOpsTest {
