@@ -1210,7 +1210,7 @@ public class PeaProcessService<A> implements MigratableProcessService<A> {
     // variable named after the aggregate's ID property. A failed start throws so the
     // outbox retries the dispatch. A crash between a successful create and marking the
     // outbox entry DONE may duplicate the instance (at-least-once): a workflow is located
-    // by asking rather than remembered in a registry (decision 25 of the platform's
+    // by asking rather than remembered in a registry (decision 5 of the platform's
     // DECISIONS.md). The core asks a probe before it sends a start again. This adapter
     // cannot ask the engine (GAPS.md, entry 11), so it answers that probe with
     // UNKNOWN_TO_BPMS, and the recovered start goes on.
