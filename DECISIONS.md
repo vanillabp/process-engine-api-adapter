@@ -617,3 +617,33 @@ by its task definition alone.
 The question is asked for service tasks as well as for user tasks. Today an observer sees only user
 tasks. But the core answers the same question for both, and a service task no extension reads
 costs nothing: the answer is empty.
+
+### 21. The IDE learns every key from the metadata of the Spring Boot jar, and a test keeps it complete
+
+Built by story 993 on 2026-10-21.
+
+An IDE offers the keys of `application.yaml` and marks a key it does not know. It reads them from
+`META-INF/spring-configuration-metadata.json` in the jars of the application. Until this story the
+adapter shipped no such file.
+
+The Spring Boot module now writes the file in two parts:
+
+- The configuration processor writes one entry for each map of `VanillaBpPeaProperties`:
+  `vanillabp.adapters` and `vanillabp.workflow-modules`. Each entry names the type of the map's
+  values. The processor never describes the keys below a map key, because the application chooses
+  that key. An IDE which follows the value type finds the keys there. We expect IntelliJ IDEA to do
+  this, but nobody tried it in an IDE yet.
+- `additional-spring-configuration-metadata.json` is written by hand. It describes every key of the
+  adapter level once more, under the adapter id `process-engine-api`. That is the id which needs no
+  `type` key. Today the only key is the removed `fetch-variables` of decision 19. It is described as
+  deprecated with level `error`, so the IDE marks it at once, before the start refuses it.
+
+`EveryKeyIsKnownToTheIdeTest` walks the overlay class the way the binder does. It fails when a key
+has no entry, when an entry describes a key nobody reads, and when a type or a default in the file
+differs from the code. So the next key of this adapter needs its field in the overlay of both
+platforms and its entry in the file, or the build is red.
+
+The platform also writes an entry `vanillabp.adapters`, with a type of its own. Which entry an IDE
+uses when two jars describe the same name was not tried in an IDE. The Quarkus module needs none of
+this: it is a Quarkus extension, and its build writes a description of every key into
+`META-INF/quarkus-config-doc/`.

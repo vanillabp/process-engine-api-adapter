@@ -1,0 +1,13 @@
+{
+  "properties": [
+    {
+      "name": "vanillabp.adapters.process-engine-api.fetch-variables",
+      "type": "java.lang.String",
+      "description": "Removed in 2.0. A start which still sets it ends with a message, at this level and at 'vanillabp.workflow-modules.<module>.adapters.<id>.fetch-variables' and the levels below it. This works for every adapter id of type 'process-engine-api', not only for the id 'process-engine-api'.",
+      "deprecation": {
+        "level": "error",
+        "reason": "A subscription now always asks for the variables VanillaBP reads. A handler which needs more reads it from the workflow aggregate."
+      }
+    }
+  ]
+}

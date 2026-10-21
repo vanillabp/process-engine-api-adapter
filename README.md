@@ -138,6 +138,32 @@ By default the adapter runs against the in-memory mock engine
 instead, provide your own beans of the Process-Engine-API interfaces. On Spring Boot any bean
 does this, on Quarkus any bean which is not a default bean.
 
+### What the IDE knows about the keys
+
+The Spring Boot module ships `META-INF/spring-configuration-metadata.json`. An IDE reads it to
+offer the keys in `application.yaml` and to mark a key it does not know. The file has two parts,
+see decision 21 in [`DECISIONS.md`](./DECISIONS.md):
+
+- The configuration processor writes one entry for each map of `VanillaBpPeaProperties`, with the
+  type of the map's values. An IDE which follows that type below a map key offers the keys for every
+  adapter id, workflow module, workflow and task. We expect IntelliJ IDEA to do so, but nobody tried
+  it in an IDE yet.
+- `spring-boot/src/main/resources/META-INF/additional-spring-configuration-metadata.json` is
+  written by hand. It describes every key of the adapter level once more, under the adapter id
+  `process-engine-api`, with a type, a description and a default where there is one. Today the
+  only key is the removed `fetch-variables`, deprecated with level `error`.
+
+So a new key needs its field in the overlay of both platforms and an entry in the hand-written
+file. `EveryKeyIsKnownToTheIdeTest` fails when the entry is missing, when an entry describes a key
+nobody reads, and when a type or a default differs from the code.
+
+The processor merges the hand-written file only while `javac` compiles. A change to that file alone
+leaves the old metadata in `target`, and the test then reads the old file. Build with `clean` after
+such a change.
+
+The Quarkus module needs none of this. It is a Quarkus extension, and its build writes a
+description of every key into `META-INF/quarkus-config-doc/`.
+
 ## Behavior and limitations
 
 - **Deployment:** at startup the adapter parses the BPMN resources of each workflow module. It
