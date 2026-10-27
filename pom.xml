@@ -78,7 +78,7 @@
     <spi-for-java.version>2.0.0-SNAPSHOT</spi-for-java.version>
     <adapter-platform.version>2.0.0-SNAPSHOT</adapter-platform.version>
     <process-engine-api.version>1.7</process-engine-api.version>
-    <spring-boot.version>4.1.1</spring-boot.version>
+    <spring-boot.version>4.1.2</spring-boot.version>
     <quarkus.version>3.40.1.1</quarkus.version>
   </properties>
 
