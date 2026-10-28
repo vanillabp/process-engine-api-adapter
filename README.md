@@ -321,7 +321,7 @@ description of every key into `META-INF/quarkus-config-doc/`.
   `#getWorkflowHistory`): the answers come from what THIS application version deployed. The
   Process-Engine-API has neither a repository nor a query or history API ([`GAPS.md`](GAPS.md),
   entries 12 and 13). The process definition id native to this adapter is
-  `<workflow module>|<bpmn process id>`. The reported version is the deployment key, and the BPMN
+  `<workflow-module-id>|<bpmn-process-id>`. The reported version is the deployment key, and the BPMN
   XML is the deployed resource, byte for byte. The history reports the definition with
   `elementsHistory == null`, which in the SPI means "not supported by the underlying BPMS". So
   there are no secondary history contexts, and you cannot drill into call activities. Definitions
@@ -342,7 +342,7 @@ engine fires itself is refused while deploying is held by `PeaDeploymentServiceT
 
 A BPMN file goes to the engine as a whole. So a workflow module may deploy a process which no
 `@WorkflowService` class claims. The core stops the start because of such a process, unless the
-application marks it with `vanillabp.workflow-modules.<module>.workflows.<process>.implemented-externally=true`.
+application marks it with `vanillabp.workflow-modules.<workflow-module-id>.workflows.<bpmn-process-id>.implemented-externally=true`.
 So a process which reaches this adapter unclaimed belongs to somebody else. `wireBpmn` returns
 for it before it checks anything, and `startWorkflowProcessing` opens no subscription for its
 tasks. The question is asked through `WorkflowTaskWiring#isClaimedByAWorkflowService`. The reason
@@ -391,7 +391,7 @@ asks for more than the derived set. Second, a BPMN process which no workflow ser
 no subscription at all. A handler which needs a value no `@TaskParam` declares reads it from the
 workflow aggregate.
 
-Snapshots of version 2.0 had the key `vanillabp.adapters.<id>.fetch-variables: all`. It made a
+Snapshots of version 2.0 had the key `vanillabp.adapters.<adapter-id>.fetch-variables: all`. It made a
 subscription ask for everything. The key is gone. The overlay in each platform module
 (`VanillaBpPeaProperties`) still binds it on all four levels. It does this only so that
 `PeaFetchVariables#rejectTheRemovedKey` can stop the start with a message which names every key
