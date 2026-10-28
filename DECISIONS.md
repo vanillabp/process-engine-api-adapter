@@ -647,3 +647,36 @@ The platform also writes an entry `vanillabp.adapters`, with a type of its own. 
 uses when two jars describe the same name was not tried in an IDE. The Quarkus module needs none of
 this: it is a Quarkus extension, and its build writes a description of every key into
 `META-INF/quarkus-config-doc/`.
+
+### 22. Every map of the Quarkus configuration names its key, with the names all adapters share
+
+Built by story 995 on 2026-10-28.
+
+The Quarkus module is a Quarkus extension. Its build writes a description of every key into
+`META-INF/quarkus-config-doc/quarkus-config-model.json` (see decision 21). A map is a level where
+the application chooses the key, for example an adapter id. Quarkus writes such a key as a name in
+quotes. Without help it takes the name of the Java method. So the file showed
+`vanillabp.workflow-modules."workflow-modules".workflows."workflows".tasks."tasks".adapters."adapters".fetch-variables`,
+and nobody could tell from it what to write there.
+
+Now every map of `VanillaBpPeaProperties` carries `@ConfigDocMapKey`. The platform and every adapter
+use the same names. The first three are also the names which the platform wiki writes in angle
+brackets, for example `<adapter-id>`:
+
+|        Map        |         Name         |
+|-------------------|----------------------|
+| `adapters`        | `adapter-id`         |
+| `workflowModules` | `workflow-module-id` |
+| `workflows`       | `bpmn-process-id`    |
+| `tasks`           | `task-definition`    |
+
+So the key above now reads
+`vanillabp.workflow-modules."workflow-module-id".workflows."bpmn-process-id".tasks."task-definition".adapters."adapter-id".fetch-variables`.
+
+`EveryMapKeyHasANameTest` reads the file which the build wrote. It fails when a map key has a name
+which is not in this table. So a new map needs the annotation, or the build is red.
+
+The Quarkus Tools plugin for IntelliJ IDEA (by Red Hat, checked in version 2.6.1) does not read this
+file. It finds the keys in the `@ConfigMapping` interfaces themselves and writes every map key as
+`{*}`. So the names help the generated documentation and everybody who reads the file. They do not
+change what this plugin offers while you type.
