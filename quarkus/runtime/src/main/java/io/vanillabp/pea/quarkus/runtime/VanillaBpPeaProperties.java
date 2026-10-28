@@ -5,6 +5,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
+import io.quarkus.runtime.annotations.ConfigDocMapKey;
 import io.quarkus.runtime.annotations.ConfigPhase;
 import io.quarkus.runtime.annotations.ConfigRoot;
 import io.quarkus.runtime.annotations.StaticInitSafe;
@@ -40,6 +41,7 @@ public interface VanillaBpPeaProperties {
    *
    * @return The adapter sections
    */
+  @ConfigDocMapKey("adapter-id")
   Map<String, PeaScopedKeys> adapters();
 
   /**
@@ -48,6 +50,7 @@ public interface VanillaBpPeaProperties {
    *
    * @return The workflow-module sections, keyed by workflow module ID
    */
+  @ConfigDocMapKey("workflow-module-id")
   Map<String, ModuleOverlay> workflowModules();
 
   /**
@@ -136,6 +139,7 @@ public interface VanillaBpPeaProperties {
      *
      * @return The adapter sections
      */
+    @ConfigDocMapKey("adapter-id")
     Map<String, PeaScopedKeys> adapters();
 
     /**
@@ -143,6 +147,7 @@ public interface VanillaBpPeaProperties {
      *
      * @return The workflow sections
      */
+    @ConfigDocMapKey("bpmn-process-id")
     Map<String, WorkflowOverlay> workflows();
 
   }
@@ -157,6 +162,7 @@ public interface VanillaBpPeaProperties {
      *
      * @return The adapter sections
      */
+    @ConfigDocMapKey("adapter-id")
     Map<String, PeaScopedKeys> adapters();
 
     /**
@@ -164,6 +170,7 @@ public interface VanillaBpPeaProperties {
      *
      * @return The task sections
      */
+    @ConfigDocMapKey("task-definition")
     Map<String, TaskOverlay> tasks();
 
   }
@@ -178,6 +185,7 @@ public interface VanillaBpPeaProperties {
      *
      * @return The adapter sections
      */
+    @ConfigDocMapKey("adapter-id")
     Map<String, PeaScopedKeys> adapters();
 
   }
