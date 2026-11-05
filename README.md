@@ -109,7 +109,7 @@ Parent (all modules are `2.0.0-SNAPSHOT`, groupId `io.vanillabp`):
 
 This adapter is built against `dev.bpm-crafters.process-engine-api` **1.7**. It has no release
 lines. The
-[Camunda 8 adapter](https://github.com/camunda-community-hub/vanillabp-camunda8-adapter#release-lines)
+[Camunda 8 adapter](https://github.com/vanillabp/camunda8-adapter#release-lines)
 has them: its artifacts carry the minor version of the cluster in their own version. Release lines
 only pay off when two things are true. The engine a user runs is a remote service the adapter has
 to be compiled against, and new minor versions of it keep coming. With the Process-Engine-API, the
@@ -206,7 +206,7 @@ description of every key into `META-INF/quarkus-config-doc/`.
   `DECISIONS.md`). What makes the window smaller is the probe the core runs before it dispatches
   a start again. This adapter cannot answer that probe, see [`GAPS.md`](GAPS.md), entry 11, and
   the remaining risk described by the
-  [Camunda 8 adapter](https://github.com/camunda-community-hub/vanillabp-camunda8-adapter/blob/main/README.md#idempotency-limitation).
+  [Camunda 8 adapter](https://github.com/vanillabp/camunda8-adapter/blob/main/README.md#idempotency-limitation).
 - **Platform coverage:** deployment is wired and has integration tests on **both platforms**.
   On Spring Boot these are `PeaDeploymentServiceTest` and `DeploymentIntegrationTest`. On Quarkus
   it is `PeaDeploymentPipelineTest`: the Quarkus platform integration runs the deployment
