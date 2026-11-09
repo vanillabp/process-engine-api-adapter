@@ -107,18 +107,20 @@ Parent (all modules are `2.0.0-SNAPSHOT`, groupId `io.vanillabp`):
 
 ## Supported Process-Engine-API version
 
-This adapter is built against `dev.bpm-crafters.process-engine-api` **1.7**. It has no release
-lines. The
+This adapter is built against the version of `dev.bpm-crafters.process-engine-api` in the
+property `process-engine-api.version` of the [root POM](./pom.xml). This README does not repeat the
+number, so that it cannot fall behind. The adapter has no release lines. The
 [Camunda 8 adapter](https://github.com/vanillabp/camunda8-adapter#release-lines)
 has them: its artifacts carry the minor version of the cluster in their own version. Release lines
 only pay off when two things are true. The engine a user runs is a remote service the adapter has
 to be compiled against, and new minor versions of it keep coming. With the Process-Engine-API, the
 engine sits behind the API, and the user chooses which engine that is.
 
-What can change here is the API contract itself. So a new minor version of it arrives as a pull
-request to look at, not as an automatic upgrade (`renovate.json`). That pull request also has to
-bring the version above into this README. This adapter runs against exactly the one minor version
-named here.
+What can change here is the API contract itself. Renovate raises a new minor version on its own,
+as soon as the build is green (`renovate.json`): the build compiles and tests the adapter against
+the new contract. What the new version adds to the restrictions and to the commands becomes an issue
+labelled `client-configuration`, see `client-configuration-inventory.yml`. A new major version
+needs a person. This adapter runs against exactly the one minor version in the root POM.
 
 ## Configuration
 
