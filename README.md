@@ -116,11 +116,11 @@ only pay off when two things are true. The engine a user runs is a remote servic
 to be compiled against, and new minor versions of it keep coming. With the Process-Engine-API, the
 engine sits behind the API, and the user chooses which engine that is.
 
-What can change here is the API contract itself. Renovate raises a new minor version on its own,
-as soon as the build is green (`renovate.json`): the build compiles and tests the adapter against
-the new contract. What the new version adds to the restrictions and to the commands becomes an issue
-labelled `client-configuration`, see `client-configuration-inventory.yml`. A new major version
-needs a person. This adapter runs against exactly the one minor version in the root POM.
+What can change here is the API contract itself. So Renovate only proposes a new minor or major
+version as a pull request, and a person decides (`renovate.json`). What a new version adds to the
+restrictions and to the commands becomes an issue labelled `client-configuration`, see
+`client-configuration-inventory.yml`. This adapter runs against exactly the one minor version in the
+root POM.
 
 ## Configuration
 
