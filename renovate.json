@@ -9,11 +9,16 @@
       "enabled": false
     },
     {
-      "description": "The Process-Engine-API is the contract this adapter is compiled against, and the README names the range it was tested against. A new minor can change that contract, so it comes as a PR to look at and to carry into the README, not as an automerge.",
+      "description": "The Process-Engine-API is the contract this adapter is compiled against. A new minor merges itself once the build is green: the build compiles and tests the adapter against the new contract, and the README names no version but points at the root POM. What the new version adds to the restrictions and the commands becomes an issue, opened by the job 'client-configuration' of checks.yaml.",
       "matchPackageNames": ["dev.bpm-crafters.process-engine-api:*"],
-      "matchUpdateTypes": ["minor", "major"],
-      "automerge": false,
-      "addLabels": ["needs-doc-update"]
+      "matchUpdateTypes": ["minor"],
+      "automerge": true
+    },
+    {
+      "description": "A new major of the Process-Engine-API may change the contract in ways the adapter has to follow by hand, so it comes as a pull request to look at.",
+      "matchPackageNames": ["dev.bpm-crafters.process-engine-api:*"],
+      "matchUpdateTypes": ["major"],
+      "automerge": false
     }
   ]
 }

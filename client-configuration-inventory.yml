@@ -1,0 +1,148 @@
+# What of the Process-Engine-API this adapter uses, and what it leaves alone.
+#
+# The Process-Engine-API is a contract, not an engine. It has no settings of its own. What a new
+# version of it can add is a restriction (a key which narrows down what a command addresses) or a
+# new attribute of a command. Either one is something the adapter could pass on and does not do
+# yet. The script .github/client-configuration/check.py reads both out of the jar. The job
+# 'client-configuration' of .github/workflows/checks.yaml runs it on every pull request. When a
+# pull request changes 'process-engine-api.version', it compares the two versions and opens an
+# issue labelled 'client-configuration' for each new entry which this file does not list yet.
+#
+# Every entry is listed once, under one of four answers:
+#
+#   supported       the adapter has a key which sets it ('key')
+#   set-by-adapter  the adapter sets or reads it itself ('reason')
+#   not-supported   why a user of the adapter does not need it ('reason')
+#   open            the issue which decides it ('issue')
+#
+# The file ends in '.yml' on purpose. Spotless formats every '*.yaml' file through Jackson, which
+# drops the comments, and the comments here are half of the answers.
+#
+# A group shares one answer, but it names each of its entries. So a new entry never falls into a
+# group without somebody writing its name down here.
+client:
+  name: Process-Engine-API
+  # where the pull request finds the version, in the root pom.xml
+  version-properties:
+    - process-engine-api.version
+  # https://github.com/orgs/vanillabp/projects/5, where the issues belong
+  project: 5
+  # what an issue suggests as the key of a new entry
+  suggested-key-prefix: vanillabp.adapters.<id>.
+# A comparison whose result is known. The job runs it first, so that a check which reads nothing
+# cannot look like a version without news.
+self-test:
+  old: "1.3"
+  new: "1.6"
+  new-settings:
+    restrictions:
+      - WORKER_LOCK_DURATION_IN_MILLISECONDS
+    commands:
+      - FailTaskCmd.retryCount
+# What the script reads.
+surfaces:
+  # The keys of the restrictions, as constants of CommonRestrictions.
+  - id: restrictions
+    title: restriction
+    read: constants
+    artifacts:
+      - dev.bpm-crafters.process-engine-api:process-engine-api
+    classes:
+      - dev.bpmcrafters.processengineapi.CommonRestrictions
+  # The attributes of the commands the adapter sends, or could send, as the getters of their
+  # classes. A name is the class and the attribute, because several commands share an attribute.
+  - id: commands
+    title: command attribute
+    read: getters
+    qualify: true
+    artifacts:
+      - dev.bpm-crafters.process-engine-api:process-engine-api
+    classes:
+      - dev.bpmcrafters.processengineapi.process.StartProcessByDefinitionCmd
+      - dev.bpmcrafters.processengineapi.process.StartProcessByMessageCmd
+      - dev.bpmcrafters.processengineapi.correlation.CorrelateMessageCmd
+      - dev.bpmcrafters.processengineapi.correlation.SendSignalCmd
+      - dev.bpmcrafters.processengineapi.task.SubscribeForTaskCmd
+      - dev.bpmcrafters.processengineapi.task.CompleteTaskCmd
+      - dev.bpmcrafters.processengineapi.task.CompleteTaskByErrorCmd
+      - dev.bpmcrafters.processengineapi.task.FailTaskCmd
+      - dev.bpmcrafters.processengineapi.deploy.DeployBundleCommand
+settings:
+  restrictions:
+    set-by-adapter:
+      - names:
+          - ACTIVITY_ID
+          - PROCESS_DEFINITION_VERSION_TAG
+          - PROCESS_INSTANCE_ID
+        reason: >-
+          The adapter reads these from the meta data of a delivered task, to find the workflow and
+          the task the delivery belongs to. They are not a setting for a user.
+    not-supported:
+      - names:
+          - BUSINESS_KEY
+          - CORRELATION_KEY
+          - EXECUTION_ID
+          - INSTANCE
+          - MESSAGE_ID
+          - PROCESS_DEFINITION_ID
+          - PROCESS_DEFINITION_KEY
+          - TENANT_ID
+          - WITHOUT_TENANT_ID
+        reason: >-
+          The adapter addresses processes, messages and tasks by its own names, which it scopes per
+          workflow module, and sends its commands without these restrictions. Where the
+          Process-Engine-API lacks a way to say what VanillaBP needs, GAPS.md says so.
+      - names:
+          - MESSAGE_TTL
+          - WORKER_LOCK_DURATION_IN_MILLISECONDS
+        reason: >-
+          Time limits which the engine behind the API applies. The adapter subscribes to tasks and
+          sends messages without them, so the defaults of that engine apply, and not every engine
+          reads them.
+  commands:
+    set-by-adapter:
+      - names:
+          - CompleteTaskByErrorCmd.errorCode
+          - CompleteTaskByErrorCmd.errorMessage
+          - CompleteTaskByErrorCmd.taskId
+          - CompleteTaskCmd.taskId
+          - CorrelateMessageCmd.correlation
+          - CorrelateMessageCmd.messageName
+          - CorrelateMessageCmd.payloadSupplier
+          - CorrelateMessageCmd.restrictions
+          - DeployBundleCommand.resources
+          - FailTaskCmd.errorDetails
+          - FailTaskCmd.reason
+          - FailTaskCmd.retryCount
+          - FailTaskCmd.taskId
+          - SendSignalCmd.payloadSupplier
+          - SendSignalCmd.restrictions
+          - SendSignalCmd.signalName
+          - StartProcessByMessageCmd.messageName
+          - StartProcessByMessageCmd.payloadSupplier
+          - StartProcessByMessageCmd.restrictions
+          - SubscribeForTaskCmd.action
+          - SubscribeForTaskCmd.payloadDescription
+          - SubscribeForTaskCmd.restrictions
+          - SubscribeForTaskCmd.taskDescriptionKey
+          - SubscribeForTaskCmd.taskType
+          - SubscribeForTaskCmd.termination
+        reason: >-
+          The adapter fills these when it calls the Process-Engine-API, from the workflow module,
+          the workflow aggregate and the task. They are not a setting for a user.
+    not-supported:
+      - names:
+          - StartProcessByDefinitionCmd.definitionKey
+          - StartProcessByDefinitionCmd.payloadSupplier
+          - StartProcessByDefinitionCmd.restrictions
+        reason: >-
+          The adapter starts a process with a start command of its own, because this one cannot
+          carry the execution mode the two-phase start of VanillaBP needs (GAPS.md).
+      - names: [DeployBundleCommand.tenantId]
+        reason: >-
+          The adapter deploys without a tenant. The Process-Engine-API cannot say that a deployment
+          belongs to a workflow module (GAPS.md).
+      - names: [FailTaskCmd.retryBackoff]
+        reason: >-
+          The engine behind the API picks the time until the next attempt. The adapter has no
+          better value to offer.
