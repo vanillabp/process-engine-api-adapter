@@ -680,3 +680,37 @@ The Quarkus Tools plugin for IntelliJ IDEA (by Red Hat, checked in version 2.6.1
 file. It finds the keys in the `@ConfigMapping` interfaces themselves and writes every map key as
 `{*}`. So the names help the generated documentation and everybody who reads the file. They do not
 change what this plugin offers while you type.
+
+### 23. A snapshot reaches Maven Central again, without a sources jar, and a refused request is repeated
+
+Proposed by stories 2162 and 2160, 2026-11-13. Story 2158 brought the profile `publish-snapshots`,
+which sends a snapshot to GitHub Packages and to the snapshot repository of Maven Central in one
+build. It wrote no decision here. `adapter-platform-integration` made the same change, see decision
+139 in adapter-platform-integration for the URL and decision 140 in adapter-platform-integration for
+the sources jar and the repeats.
+
+**The snapshot reaches Maven Central again.** The profile `publish-snapshots` sets the snapshot
+repository of the POM to GitHub Packages, because that is where `maven-deploy-plugin` uploads.
+`central-publishing-maven-plugin` 0.12.0 reads the same setting: where its configuration names no
+`centralSnapshotsUrl`, it uploads a snapshot to the snapshot repository of the POM. So since story
+2158 every snapshot of this repository went to GitHub Packages twice and never to Maven Central, and
+the build stayed green. The configuration of the plugin in the profile now names
+`https://central.sonatype.com/repository/maven-snapshots/` as `centralSnapshotsUrl`. The modules
+which are not published keep `skip.central.release`, so the list of published modules is the same as
+before.
+
+**The sources jar stays here.** The other repositories stop binding `maven-source-plugin` for
+snapshots, because a release gets its sources jar from the profile `release` of
+`io.vanillabp:release-parent`. This repository has no release workflow yet. Until one runs with that
+profile, the root POM keeps binding the plugin, and a snapshot still carries a sources jar.
+
+**A refused request is repeated.** `.mvn/maven.config` tells Maven to repeat a request which a
+server answers with 429 or 503. It repeats a request at most twice and waits as long as the
+`Retry-After` header asks, up to 35 minutes. Central blocks a runner for about half an hour, and
+every request during the block makes it longer, so waiting once is better than asking again. Maven
+also uploads one file after the other instead of five at once. The file applies to every build of
+this repository, on a laptop and in a pull request as well.
+
+**Where it is referred to:** the comments at `centralSnapshotsUrl` and `skipPublishing` in the
+profile `publish-snapshots` of `pom.xml` and the comments in `.mvn/maven.config`. None of them cites
+a number.
